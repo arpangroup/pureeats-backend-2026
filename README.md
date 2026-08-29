@@ -2,8 +2,6 @@
 
 A multi-module Spring Boot rewrite of the PureEats food-delivery API (originally Laravel). Pure REST API, no server-rendered UI — the [React frontend](../pureeats-react-ui) is the client. Secured with **Spring Security + JWT**, documented with **springdoc-openapi / Swagger UI**, backed by **MySQL**.
 
-> **Migration context**: this replaces `C:\xampp\htdocs\pureeats` (Laravel). See [`entity_summary.txt`](domain/entity_summary.txt) for the original 53-table schema this was modeled from.
-
 ---
 
 ## Table of contents
@@ -11,6 +9,7 @@ A multi-module Spring Boot rewrite of the PureEats food-delivery API (originally
 - [Tech stack](#tech-stack)
 - [Module structure](#module-structure)
 - [Getting started](#getting-started)
+- [Explore the API](#explore-the-api)
 - [Security & JWT](#security--jwt)
 - [Entity relationships](#entity-relationships)
 - [API reference](#api-reference)
@@ -18,6 +17,8 @@ A multi-module Spring Boot rewrite of the PureEats food-delivery API (originally
 - [Known limitations / not yet built](#known-limitations--not-yet-built)
 
 ---
+
+
 
 ## Tech stack
 
@@ -77,6 +78,15 @@ graph LR
 
 ---
 
+## Explore the API
+- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
+- OpenAPI JSON: `http://localhost:8080/v3/api-docs`
+- Health check: `http://localhost:8080/actuator/health`
+
+Click **Authorize** in Swagger UI and paste a JWT (obtained from `POST /api/v1/auth/register` or `/login`) to call protected endpoints.
+
+---
+
 ## Getting started
 
 ### Prerequisites
@@ -113,13 +123,6 @@ Every config value in `application.yml` already has a `${VAR:default}` fallback,
 ```
 DB_HOST=localhost;DB_PORT=3306;DB_NAME=pureeats_dev;DB_USERNAME=root;DB_PASSWORD=;JPA_DDL_AUTO=update;SERVER_PORT=8080;JWT_SECRET=local-intellij-dev-secret-key-change-me-min-32-bytes-long;JWT_EXPIRATION_MS=86400000;OTP_DEV_MODE=true;TAX_PERCENTAGE=5;COMMISSION_BASIS=FULL_ORDER
 ```
-
-### Explore the API
-- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
-- OpenAPI JSON: `http://localhost:8080/v3/api-docs`
-- Health check: `http://localhost:8080/actuator/health`
-
-Click **Authorize** in Swagger UI and paste a JWT (obtained from `POST /api/v1/auth/register` or `/login`) to call protected endpoints.
 
 ---
 
