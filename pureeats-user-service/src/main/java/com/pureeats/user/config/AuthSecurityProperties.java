@@ -98,8 +98,7 @@ public class AuthSecurityProperties {
     }
 
     public static class Session {
-        //private int accessTokenExpiryMinutes = 15;
-        private int accessTokenExpiryMinutes = 1440*3; // 3 day (1 day = 24*60 minute)
+        private int accessTokenExpiryMinutes = 15;
         private int refreshTokenExpiryDays = 30;
 
         public int getAccessTokenExpiryMinutes() {
