@@ -1,13 +1,19 @@
 # OTP-Based Authentication & Security Subsystem
 
-This document covers the **new** OTP-challenge authentication flow added alongside the existing
-password login and legacy phone-OTP login (both left untouched — see [Coexistence with the
-legacy endpoints](#coexistence-with-the-legacy-endpoints)). For the rest of the API, module graph,
-and entity relationships, see [README.md](README.md).
+This document covers the OTP-challenge authentication flow — signup, phone/email OTP login,
+tokens, sessions, and the security mechanisms around them. It is now the **only** authentication
+flow in this codebase: the password-login/register and 4-digit phone-OTP endpoints that originally
+existed alongside it have been removed entirely (not deprecated — deleted, along with
+`AuthService`, `OtpService`, the `SmsOtp` table, and their DTOs). One consequence: the still-present
+`PasswordResetController`/`PasswordResetService` (email-based password reset) has nothing left to
+plug into — nothing checks a password at login anymore. See
+[pureeats-user-service/README.md](pureeats-user-service/README.md) for the full request/response
+contracts and a step-by-step execution timeline; this document covers the cross-cutting
+architecture and deployment/config. For the rest of the API, module graph, and entity
+relationships, see [README.md](README.md).
 
 ## Table of contents
 
-- [Why a separate flow instead of changing `/auth/login`](#why-a-separate-flow-instead-of-changing-authlogin)
 - [Architecture](#architecture)
 - [Auth flow](#auth-flow)
 - [API reference](#api-reference)
@@ -23,46 +29,32 @@ and entity relationships, see [README.md](README.md).
 - [Environment variables](#environment-variables)
 - [Privacy / PII handling](#privacy--pii-handling)
 - [Testing](#testing)
+- [Admin audit endpoints](#admin-audit-endpoints)
 - [Production recommendations](#production-recommendations)
 
 ---
 
-## Why a separate flow instead of changing `/auth/login`
+## Endpoints at a glance
 
-The original design brief describes `POST /auth/login` as the OTP-challenge entry point. This
-codebase already has a `POST /api/v1/auth/login` that means something different (email/phone +
-password) and is presumably in active use by the React app. Renaming or overloading it would be a
-breaking change for zero functional benefit, so the new flow lives at its own paths instead:
+All under `/api/v1/auth`, all public except `/logout-all`:
 
-| Design brief's illustrative path | Actual path in this codebase |
+| Endpoint | Purpose |
 |---|---|
-| `POST /auth/login` (start OTP challenge) | `POST /api/v1/auth/otp/initiate` |
-| `POST /auth/verify` | `POST /api/v1/auth/otp/verify` |
-| `POST /auth/resend` | `POST /api/v1/auth/otp/resend` |
-| `POST /auth/signup` | `POST /api/v1/auth/signup` (no collision — kept as-is) |
-| `POST /auth/refresh` / `/logout` / `/logout-all` | same paths (no collision — new endpoints) |
-
-Everything else in this document (fields, error codes, security policy) matches the brief exactly;
-only the login/verify/resend path names differ.
-
-## Coexistence with the legacy endpoints
-
-Nothing below changes or removes:
-
-- `POST /auth/register` + `POST /auth/login` — password auth. Untouched.
-- `POST /auth/otp/send` + `POST /auth/otp/login` — the original 4-digit phone-only OTP login, no
-  attempt/lock policy, no notification abstraction. Untouched, but superseded by
-  `/otp/initiate` + `/otp/verify` for any new client work — marked deprecated in Swagger.
-- `PasswordResetController` (email-based password reset). Untouched.
+| `POST /register` | Email signup → sends a verification OTP |
+| `POST /otp/send` | Start a phone/email OTP login challenge |
+| `POST /otp/verify` | Verify a challenge's OTP → access + refresh token |
+| `POST /otp/resend` | Resend the OTP for an existing challenge |
+| `POST /refresh` | Rotate a refresh token for a new access token |
+| `POST /logout` | Revoke one session |
+| `POST /logout-all` 🔒 | Revoke every session for the current user |
 
 A phone or email that has never been used before is **auto-registered** on first successful OTP
-verification against `/otp/initiate` + `/otp/verify` — same behavior as the legacy
-`/otp/login` endpoint, for the same reason: telling a client "no account with that number" before
-they've proven they own it is an account-enumeration leak.
+verification against `/otp/send` + `/otp/verify` — telling a client "no account with that number"
+before they've proven they own it would be an account-enumeration leak.
 
 ## Architecture
 
-Every piece is a small, single-responsibility, interface-first component — no god `AuthService`.
+Every piece is a small, single-responsibility, interface-first component — no god service.
 Package layout (new code only):
 
 ```
@@ -127,12 +119,12 @@ for tokens. Every one of those collaborators is swappable independently:
 ## Auth flow
 
 ```
-Client                                   Server
-  |--- POST /auth/signup ---------------->|  create User (unverified) + OtpChallenge (SIGNUP_OTP)
+Client                                    Server
+  |--- POST /auth/register -------------->|  create User (unverified) + OtpChallenge (SIGNUP_OTP)
   |                                       |  NotificationService.send(...)  [OTP never in response]
   |<---- { challengeId, maskedDest } -----|
   |                                       |
-  |--- POST /auth/otp/initiate ---------->|  (for an existing/new phone or email)
+  |--- POST /auth/otp/send --------------->|  (for an existing/new phone or email)
   |                                       |  blocklist + rate-limit checks
   |                                       |  create OtpChallenge (LOGIN_OTP), send notification
   |<---- { challengeId, maskedDest } -----|
@@ -167,7 +159,7 @@ in the original design brief).
 → `201`/`200` `{ "success": true, "data": { "challengeId": "...", "maskedDestination": "j**n@gmail.com", "expiresIn": 600, "resendAvailableIn": 30 } }`
 Errors: `EMAIL_ALREADY_REGISTERED` (409).
 
-### `POST /otp/initiate`
+### `POST /otp/send`
 ```json
 { "method": "PHONE", "countryId": 1, "phone": "9876543210" }
 ```
@@ -185,7 +177,7 @@ or
 
 Errors:
 - `INVALID_OTP` (400) — `data.attemptsRemaining` tells the client how many guesses are left.
-- `OTP_ATTEMPTS_EXCEEDED` (400) — challenge is now `LOCKED`; the client must call `/otp/initiate` (or `/otp/resend`, if still allowed) again.
+- `OTP_ATTEMPTS_EXCEEDED` (400) — challenge is now `LOCKED`; the client must call `/otp/send` (or `/otp/resend`, if still allowed) again.
 - `OTP_EXPIRED` (400), `CHALLENGE_NOT_FOUND` (400), `ALREADY_VERIFIED` (400).
 - `ACCOUNT_LOCKED` / `ACCOUNT_BLOCKED` / `ACCOUNT_DISABLED` / `ACCOUNT_DEACTIVATED` (403) — the OTP was right, but the account itself can't be used right now.
 
@@ -215,10 +207,12 @@ is intentionally public (that's the whole point of a login flow).
 
 ## Token strategy
 
-- **Access token**: JWT, same claims/verification as the existing password-login token
-  (`AuthenticatedUser`: userId, name, email, phone, role, deliveryGuyDetailId), but a short
-  `security.session.access-token-expiry-minutes` (default 15) instead of the legacy 24h. Stateless
-  — never persisted, never revocable individually (that's what the short lifetime is for).
+- **Access token**: JWT (`AuthenticatedUser`: userId, name, email, phone, role,
+  deliveryGuyDetailId claims), short-lived via `security.session.access-token-expiry-minutes`
+  (default 15). Stateless — never persisted, never revocable individually (that's what the short
+  lifetime is for). `JwtTokenProvider` also has a `pureeats.jwt.expiration-ms`-driven default-expiry
+  overload, kept for test/utility convenience — the live flow always passes the explicit
+  short-lived expiry instead.
 - **Refresh token**: an opaque, cryptographically random 256-bit string, returned once. The server
   only ever stores its SHA-256 hash (`user_sessions.refresh_token_hash`) — a stolen database dump
   cannot be replayed into a live session. `security.session.refresh-token-expiry-days` (default 30).
@@ -396,10 +390,10 @@ notification:
 | `OTP_MAX_RESENDS` | `3` | Resends allowed per challenge |
 | `OTP_MAX_REQUESTS_PER_DESTINATION_PER_HOUR` | `10` | New-challenge cap per phone/email |
 | `OTP_MAX_REQUESTS_PER_IP_PER_HOUR` | `20` | New-challenge cap per IP |
-| `ACCESS_TOKEN_EXPIRY_MINUTES` | `15` | New flow's JWT lifetime (legacy flow keeps using `JWT_EXPIRATION_MS`) |
+| `ACCESS_TOKEN_EXPIRY_MINUTES` | `15` | Access token lifetime for the OTP-challenge flow |
 | `REFRESH_TOKEN_EXPIRY_DAYS` | `30` | Refresh token / session lifetime |
-| `RATE_LIMIT_LOGIN_IP_LIMIT` / `_WINDOW_SECONDS` | `10` / `60` | `/otp/initiate` per-IP limit |
-| `RATE_LIMIT_LOGIN_DESTINATION_LIMIT` / `_WINDOW_SECONDS` | `5` / `60` | `/otp/initiate` per-destination limit |
+| `RATE_LIMIT_LOGIN_IP_LIMIT` / `_WINDOW_SECONDS` | `10` / `60` | `/otp/send` per-IP limit |
+| `RATE_LIMIT_LOGIN_DESTINATION_LIMIT` / `_WINDOW_SECONDS` | `5` / `60` | `/otp/send` per-destination limit |
 | `RATE_LIMIT_VERIFY_IP_LIMIT` / `_WINDOW_SECONDS` | `20` / `60` | `/otp/verify` per-IP limit |
 | `RATE_LIMIT_RESEND_IP_LIMIT` / `_WINDOW_SECONDS` | `10` / `60` | `/otp/resend` per-IP limit |
 | `GEOLOCATION_ENABLED` | `true` | Set `false` to skip IP geolocation entirely |
@@ -438,6 +432,19 @@ notification:
   receive it, never from an API response.
 - Run everything: `mvn test` from the repo root. Run just this subsystem's tests:
   `mvn -pl domain,pureeats-notification-service,pureeats-user-service,pureeats-app -am test`.
+- **`AdminAuditControllerTest`**: confirms a `CUSTOMER` token is rejected and `ADMIN`/`SUPER_ADMIN`
+  tokens succeed on all seven admin audit endpoints (see below), and that the OTP-challenge/
+  session views never serialize a hash.
+
+## Admin audit endpoints
+
+Every table this document describes (`otp_challenges`, `security_blocklist`, `user_devices`,
+`login_history`, `user_sessions`, `audit_logs`, `rate_limit_buckets`) has a read-only, paginated
+`GET` endpoint under `/api/v1/admin/*`, restricted to `ADMIN`/`SUPER_ADMIN` — full reference in
+[pureeats-user-service/README.md → Admin audit endpoints](pureeats-user-service/README.md#admin-audit-endpoints).
+Authorization is layered two independent ways there (URL-pattern rule + method-level
+`@PreAuthorize`), which is also where the trade-offs of adding method-level security to this
+codebase are written up.
 
 ## Production recommendations
 

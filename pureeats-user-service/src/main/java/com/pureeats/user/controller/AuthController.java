@@ -5,60 +5,30 @@ import com.pureeats.domain.common.response.ApiResponse;
 import com.pureeats.user.dto.*;
 import com.pureeats.user.security.metadata.RequestMetadata;
 import com.pureeats.user.security.metadata.RequestMetadataResolver;
-import com.pureeats.user.service.AuthService;
 import com.pureeats.user.service.AuthenticationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
-@Tag(name = "Auth", description = "Registration, password login, legacy OTP login and the OTP-challenge auth flow")
+@Tag(name = "Auth", description = "The OTP-challenge signup/login flow, refresh tokens, and logout")
 public class AuthController {
 
-    private final AuthService authService;
     private final AuthenticationService authenticationService;
     private final RequestMetadataResolver requestMetadataResolver;
 
     @PostMapping("/register")
-    @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Register a new customer account (email/phone + password)")
-    public ApiResponse<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
-        return ApiResponse.success("Registered successfully", authService.register(request));
-    }
-
-    @PostMapping("/login")
-    @Operation(summary = "Login with email/phone + password")
-    public ApiResponse<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
-        return ApiResponse.success("Logged in successfully", authService.login(request));
-    }
-
-    @PostMapping("/otp/send")
-    @Operation(summary = "[Legacy] Send a login OTP to a phone number - superseded by /otp/initiate")
-    public ApiResponse<OtpSentResponse> sendLoginOtp(@Valid @RequestBody SendOtpRequest request) {
-        return ApiResponse.success(authService.sendLoginOtp(request.phone()));
-    }
-
-    @PostMapping("/otp/login")
-    @Operation(summary = "[Legacy] Login (or auto-register) using a verified phone OTP - superseded by /otp/initiate + /otp/verify")
-    public ApiResponse<AuthResponse> loginWithOtp(@Valid @RequestBody OtpLoginRequest request) {
-        return ApiResponse.success("Logged in successfully", authService.loginWithOtp(request));
-    }
-
-    // --- OTP-challenge auth flow (section: signup / login / verify / resend / refresh / logout) ---
-
-    @PostMapping("/signup")
     @Operation(summary = "Create an account by email and send a verification OTP")
     public ApiResponse<LoginChallengeResponse> signup(@Valid @RequestBody SignupRequest request, HttpServletRequest httpRequest) {
         return ApiResponse.success(authenticationService.signup(request, metadata(httpRequest)));
     }
 
-    @PostMapping("/otp/initiate")
+    @PostMapping("/otp/send")
     @Operation(summary = "Start an OTP-based login challenge for a phone or email")
     public ApiResponse<LoginChallengeResponse> initiateOtpLogin(@Valid @RequestBody LoginChallengeRequest request, HttpServletRequest httpRequest) {
         return ApiResponse.success(authenticationService.initiateLogin(request, metadata(httpRequest)));

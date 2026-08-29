@@ -2,6 +2,8 @@ package com.pureeats.user.repository;
 
 import com.pureeats.user.entity.UserSession;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
@@ -18,6 +20,8 @@ public interface UserSessionRepository extends JpaRepository<UserSession, Long> 
     Optional<UserSession> findByRefreshTokenHash(String refreshTokenHash);
 
     List<UserSession> findByUserIdAndRevokedAtIsNull(Long userId);
+
+    Page<UserSession> findByUserId(Long userId, Pageable pageable);
 
     @Modifying
     @Query("update UserSession s set s.revokedAt = :now where s.userId = :userId and s.revokedAt is null")

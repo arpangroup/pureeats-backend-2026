@@ -10,8 +10,7 @@ import java.util.UUID;
  * Local-development stand-in for a real email gateway - prints the rendered message to the
  * console instead of connecting to SMTP. This is the one deliberate exception to "never log an
  * OTP": with no SMTP credentials configured, this console line IS the delivery mechanism (there
- * is no other way to complete the flow), same trade-off the pre-existing {@code OtpService}
- * dev-mode already makes. Never active unless {@code notification.email-provider=console}
+ * is no other way to complete the flow). Never active unless {@code notification.email-provider=console}
  * (the default) - set it to {@code smtp} in production.
  */
 @Slf4j

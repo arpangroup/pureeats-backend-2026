@@ -5,6 +5,7 @@ import com.pureeats.user.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -17,14 +18,20 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.List;
 
 /**
- * Coarse-grained, URL-pattern-based role gating. This is the ONLY place authorization rules
- * are declared, which is deliberate: it means pureeats-catalog-service, pureeats-order-service
- * etc. never need a compile dependency on Spring Security to enforce "who can call what" - they
+ * Coarse-grained, URL-pattern-based role gating is still the primary mechanism and covers every
+ * endpoint in the app - it's deliberate that pureeats-catalog-service, pureeats-order-service etc.
+ * never need a compile dependency on Spring Security to enforce "who can call what", and instead
  * only ever read {@code CurrentUserContext}/{@code @AuthenticationPrincipal} for row-level
  * ownership checks (see e.g. RestaurantService.assertOwnership).
+ * <p>
+ * {@code @EnableMethodSecurity} additionally turns on {@code @PreAuthorize} for modules that
+ * already depend on Spring Security (currently just pureeats-user-service - see
+ * {@code AdminAuditController}) as an optional second, independent layer for endpoints that want
+ * it; it is not required and does not replace the URL-pattern rules above.
  */
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 

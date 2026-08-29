@@ -63,7 +63,7 @@ public class SuperAdminSeeder implements ApplicationRunner {
         user.setName(name);
         user.setEmail(email);
         user.setPassword(passwordEncoder.encode(password));
-        user.setIsActive(AuthService.STATUS_ACTIVE);
+        user.setIsActive(User.STATUS_ACTIVE);
         user.setAccountStatus(AccountStatus.ACTIVE);
         user.setCreatedAt(LocalDateTime.now());
         user.setUpdatedAt(LocalDateTime.now());

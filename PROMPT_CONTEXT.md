@@ -35,17 +35,17 @@ Package-per-module: `com.pureeats.{user|catalog|notification|order|rating|app}.{
 ## Entities (all in `domain`, flat `@Entity` classes — NO `@ManyToOne`/`@OneToMany`, just plain FK-id columns as `Long`/`Integer`)
 
 Relationships are logical (matching ID columns), not JPA associations — this is deliberate, keeps modules decoupled on a shared DB. Full list + diagrams: `README.md` → Entity relationships. Groups:
-- **Identity**: `User`, `Address`, `DeliveryGuyDetail`, `LoginSession`, `PasswordReset(Otp)`, `SmsOtp`, `Role`, `Permission`, `ModelHasRole`, `ModelHasPermission`, `RoleHasPermission` (legacy Spatie-shaped RBAC mirror, morph type `App\User`).
+- **Identity**: `User`, `Address`, `DeliveryGuyDetail`, `LoginSession`, `PasswordReset(Otp)`, `Role`, `Permission`, `ModelHasRole`, `ModelHasPermission`, `RoleHasPermission` (legacy Spatie-shaped RBAC mirror, morph type `App\User`). `SmsOtp` (legacy phone-OTP table) was deleted along with the endpoints that used it — see the OTP-challenge section below.
 - **Catalog**: `Restaurant`, `RestaurantUser` (M:N ownership), `RestaurantCategory(Restaurant/Slider)`, `ItemCategory`, `Item`, `AddonCategory`, `Addon`, `AddonCategoryItem`, `Coupon`, `CouponUsage`, `Location`, `PopularGeoPlace`, `PromoSlider`, `Slide`, `Page`, `Setting`, `PaymentGateway`, `SmsGateway`, `Translation`.
 - **Orders**: `Order`, `OrderItem`, `OrderItemAddon`, `OrderStatus` (lookup table, seeded from `OrderStatusCode` enum by `OrderStatusSeeder` on boot — never hardcode a status id), `AcceptDelivery` (order↔rider assignment), `GpsTable`, `TripDetail`, `RestaurantEarning`, `RestaurantPayout`, `Wallet` (polymorphic holder, `App\User` only in practice, balance = integer minor units/paise), `Transaction`, `Transfer` (unused — no service built on it), `Support`.
 - **Ratings/notifications**: `Rating` (polymorphic `rateableType`/`rateableId`: `App\Restaurant` or `App\DeliveryGuyDetail`), `Alert`, `PushToken`.
 
 ## Security / JWT (`pureeats-user-service` issues, `pureeats-app` enforces)
 
-- Roles enum (`domain.enums.Role`): `ADMIN`, `STORE_OWNER`, `DELIVERY`, `CUSTOMER`, `EMPLOYEE`. Every user starts `CUSTOMER`. A user can hold several roles at once (legacy schema allows it) — `RoleService.resolveRole` picks the highest-priority one for the JWT, priority `ADMIN > EMPLOYEE > STORE_OWNER > DELIVERY > CUSTOMER`.
-- JWT claims: `sub`=userId, `name`, `email`, `phone`, `role`, `deliveryGuyDetailId` (riders only). HS256, `pureeats.jwt.secret`/`expiration-ms`.
+- Roles enum (`domain.enums.Role`): `SUPER_ADMIN`, `ADMIN`, `STORE_OWNER`, `DELIVERY`, `CUSTOMER`, `EMPLOYEE`. Every self-registered user starts `CUSTOMER`. A user can hold several roles at once (legacy schema allows it) — `RoleService.resolveRole` picks the highest-priority one for the JWT, priority `SUPER_ADMIN > ADMIN > EMPLOYEE > STORE_OWNER > DELIVERY > CUSTOMER`. `SUPER_ADMIN`/`ADMIN` can never be self-registered (`RoleService.assertCallerNotPrivileged`, checked in `AuthenticationService.signup`) — there's exactly one `SUPER_ADMIN`, seeded on startup by `SuperAdminSeeder` if none exists yet.
+- JWT claims: `sub`=userId, `name`, `email`, `phone`, `role`, `deliveryGuyDetailId` (riders only). HS256, `pureeats.jwt.secret`/`expiration-ms` (legacy/default expiry - the live OTP-challenge flow always passes an explicit 15-minute expiry instead, see the OTP-challenge section below).
 - `JwtAuthenticationFilter` (in user-service) sets both the Spring Security `Authentication` (principal = `AuthenticatedUser` record) AND `CurrentUserContext` (plain `ThreadLocal<Long>` in `domain`) — business modules that don't want a Spring Security dependency read `CurrentUserContext.get()` instead of `@AuthenticationPrincipal`.
-- **All role gating is centralized** in `pureeats-app`'s `SecurityConfig` (URL-pattern based: `/api/v1/store-owner/**`→`STORE_OWNER`, `/api/v1/delivery/**`→`DELIVERY`, `/api/v1/admin/**`→`ADMIN`, everything else just `authenticated()`). Business modules do row-level ownership checks themselves (e.g. `RestaurantService.assertOwnership`), not role checks.
+- **All role gating is centralized** in `pureeats-app`'s `SecurityConfig` (URL-pattern based: `/api/v1/store-owner/**`→`STORE_OWNER`, `/api/v1/delivery/**`→`DELIVERY`, `/api/v1/admin/**`→`ADMIN` or `SUPER_ADMIN`, everything else just `authenticated()`). Business modules do row-level ownership checks themselves (e.g. `RestaurantService.assertOwnership`), not role checks.
 - **Known sharp edge**: role-granting endpoints must be carved out of their own role's URL-gate BEFORE a user has that role. `POST /api/v1/store-owner/restaurants` (onboarding, grants `STORE_OWNER`) has an explicit `.authenticated()` matcher placed before the broader `hasRole("STORE_OWNER")` rule for this reason. Apply the same pattern to any future self-serve role upgrade.
 - Role changes require re-login (stateless JWT, not re-issued mid-session).
 
@@ -64,11 +64,26 @@ Relationships are logical (matching ID columns), not JPA associations — this i
 
 ## Deferred / not built (don't assume these exist)
 
-Admin panel/APIs (`/api/v1/admin/**` is reserved+role-gated but empty), real payment gateways (Razorpay/Paytm/PayUmoney/MercadoPago — only COD/WALLET are actually processed), bulk upload, geocoder integration, `Translation`/`SmsGateway` admin CRUD, `Transfer` entity (no service uses it). The legacy `/auth/otp/*` + `PasswordResetController` codes are still generated+stored only, returned in-response when `pureeats.otp.dev-mode=true`, never sent.
+Admin panel/APIs (`/api/v1/admin/**` is reserved+role-gated but empty — the one `SUPER_ADMIN` account does exist from boot, there's just nothing behind the prefix yet), real payment gateways (Razorpay/Paytm/PayUmoney/MercadoPago — only COD/WALLET are actually processed), bulk upload, geocoder integration, `Translation`/`SmsGateway` admin CRUD, `Transfer` entity (no service uses it). `PasswordResetController`'s codes are still generated+stored only, returned in-response when `pureeats.otp.dev-mode=true`, never sent — and since password-based login was removed (see below), a reset password currently has no way to actually be used.
 
 ## OTP-challenge auth subsystem (see AUTH_SECURITY.md for the full picture)
 
-A second, newer auth flow lives alongside everything above: `POST /api/v1/auth/{signup,otp/initiate,otp/verify,otp/resend,refresh,logout,logout-all}`, orchestrated by `pureeats-user-service`'s `AuthenticationService` (thin — delegates to single-purpose collaborators: `OtpChallengeService`, `SessionService`, `DeviceService`, `LoginHistoryRecorder`, `BlocklistService`, `RateLimiter`, `IpGeolocationService`, `SecurityEventPublisher`, all under `com.pureeats.user.security.*`/`com.pureeats.user.otp`). `pureeats-notification-service` now exposes a real `NotificationService` (email via console/Gmail-SMTP, SMS via console-only-so-far) that `pureeats-user-service` depends on — new module edge, still acyclic (notification-service depends on nothing but `domain`). New tables: `otp_challenges`, `security_blocklist`, `user_devices`, `login_history`, `user_sessions`, `audit_logs`, `rate_limit_buckets`, `notification_logs`. `User` gained `phone_verified_at`/`account_status`/`locked_at`/`locked_until`/`lock_reason`, and `password` is now nullable (was already effectively nullable in practice for OTP-provisioned accounts - MySQL's non-strict mode just silently tolerated the NOT NULL violation before). Everything from before this section is completely untouched for backward compatibility - see AUTH_SECURITY.md for why the endpoint paths don't literally match the original OTP design brief's `/auth/login`/`/auth/verify`/`/auth/resend`.
+This is now the **only** auth flow — the password-login/register and legacy 4-digit phone-OTP
+endpoints (`AuthService`, `OtpService`, `SmsOtp` table, their DTOs) have been deleted entirely, not
+deprecated. Endpoints: `POST /api/v1/auth/{register,otp/send,otp/verify,otp/resend,refresh,logout,logout-all}`
+(`register`=email signup, `otp/send`=start a phone/email login challenge), orchestrated by
+`pureeats-user-service`'s `AuthenticationService` (thin — delegates to single-purpose
+collaborators: `OtpChallengeService`, `SessionService`, `DeviceService`, `LoginHistoryRecorder`,
+`BlocklistService`, `RateLimiter`, `IpGeolocationService`, `SecurityEventPublisher`, all under
+`com.pureeats.user.security.*`/`com.pureeats.user.otp`). `pureeats-notification-service` exposes a
+real `NotificationService` (email via console/Gmail-SMTP, SMS via console-only-so-far) that
+`pureeats-user-service` depends on — module edge, still acyclic (notification-service depends on
+nothing but `domain`). Tables: `otp_challenges`, `security_blocklist`, `user_devices`,
+`login_history`, `user_sessions`, `audit_logs`, `rate_limit_buckets`, `notification_logs`. `User`
+gained `phone_verified_at`/`account_status`/`locked_at`/`locked_until`/`lock_reason`, and
+`password` is nullable (OTP-provisioned accounts never had one; MySQL's non-strict mode used to
+silently tolerate the NOT NULL violation). Full request/response contracts and a step-by-step
+execution timeline: [pureeats-user-service/README.md](pureeats-user-service/README.md).
 
 ## Local verification setup (if asked to run/test this)
 

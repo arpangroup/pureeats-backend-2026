@@ -282,7 +282,7 @@ public class AuthenticationService {
     }
 
     private void assertAccountUsable(User user) {
-        if (AuthService.STATUS_INACTIVE.equalsIgnoreCase(user.getIsActive())) {
+        if (User.STATUS_INACTIVE.equalsIgnoreCase(user.getIsActive())) {
             throw new ForbiddenException("ACCOUNT_DEACTIVATED", "This account has been deactivated");
         }
         AccountStatus status = user.getAccountStatus() != null ? user.getAccountStatus() : AccountStatus.ACTIVE;

@@ -97,7 +97,7 @@ graph LR
 - OpenAPI JSON: `http://localhost:8080/v3/api-docs`
 - Health check: `http://localhost:8080/actuator/health`
 
-Click **Authorize** in Swagger UI and paste a JWT (obtained from `POST /api/v1/auth/register` or `/login`) to call protected endpoints.
+Click **Authorize** in Swagger UI and paste a JWT (obtained via `POST /api/v1/auth/register` or `/otp/send` + `/otp/verify` — see [API reference](#api-reference) and [AUTH_SECURITY.md](AUTH_SECURITY.md)) to call protected endpoints.
 
 ---
 
@@ -142,9 +142,9 @@ DB_HOST=localhost;DB_PORT=3306;DB_NAME=pureeats_dev;DB_USERNAME=root;DB_PASSWORD
 
 ## Security & JWT
 
-- **Login/register** (`pureeats-user-service`) issue an HS256 JWT containing: `sub` (userId), `name`, `email`, `phone`, `role`, and `deliveryGuyDetailId` (riders only) — enough for the frontend or any internal caller to know "who is this and what can they do" without another API call.
+- **`/otp/verify`** (`pureeats-user-service`) issues an HS256 JWT containing: `sub` (userId), `name`, `email`, `phone`, `role`, and `deliveryGuyDetailId` (riders only) — enough for the frontend or any internal caller to know "who is this and what can they do" without another API call. There is no password-based login anymore — every account authenticates via OTP (see [AUTH_SECURITY.md](AUTH_SECURITY.md)).
 - **Roles**: `SUPER_ADMIN`, `ADMIN`, `STORE_OWNER`, `DELIVERY`, `CUSTOMER`, `EMPLOYEE`. Every self-registered account starts as `CUSTOMER`; registering a restaurant grants `STORE_OWNER`, registering a rider profile grants `DELIVERY`. A user can hold multiple roles simultaneously (mirrors the legacy schema) — the JWT carries the single highest-priority one (`SUPER_ADMIN` > `ADMIN` > `EMPLOYEE` > `STORE_OWNER` > `DELIVERY` > `CUSTOMER`). `/api/v1/admin/**` accepts either `ADMIN` or `SUPER_ADMIN`.
-- **`SUPER_ADMIN` and `ADMIN` are never self-registered.** There is exactly one `SUPER_ADMIN` account, created once by `SuperAdminSeeder` (a startup `ApplicationRunner` in `pureeats-user-service`) if none exists yet — see [Configuration reference](#configuration-reference) for its env vars. `POST /auth/register` and `POST /auth/signup` both reject the call with `403 REGISTRATION_BLOCKED_FOR_PRIVILEGED_ROLE` if the caller's *currently DB-assigned* role (re-checked on every call, not trusted from the JWT claim) is `ADMIN`/`SUPER_ADMIN` — `RoleService.assertCallerNotPrivileged()`. `ADMIN` accounts are meant to be provisioned by a `SUPER_ADMIN` through a future admin panel, not through public signup.
+- **`SUPER_ADMIN` and `ADMIN` are never self-registered.** There is exactly one `SUPER_ADMIN` account, created once by `SuperAdminSeeder` (a startup `ApplicationRunner` in `pureeats-user-service`) if none exists yet — see [Configuration reference](#configuration-reference) for its env vars. `POST /auth/register` rejects the call with `403 REGISTRATION_BLOCKED_FOR_PRIVILEGED_ROLE` if the caller's *currently DB-assigned* role (re-checked on every call, not trusted from the JWT claim) is `ADMIN`/`SUPER_ADMIN` — `RoleService.assertCallerNotPrivileged()`. `ADMIN` accounts are meant to be provisioned by a `SUPER_ADMIN` through a future admin panel, not through public signup. Both `SUPER_ADMIN`/`ADMIN` log in the same OTP way as everyone else (via their email).
 - **Role changes require re-login** — the JWT is stateless and not re-issued mid-session (e.g. after `POST /api/v1/store-owner/restaurants`, log in again to get a `STORE_OWNER`-role token).
 - **Onboarding exception**: `POST /api/v1/store-owner/restaurants` is reachable by *any* authenticated user (not just existing owners), since that's the endpoint that grants the role in the first place — every other `/api/v1/store-owner/**` route requires the role already.
 - Stateless sessions, CSRF disabled (no cookies involved), permissive CORS (tighten `SecurityConfig.corsConfigurationSource()` for production).
@@ -153,17 +153,17 @@ DB_HOST=localhost;DB_PORT=3306;DB_NAME=pureeats_dev;DB_USERNAME=root;DB_PASSWORD
 
 ## OTP-based auth & security subsystem
 
-A second, richer authentication flow lives alongside the password login above: OTP-challenge
-signup/login (email or phone) with configurable attempt/lock/resend policy, short-lived access
-tokens + rotating refresh tokens, device/session tracking, login history with best-effort IP
-geolocation, an IP/device/email/phone/user blocklist, DB-backed rate limiting, a pluggable
-email/SMS notification abstraction (console by default, Gmail SMTP ready to enable), and an
-audit-log of every security-relevant event. None of it changes or removes anything above — see
-**[AUTH_SECURITY.md](AUTH_SECURITY.md)** for the full architecture, API reference, Gmail setup,
-and configuration reference.
+OTP-challenge signup/login (email or phone) is the **only** authentication mechanism in this API —
+password-based login/register and the old 4-digit phone-OTP endpoints have been removed entirely.
+The flow has a configurable attempt/lock/resend policy, short-lived access tokens + rotating
+refresh tokens, device/session tracking, login history with best-effort IP geolocation, an
+IP/device/email/phone/user blocklist, DB-backed rate limiting, a pluggable email/SMS notification
+abstraction (console by default, Gmail SMTP ready to enable), and an audit log of every
+security-relevant event. See **[AUTH_SECURITY.md](AUTH_SECURITY.md)** for the full architecture,
+API reference, Gmail setup, and configuration reference.
 
-New endpoints at a glance (all under `/api/v1/auth`, all public except `logout-all`):
-`POST /signup`, `POST /otp/initiate`, `POST /otp/verify`, `POST /otp/resend`, `POST /refresh`,
+Endpoints at a glance (all under `/api/v1/auth`, all public except `logout-all`):
+`POST /register`, `POST /otp/send`, `POST /otp/verify`, `POST /otp/resend`, `POST /refresh`,
 `POST /logout`, `POST /logout-all` 🔒.
 
 ---
@@ -367,22 +367,39 @@ erDiagram
 Base path: `/api/v1`. All endpoints return the envelope `{ success, message, data, timestamp }` (see `ApiResponse`). 🔒 = requires `Authorization: Bearer <token>`; role noted where narrower than "any authenticated user".
 
 ### Auth — `AuthController`, `PasswordResetController`
+
+There is exactly one authentication mechanism: OTP-challenge (email or phone). Password-based
+login/register and the old 4-digit phone-OTP endpoints have been removed — see
+[AUTH_SECURITY.md](AUTH_SECURITY.md).
+
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| POST | `/auth/register` | public | Register a new customer account |
-| POST | `/auth/login` | public | Login with email/phone + password |
-| POST | `/auth/otp/send` | public | Send a login OTP to a phone number |
-| POST | `/auth/otp/login` | public | Login (or auto-register) via verified OTP |
-| POST | `/auth/password/forgot` | public | Send a password-reset code by email |
-| POST | `/auth/password/verify` | public | Verify a password-reset code |
-| POST | `/auth/password/reset` | public | Set a new password using a verified code |
-| POST | `/auth/signup` | public | Email signup + verification OTP (see [AUTH_SECURITY.md](AUTH_SECURITY.md)) |
-| POST | `/auth/otp/initiate` | public | Start an OTP-challenge login (phone or email) |
+| POST | `/auth/register` | public | Email signup + verification OTP |
+| POST | `/auth/otp/send` | public | Start an OTP-challenge login (phone or email) |
 | POST | `/auth/otp/verify` | public | Verify a challenge's OTP → access + refresh token |
 | POST | `/auth/otp/resend` | public | Resend the OTP for an existing challenge |
 | POST | `/auth/refresh` | public | Exchange (and rotate) a refresh token for a new access token |
 | POST | `/auth/logout` | public | Revoke one refresh token / session |
 | POST | `/auth/logout-all` | 🔒 | Revoke every session for the current user |
+
+### Admin audit — `AdminAuditController`
+
+Read-only, paginated (`page`/`size`/`sort`) security observability. `ADMIN`/`SUPER_ADMIN` only —
+enforced both by the URL rule below and a `@PreAuthorize` on the controller (see
+[pureeats-user-service/README.md](pureeats-user-service/README.md#admin-audit-endpoints)).
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/admin/audit-logs` | 🔒 admin | Security/activity audit events (filter: `userId`) |
+| GET | `/admin/login-history` | 🔒 admin | Login attempts, success and failure (filter: `userId`) |
+| GET | `/admin/otp-challenges` | 🔒 admin | OTP challenge lifecycle, never the OTP itself (filter: `userId`) |
+| GET | `/admin/rate-limit-buckets` | 🔒 admin | Rate-limit counters |
+| GET | `/admin/security-blocklist` | 🔒 admin | IP/device/email/phone/user blocks (filter: `blockType`) |
+| GET | `/admin/user-devices` | 🔒 admin | Known devices per user (filter: `userId`) |
+| GET | `/admin/user-sessions` | 🔒 admin | Refresh-token sessions, live and revoked (filter: `userId`) |
+| POST | `/auth/password/forgot` | public | Send a password-reset code by email — **note:** with password login removed, there is currently no way to actually use a reset password to log in |
+| POST | `/auth/password/verify` | public | Verify a password-reset code |
+| POST | `/auth/password/reset` | public | Set a new password using a verified code |
 
 ### User profile & addresses — `UserController`, `AddressController`, `RiderController`
 | Method | Path | Auth | Description |
@@ -501,8 +518,8 @@ All in `pureeats-app/src/main/resources/application.yml`, overridable via enviro
 
 Flagged deliberately (need external credentials or product decisions only you can make):
 
-- **Admin panel/APIs** — no `/api/v1/admin/**` controllers yet (the URL prefix is reserved and role-gated in `SecurityConfig` for `ADMIN`/`SUPER_ADMIN`, ready to receive them). The one `SUPER_ADMIN` account itself does exist from first boot (`SuperAdminSeeder`) — there's just nothing behind `/admin/**` for it to call yet. Promoting a user to `ADMIN` currently means assigning the role directly in the database; there's no self-serve or admin-panel path for it (deliberately — see [Security & JWT](#security--jwt)).
+- **Admin panel/APIs** — `/api/v1/admin/**` now has a first tenant: `AdminAuditController` (read-only security/audit views, see [API reference](#api-reference)). Everything else under the prefix (restaurant/order/user management, etc.) is still unbuilt. Promoting a user to `ADMIN` currently means assigning the role directly in the database; there's no self-serve or admin-panel path for it (deliberately — see [Security & JWT](#security--jwt)).
 - **Real payment gateways** — Razorpay/Paytm/PayUmoney/MercadoPago are not integrated; `/payment-gateways` only lists configured rows, COD/WALLET are the only payment modes actually processed.
-- **SMS/email delivery** — the legacy `/auth/otp/*` and `PasswordResetController` codes are still generated/stored only, returned directly in the response while `OTP_DEV_MODE=true`. The newer OTP-challenge flow (see [AUTH_SECURITY.md](AUTH_SECURITY.md)) has a real, pluggable delivery path (Gmail SMTP ready via config; SMS still needs a real gateway credential wired into the existing `SmsProvider` interface) but ships with console-only providers until you configure one.
+- **SMS/email delivery** — the OTP-challenge flow (see [AUTH_SECURITY.md](AUTH_SECURITY.md)) has a real, pluggable delivery path (Gmail SMTP ready via config; SMS still needs a real gateway credential wired into the existing `SmsProvider` interface) but ships with console-only providers until you configure one. `PasswordResetController`'s codes are still generated/stored only, returned directly in the response while `OTP_DEV_MODE=true` — and since password-based login has been removed, a reset password currently has no way to be used to log in.
 - **Bulk upload, geocoder integration, `Translation`/`SmsGateway` admin CRUD** — entities exist in `domain`, no service/controller layer yet.
 - **Delivery-charge tiering** — uses a flat `Restaurant.deliveryCharges`, not the legacy distance-tiered calculation.

@@ -50,7 +50,7 @@ class AuthFlowIntegrationTest {
     void signupThenVerifyIssuesAccessAndRefreshTokens() throws Exception {
         when(notificationService.send(any())).thenReturn(NotificationResult.success("mock-1"));
 
-        MvcResult signupResult = mockMvc.perform(post("/api/v1/auth/signup")
+        MvcResult signupResult = mockMvc.perform(post("/api/v1/auth/register")
                         .contentType("application/json")
                         .content("""
                                 {"fullName":"Jane Doe","email":"jane.doe@example.com"}
@@ -109,7 +109,7 @@ class AuthFlowIntegrationTest {
     void wrongOtpReportsAttemptsRemainingThenLocksAfterMaxAttempts() throws Exception {
         when(notificationService.send(any())).thenReturn(NotificationResult.success("mock-2"));
 
-        MvcResult initiateResult = mockMvc.perform(post("/api/v1/auth/otp/initiate")
+        MvcResult initiateResult = mockMvc.perform(post("/api/v1/auth/otp/send")
                         .contentType("application/json")
                         .content("""
                                 {"method":"EMAIL","email":"wrongotp@example.com"}
@@ -143,7 +143,7 @@ class AuthFlowIntegrationTest {
     void resendIssuesAWorkingReplacementOtpAndInvalidatesThePrevious() throws Exception {
         when(notificationService.send(any())).thenReturn(NotificationResult.success("mock-3"));
 
-        MvcResult initiateResult = mockMvc.perform(post("/api/v1/auth/otp/initiate")
+        MvcResult initiateResult = mockMvc.perform(post("/api/v1/auth/otp/send")
                         .contentType("application/json")
                         .content("""
                                 {"method":"EMAIL","email":"resend@example.com"}

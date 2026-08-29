@@ -17,7 +17,7 @@ import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
-/** Email-based password reset. No email gateway is wired up yet - see {@link OtpService} for the same caveat. */
+/** Email-based password reset. No email gateway is wired up yet for this legacy flow. */
 @Service
 @RequiredArgsConstructor
 public class PasswordResetService {

@@ -18,9 +18,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * SUPER_ADMIN and ADMIN accounts are provisioned out-of-band (seeder / future admin panel) and
- * must never be reachable through the public self-registration endpoints - see
- * {@code RoleService.assertCallerNotPrivileged}. Both {@code /register} (password) and
- * {@code /signup} (OTP-challenge) call the same guard.
+ * must never be reachable through the public self-registration endpoint - see
+ * {@code RoleService.assertCallerNotPrivileged}. There is only one self-registration entry point
+ * now that the legacy password/OTP endpoints are gone: {@code POST /register}, which is the
+ * OTP-challenge email signup ({@code AuthenticationService.signup}).
  */
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
@@ -38,19 +39,19 @@ class RegistrationPrivilegeGuardTest {
     private RoleService roleService;
 
     @Test
-    void adminCannotUseThePasswordRegistrationEndpoint() throws Exception {
+    void adminCannotUseTheRegistrationEndpoint() throws Exception {
         mockMvc.perform(post("/api/v1/auth/register")
                         .header("Authorization", "Bearer " + tokenFor(777_701L, Role.ADMIN))
                         .contentType("application/json")
                         .content("""
-                                {"name":"Sneaky Admin","email":"sneaky-admin@example.com","phone":"9000000099","password":"secret123"}
+                                {"fullName":"Sneaky Admin","email":"sneaky-admin@example.com"}
                                 """))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    void superAdminCannotUseTheOtpSignupEndpoint() throws Exception {
-        mockMvc.perform(post("/api/v1/auth/signup")
+    void superAdminCannotUseTheRegistrationEndpoint() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/register")
                         .header("Authorization", "Bearer " + tokenFor(777_702L, Role.SUPER_ADMIN))
                         .contentType("application/json")
                         .content("""
@@ -64,9 +65,9 @@ class RegistrationPrivilegeGuardTest {
         mockMvc.perform(post("/api/v1/auth/register")
                         .contentType("application/json")
                         .content("""
-                                {"name":"Normal Customer","email":"normal-customer-xyz@example.com","phone":"9000000098","password":"secret123"}
+                                {"fullName":"Normal Customer","email":"normal-customer-xyz@example.com"}
                                 """))
-                .andExpect(status().isCreated());
+                .andExpect(status().isOk());
     }
 
     /**

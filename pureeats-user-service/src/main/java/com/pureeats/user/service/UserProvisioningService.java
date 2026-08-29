@@ -45,7 +45,7 @@ public class UserProvisioningService {
         User user = new User();
         user.setName(name != null && !name.isBlank() ? name : "PureEats User");
         user.setPassword(null);
-        user.setIsActive(AuthService.STATUS_ACTIVE);
+        user.setIsActive(User.STATUS_ACTIVE);
         user.setAccountStatus(AccountStatus.ACTIVE);
         user.setCreatedAt(LocalDateTime.now());
         user.setUpdatedAt(LocalDateTime.now());

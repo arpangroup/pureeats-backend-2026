@@ -1,11 +1,19 @@
 # PureEats — `pureeats-user-service`
 
-Authentication, identity, and account security for PureEats. This module owns **three** things:
-password auth (legacy), a 4-digit phone-OTP login (legacy), and the **OTP-challenge auth
-subsystem** — signup, phone/email OTP login, short-lived access tokens, rotating refresh tokens,
-device/session tracking, rate limiting, blocklisting, and audit logging. This README documents all
-of it from the inside: architecture, request/response contracts, and the exact step-by-step
-sequence of what code runs for every call.
+Authentication, identity, and account security for PureEats. This module's primary responsibility
+is the **OTP-challenge auth subsystem** — signup, phone/email OTP login, short-lived access
+tokens, rotating refresh tokens, device/session tracking, rate limiting, blocklisting, and audit
+logging. This README documents all of it from the inside: architecture, request/response
+contracts, and the exact step-by-step sequence of what code runs for every call.
+
+> **The password-login and 4-digit phone-OTP endpoints that used to exist here have been removed
+> entirely** (not deprecated — deleted, along with `AuthService`, `OtpService`, the `SmsOtp`
+> table, and their DTOs). OTP-challenge auth (this document) is now the only way to authenticate.
+> One consequence worth knowing: `PasswordResetController`/`PasswordResetService` (email-based
+> password reset) still exist and still work in isolation, but since nothing checks a password at
+> login anymore, resetting one currently has no way to be *used* — see [Privileged roles](#privileged-roles-super_admin-and-admin)
+> for the one place a password still matters (`SUPER_ADMIN`/`ADMIN` accounts, which log in via the
+> email OTP flow, not their password).
 
 > For deployment/config (Gmail SMTP setup, every environment variable, production
 > recommendations), see **[AUTH_SECURITY.md](../AUTH_SECURITY.md)** at the repo root. This document
@@ -26,8 +34,8 @@ sequence of what code runs for every call.
 - [Privileged roles: SUPER_ADMIN and ADMIN](#privileged-roles-super_admin-and-admin)
 - [API reference](#api-reference)
 - [Error codes](#error-codes)
-- [Legacy endpoints](#legacy-endpoints)
 - [Data model](#data-model)
+- [Admin audit endpoints](#admin-audit-endpoints)
 - [Testing this module](#testing-this-module)
 
 ---
@@ -87,7 +95,7 @@ a single-purpose class with one job. Nothing here is a "god service."
 | Package | Responsibility | Key classes |
 |---|---|---|
 | `controller` | HTTP surface only — no business logic | `AuthController` |
-| `service` | Orchestration + legacy auth | `AuthenticationService` (new flow), `AuthService` (legacy password/OTP), `UserProvisioningService`, `RoleService` (role resolution + the privileged-role registration guard), `SuperAdminSeeder` (startup-only, provisions the one `SUPER_ADMIN` account) |
+| `service` | Orchestration | `AuthenticationService` (the OTP-challenge flow), `UserProvisioningService`, `RoleService` (role resolution + the privileged-role registration guard), `SuperAdminSeeder` (startup-only, provisions the one `SUPER_ADMIN` account), `PasswordResetService` (legacy, email-based, independent of login) |
 | `otp` | OTP generation, hashing, and the challenge lifecycle | `OtpGenerator` → `SecureOtpGenerator`, `OtpHasher` → `PasswordEncoderOtpHasher`, `OtpChallengeService` |
 | `entity` | JPA entities used **only** by this module | `OtpChallenge`, `SecurityBlockEntry`, `UserDevice`, `LoginHistory`, `UserSession`, `AuditLog`, `RateLimitBucket` |
 | `enums` | Enums used **only** by this module | `AuthenticationMethod`, `OtpChallengeStatus`, `BlockType`, `BlockStatus`, `LoginMethod`, `SecurityEventType` |
@@ -101,7 +109,7 @@ a single-purpose class with one job. Nothing here is a "god service."
 | `security.metadata` | "Who/what is calling" per request | `RequestMetadata`, `RequestMetadataResolver`, `UserAgentParser` |
 | `security` (root) | JWT issuance/validation | `JwtTokenProvider`, `JwtAuthenticationFilter`, `AuthenticatedUser` |
 | `config` | Externalized settings | `AuthSecurityProperties` (`security.*`) |
-| `dto` | Request/response records | `LoginChallengeRequest/Response`, `VerifyOtpRequest`, `AuthTokenResponse`, `ResendOtpRequest/Response`, `SignupRequest`, `RefreshTokenRequest`, `LogoutRequest`, plus the legacy DTOs |
+| `dto` | Request/response records | `LoginChallengeRequest/Response`, `VerifyOtpRequest`, `AuthTokenResponse`, `ResendOtpRequest/Response`, `SignupRequest`, `RefreshTokenRequest`, `LogoutRequest`, plus the password-reset DTOs |
 
 ## SOLID, mapped to actual classes
 
@@ -130,7 +138,7 @@ sequenceDiagram
     participant Notif as NotificationService
     participant DB as Database
 
-    C->>Ctrl: POST /api/v1/auth/signup<br/>{fullName, email}
+    C->>Ctrl: POST /api/v1/auth/register<br/>{fullName, email}
     Ctrl->>Auth: signup(request, metadata)
     Auth->>Auth: assertNotBlocked(IP, EMAIL, DEVICE)
     Auth->>Auth: rateLimiter.enforce(signup quotas)
@@ -168,7 +176,7 @@ sequenceDiagram
     participant Notif as NotificationService
     participant DB as Database
 
-    C->>Ctrl: POST /api/v1/auth/otp/initiate<br/>{method, phone|email}
+    C->>Ctrl: POST /api/v1/auth/otp/send<br/>{method, phone|email}
     Ctrl->>Auth: initiateLogin(request, metadata)
     Auth->>Auth: validate method-specific fields
     Auth->>Auth: assertNotBlocked(IP, PHONE|EMAIL, DEVICE)
@@ -313,7 +321,7 @@ everywhere" — every step names the exact class/method that runs.
 
 | # | Client action | What happens server-side |
 |---|---|---|
-| 1 | `POST /otp/initiate` `{method:"PHONE", countryId:91, phone:"9876543210"}` | `AuthController.initiateOtpLogin` → `AuthenticationService.initiateLogin`: validates the PHONE-shape fields, checks `BlocklistService.isBlocked` for the IP/phone/device, calls `RateLimiter.enforce` four times (login-ip, login-destination, otp-requests-ip, otp-requests-destination), looks up `UserRepository.findByPhone` (not found — first time), then `OtpChallengeService.createChallenge(PHONE, "9876543210", LOGIN_OTP, null, metadata)` generates a 6-digit OTP via `SecureOtpGenerator`, hashes it via `PasswordEncoderOtpHasher` (BCrypt), and inserts an `otp_challenges` row (`status=PENDING`, `userId=null`). |
+| 1 | `POST /otp/send` `{method:"PHONE", countryId:91, phone:"9876543210"}` | `AuthController.initiateOtpLogin` → `AuthenticationService.initiateLogin`: validates the PHONE-shape fields, checks `BlocklistService.isBlocked` for the IP/phone/device, calls `RateLimiter.enforce` four times (login-ip, login-destination, otp-requests-ip, otp-requests-destination), looks up `UserRepository.findByPhone` (not found — first time), then `OtpChallengeService.createChallenge(PHONE, "9876543210", LOGIN_OTP, null, metadata)` generates a 6-digit OTP via `SecureOtpGenerator`, hashes it via `PasswordEncoderOtpHasher` (BCrypt), and inserts an `otp_challenges` row (`status=PENDING`, `userId=null`). |
 | 2 | *(server → notification)* | `AuthenticationService` builds a `NotificationRequest{LOGIN_OTP, SMS, "9876543210", {otp, expiryMinutes, userName:"there"}}` and calls `NotificationService.send(...)`. `NotificationDispatcherService` routes it to `SmsNotificationService`, which renders `templates/sms/otp.txt` and calls the configured `SmsProvider` (console by default). A `notification_logs` row records the attempt — **never** the OTP itself. |
 | 3 | Client receives `200 { data: { challengeId: "c1a2...", maskedDestination: "******3210", expiresIn: 600, resendAvailableIn: 30 } }` | — |
 | 4 | *(user mistypes)* `POST /otp/verify {challengeId:"c1a2...", otp:"000000"}` | `OtpChallengeService.verify` takes a pessimistic lock on the challenge row, compares the hash (no match), increments `attempt_count` to 1, computes `attemptsRemaining = maxAttempts(5) - 1 = 4`, and throws `InvalidOtpException`. This runs in its **own** transaction (`REQUIRES_NEW`) specifically so the attempt counter survives even though the call ends in an exception. |
@@ -333,7 +341,7 @@ everywhere" — every step names the exact class/method that runs.
 
 ## Privileged roles: `SUPER_ADMIN` and `ADMIN`
 
-Both are provisioned **out-of-band** — never through `/register` or `/signup`:
+Both are provisioned **out-of-band** — never through `/register`:
 
 - **`SUPER_ADMIN`** — exactly one account, created once on application startup by
   `SuperAdminSeeder` (an `ApplicationRunner`). On every boot it checks
@@ -346,9 +354,8 @@ Both are provisioned **out-of-band** — never through `/register` or `/signup`:
   (`roles`/`model_has_roles`, `App\User` morph type) or through `RoleService.assignRole(userId,
   Role.ADMIN)` once an internal admin-panel endpoint exists to call it.
 
-**Both roles are explicitly blocked from `/register` and `/signup`.** `RoleService
-.assertCallerNotPrivileged()` runs as the very first line of `AuthService.register` and
-`AuthenticationService.signup`:
+**Both roles are explicitly blocked from `/register`.** `RoleService.assertCallerNotPrivileged()`
+runs as the very first line of `AuthenticationService.signup` (the handler behind `/register`):
 
 ```java
 Long callerId = CurrentUserContext.get();      // null for a normal anonymous signup - the common case
@@ -359,7 +366,7 @@ if (callerId != null && roleService.resolveRole(callerId).isPrivileged()) {
 
 Two things worth being precise about:
 
-1. **It only fires when the caller is already authenticated.** Both endpoints stay public
+1. **It only fires when the caller is already authenticated.** `/register` stays public
    (`permitAll` in `SecurityConfig`) — the check only has something to reject when a request
    happens to carry a valid `Authorization: Bearer` header for an admin/super-admin session. A
    normal anonymous signup is unaffected.
@@ -374,7 +381,7 @@ Base path `/api/v1/auth`. Every response uses the standard envelope
 `{ success, message, data, timestamp, errorCode, requestId }` (`ApiResponse`) — `errorCode`/
 `requestId` are `null` on success. All new endpoints below are **public** except `/logout-all`.
 
-### `POST /signup`
+### `POST /register`
 
 <table>
 <tr><th>Request</th><th>Success response <code>200</code></th></tr>
@@ -412,7 +419,7 @@ Base path `/api/v1/auth`. Every response uses the standard envelope
 
 Errors: `409 EMAIL_ALREADY_REGISTERED`, `403 BLOCKED`, `429 RATE_LIMIT_EXCEEDED`.
 
-### `POST /otp/initiate`
+### `POST /otp/send`
 
 <table>
 <tr><th>Request (phone)</th><th>Request (email)</th></tr>
@@ -438,7 +445,7 @@ Errors: `409 EMAIL_ALREADY_REGISTERED`, `403 BLOCKED`, `429 RATE_LIMIT_EXCEEDED`
 </td></tr>
 </table>
 
-Success response: identical shape to `/signup`'s `data`. Errors: `403 ACCOUNT_LOCKED` /
+Success response: identical shape to `/register`'s `data`. Errors: `403 ACCOUNT_LOCKED` /
 `ACCOUNT_BLOCKED` / `ACCOUNT_DISABLED` / `ACCOUNT_DEACTIVATED` / `BLOCKED`,
 `429 RATE_LIMIT_EXCEEDED`, `400` (missing `countryId`/`phone`/`email` for the chosen method).
 
@@ -572,8 +579,8 @@ No body. Requires `Authorization: Bearer <accessToken>`.
 
 | Code | HTTP | Meaning |
 |---|---|---|
-| `EMAIL_ALREADY_REGISTERED` | 409 | `/signup` called with an email already in `users` |
-| `REGISTRATION_BLOCKED_FOR_PRIVILEGED_ROLE` | 403 | caller is authenticated as `ADMIN`/`SUPER_ADMIN` and called `/register` or `/signup` |
+| `EMAIL_ALREADY_REGISTERED` | 409 | `/register` called with an email already in `users` |
+| `REGISTRATION_BLOCKED_FOR_PRIVILEGED_ROLE` | 403 | caller is authenticated as `ADMIN`/`SUPER_ADMIN` and called `/register` |
 | `BLOCKED` | 403 | IP/device/destination is on `security_blocklist` |
 | `ACCOUNT_LOCKED` | 403 | `accountStatus=TEMPORARILY_LOCKED` and still within `lockedUntil` |
 | `ACCOUNT_BLOCKED` | 403 | `accountStatus=BLOCKED` |
@@ -595,20 +602,6 @@ No body. Requires `Authorization: Bearer <accessToken>`.
 
 ---
 
-## Legacy endpoints
-
-These are **not** part of the flow documented above and are untouched by it:
-
-| Endpoint | Behavior |
-|---|---|
-| `POST /register` | Email/phone + password signup, password stored via BCrypt |
-| `POST /login` | Email-or-phone + password |
-| `POST /otp/send` | 4-digit phone OTP, no attempt/lock/resend policy, `SmsOtp` table |
-| `POST /otp/login` | Verifies that 4-digit OTP, auto-registers on first use |
-
-Kept for backward compatibility with existing clients — new client work should use
-`/otp/initiate` + `/otp/verify` instead, which is why they're marked deprecated in Swagger.
-
 ## Data model
 
 Full column-level DDL reference lives in [`AUTH_SECURITY.md` → Database
@@ -626,6 +619,43 @@ erDiagram
 `security_blocklist`, `rate_limit_buckets`, and `notification_logs` (the last lives in
 `pureeats-notification-service`) don't reference `users` at all — they're keyed by
 IP/device/destination or a bucket key, by design.
+
+## Admin audit endpoints
+
+Read-only, paginated observability over all seven security tables — `AdminAuditController`.
+`ADMIN`/`SUPER_ADMIN` only, enforced **twice**, independently:
+
+1. The pre-existing `SecurityConfig` URL rule — `/api/v1/admin/**` → `hasAnyRole("ADMIN", "SUPER_ADMIN")`.
+2. A class-level `@PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")` on the controller itself,
+   which requires `@EnableMethodSecurity` (now on `pureeats-app`'s `SecurityConfig`). This is
+   Spring Security's *method*-interception mechanism (AOP around the controller method) as
+   opposed to the *URL*-pattern `SecurityFilterChain` mechanism everything else in this app uses —
+   see the class Javadoc on `AdminAuditController` and `SecurityConfig` for why both are kept, and
+   why this pattern isn't used in modules that don't already depend on Spring Security
+   (catalog/order/rating) — that would undo the whole point of centralizing authorization.
+
+| Endpoint | Entity | Filters | Notes |
+|---|---|---|---|
+| `GET /api/v1/admin/audit-logs` | `AuditLog` | `userId` | Every `SecurityEventType` |
+| `GET /api/v1/admin/login-history` | `LoginHistory` | `userId` | Includes best-effort geolocation |
+| `GET /api/v1/admin/otp-challenges` | `OtpChallenge` | `userId` | `maskedDestination`, never the OTP hash |
+| `GET /api/v1/admin/rate-limit-buckets` | `RateLimitBucket` | — | Raw counters, mostly for debugging |
+| `GET /api/v1/admin/security-blocklist` | `SecurityBlockEntry` | `blockType` | `value` shown unmasked — the point of this view is to see exactly what's blocked |
+| `GET /api/v1/admin/user-devices` | `UserDevice` | `userId` | |
+| `GET /api/v1/admin/user-sessions` | `UserSession` | `userId` | Never the refresh-token hash |
+
+All seven are paginated (`page`/`size`/`sort` query params via Spring Data `Pageable`, default 20
+per page, newest first) and wrapped in `PageResponse<T>` (`domain.common.response`) —
+`{content, page, size, totalElements, totalPages}` — rather than a raw list, since these tables
+are append-only and can grow large. Every response is a hand-written DTO, never the JPA entity;
+`OtpChallengeResponse` and `UserSessionResponse` each have a one-line Javadoc explaining exactly
+which field they deliberately omit and why.
+
+These are read-only by design (an "audit" surface, not a management one). Two natural follow-ups
+if you want them: a `POST /api/v1/admin/security-blocklist` to actually create a block
+(`BlocklistService.block(...)` already exists and is unused by any endpoint), and a
+`POST /api/v1/admin/user-sessions/{id}/revoke` for support/incident response
+(`SessionService.revoke`/`revokeAllForUser` already exist too) — neither was in scope here.
 
 ## Testing this module
 

@@ -1,7 +1,6 @@
 package com.pureeats.user.entity;
 
 import com.pureeats.domain.entity.PasswordResetOtp;
-import com.pureeats.domain.entity.SmsOtp;
 import com.pureeats.domain.entity.User;
 import com.pureeats.user.enums.AuthenticationMethod;
 import com.pureeats.notification.enums.NotificationType;
@@ -16,10 +15,9 @@ import java.time.LocalDateTime;
 
 /**
  * A single OTP verification attempt, decoupled from {@link User} (userId is nullable - a
- * signup challenge has no user yet). Replaces neither {@link SmsOtp} nor {@link PasswordResetOtp}
- * (those legacy tables keep serving the pre-existing password-reset/OTP-login endpoints) - this
- * is the richer, policy-enforced table backing the new challenge/verify/resend flow. Lives in
- * pureeats-user-service (not domain) since only this module ever reads/writes it.
+ * signup challenge has no user yet). Replaces the legacy {@link PasswordResetOtp} table's role for
+ * OTP-based auth - this is the richer, policy-enforced table backing the challenge/verify/resend
+ * flow. Lives in pureeats-user-service (not domain) since only this module ever reads/writes it.
  */
 @Entity
 @Table(name = "otp_challenges", indexes = {
