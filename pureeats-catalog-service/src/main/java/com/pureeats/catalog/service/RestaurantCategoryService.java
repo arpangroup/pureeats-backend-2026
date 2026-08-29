@@ -5,9 +5,13 @@ import com.pureeats.catalog.dto.RestaurantSummaryResponse;
 import com.pureeats.catalog.repository.RestaurantCategoryRepository;
 import com.pureeats.catalog.repository.RestaurantCategoryRestaurantRepository;
 import com.pureeats.catalog.repository.RestaurantRepository;
+import com.pureeats.domain.common.response.PageResponse;
 import com.pureeats.domain.entity.Restaurant;
+import com.pureeats.domain.entity.RestaurantCategory;
 import com.pureeats.domain.entity.RestaurantCategoryRestaurant;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +29,14 @@ public class RestaurantCategoryService {
     public List<RestaurantCategoryResponse> listActive() {
         return restaurantCategoryRepository.findByIsActiveTrue().stream()
                 .map(c -> new RestaurantCategoryResponse(c.getId(), c.getName())).toList();
+    }
+
+    /** Admin listing - all categories, active or not. */
+    @Transactional(readOnly = true)
+    public PageResponse<RestaurantCategoryResponse> listPaged(Pageable pageable) {
+        Page<RestaurantCategory> page = restaurantCategoryRepository.findAll(pageable);
+        return PageResponse.of(page.getContent().stream().map(c -> new RestaurantCategoryResponse(c.getId(), c.getName())).toList(),
+                page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
     }
 
     @Transactional(readOnly = true)

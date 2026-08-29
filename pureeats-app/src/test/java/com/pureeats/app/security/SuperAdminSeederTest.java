@@ -3,7 +3,7 @@ package com.pureeats.app.security;
 import com.pureeats.domain.enums.Role;
 import com.pureeats.user.repository.UserRepository;
 import com.pureeats.user.service.RoleService;
-import com.pureeats.user.service.SuperAdminSeeder;
+import com.pureeats.user.seeder.SuperAdminSeeder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;

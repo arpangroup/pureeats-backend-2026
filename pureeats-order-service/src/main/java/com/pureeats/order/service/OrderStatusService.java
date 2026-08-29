@@ -2,12 +2,14 @@ package com.pureeats.order.service;
 
 import com.pureeats.domain.entity.OrderStatus;
 import com.pureeats.domain.enums.OrderStatusCode;
+import com.pureeats.order.dto.OrderStatusResponse;
 import com.pureeats.order.repository.OrderStatusRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -36,6 +38,12 @@ public class OrderStatusService {
         codeToId.put(code, id);
         idToCode.put(id, code);
         return id;
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrderStatusResponse> listAll() {
+        return orderStatusRepository.findAll().stream()
+                .map(s -> new OrderStatusResponse(s.getId(), s.getName())).toList();
     }
 
     @Transactional(readOnly = true)

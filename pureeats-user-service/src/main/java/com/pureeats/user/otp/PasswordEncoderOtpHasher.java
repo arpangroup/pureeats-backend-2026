@@ -13,11 +13,13 @@ public class PasswordEncoderOtpHasher implements OtpHasher {
 
     @Override
     public String hash(String otp) {
-        return passwordEncoder.encode(otp);
+        //return passwordEncoder.encode(otp);
+        return otp;
     }
 
     @Override
     public boolean matches(String otp, String hash) {
-        return hash != null && passwordEncoder.matches(otp, hash);
+        //return hash != null && passwordEncoder.matches(otp, hash);
+        return otp.equals(hash);
     }
 }

@@ -8,9 +8,12 @@ import com.pureeats.catalog.repository.AddonCategoryRepository;
 import com.pureeats.catalog.repository.AddonRepository;
 import com.pureeats.domain.common.exception.ForbiddenException;
 import com.pureeats.domain.common.exception.ResourceNotFoundException;
+import com.pureeats.domain.common.response.PageResponse;
 import com.pureeats.domain.entity.Addon;
 import com.pureeats.domain.entity.AddonCategory;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,6 +49,23 @@ public class AddonService {
     public List<AddonResponse> listAddons(Long addonCategoryId) {
         return addonRepository.findByAddonCategoryIdAndIsActiveTrue(addonCategoryId.intValue()).stream()
                 .map(this::toResponse).toList();
+    }
+
+    /** Admin listing - every addon category, regardless of owner. */
+    @Transactional(readOnly = true)
+    public PageResponse<AddonCategoryResponse> listCategoriesPaged(Pageable pageable) {
+        Page<AddonCategory> page = addonCategoryRepository.findAll(pageable);
+        return PageResponse.of(page.getContent().stream()
+                .map(c -> new AddonCategoryResponse(c.getId(), c.getName(), c.getType())).toList(),
+                page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
+    }
+
+    /** Admin listing - every addon, optionally scoped to one category, active or not. */
+    @Transactional(readOnly = true)
+    public PageResponse<AddonResponse> listAddonsPaged(Long addonCategoryId, Pageable pageable) {
+        Page<Addon> page = addonRepository.findPage(addonCategoryId != null ? addonCategoryId.intValue() : null, pageable);
+        return PageResponse.of(page.getContent().stream().map(this::toResponse).toList(),
+                page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
     }
 
     @Transactional

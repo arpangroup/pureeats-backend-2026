@@ -1,10 +1,11 @@
-package com.pureeats.user.service;
+package com.pureeats.user.seeder;
 
 import com.pureeats.domain.common.PiiMaskUtil;
 import com.pureeats.domain.entity.User;
 import com.pureeats.domain.enums.AccountStatus;
 import com.pureeats.domain.enums.Role;
 import com.pureeats.user.repository.UserRepository;
+import com.pureeats.user.service.RoleService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;

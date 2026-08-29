@@ -12,6 +12,7 @@ import com.pureeats.user.config.AuthSecurityProperties;
 import com.pureeats.user.repository.OtpChallengeRepository;
 import com.pureeats.user.security.metadata.RequestMetadata;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +28,7 @@ import java.util.UUID;
  * row lock ({@link OtpChallengeRepository#findWithLockByChallengeId}) so two concurrent verify (or
  * resend) calls for the same challenge can never both succeed or corrupt the attempt counter.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OtpChallengeService {

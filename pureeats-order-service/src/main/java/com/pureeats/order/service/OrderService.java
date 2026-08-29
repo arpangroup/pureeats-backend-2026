@@ -9,6 +9,7 @@ import com.pureeats.domain.common.exception.BadRequestException;
 import com.pureeats.domain.common.exception.ForbiddenException;
 import com.pureeats.domain.common.exception.ResourceNotFoundException;
 import com.pureeats.domain.entity.*;
+import com.pureeats.domain.common.response.PageResponse;
 import com.pureeats.domain.enums.DeliveryType;
 import com.pureeats.domain.enums.OrderStatusCode;
 import com.pureeats.notification.service.NotificationDispatchService;
@@ -17,7 +18,10 @@ import com.pureeats.order.repository.OrderItemAddonRepository;
 import com.pureeats.order.repository.OrderItemRepository;
 import com.pureeats.order.repository.OrderRepository;
 import com.pureeats.user.repository.AddressRepository;
+import com.pureeats.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,6 +51,7 @@ public class OrderService {
     private final CouponService couponService;
     private final AddressRepository addressRepository;
     private final NotificationDispatchService notificationDispatchService;
+    private final UserRepository userRepository;
 
     @Transactional
     public OrderResponse placeOrder(Long userId, PlaceOrderRequest request) {
@@ -197,6 +202,31 @@ public class OrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
     }
 
+    /** Admin listing - every order, optionally filtered by restaurant/status/uniqueOrderId search. */
+    @Transactional(readOnly = true)
+    public PageResponse<AdminOrderSummaryResponse> listPaged(Long restaurantId, Integer statusId, String search, Pageable pageable) {
+        Page<Order> page = orderRepository.findPage(
+                restaurantId != null ? restaurantId.intValue() : null, statusId, search, pageable);
+        return PageResponse.of(page.getContent().stream().map(this::toAdminSummary).toList(),
+                page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
+    }
+
+    /** Admin detail - unlike {@link #getOrder}, not scoped to the caller owning the order. */
+    @Transactional(readOnly = true)
+    public OrderResponse getOrderForAdmin(Long orderId) {
+        return toResponse(findOrThrow(orderId));
+    }
+
+    private AdminOrderSummaryResponse toAdminSummary(Order order) {
+        OrderStatusCode status = orderStatusService.codeFor(order.getOrderstatusId());
+        String customerName = userRepository.findById(order.getUserId().longValue()).map(User::getName).orElse("Unknown");
+        String restaurantName = restaurantRepository.findById(order.getRestaurantId().longValue()).map(Restaurant::getName).orElse("Unknown");
+        int itemCount = orderItemRepository.findByOrderId(order.getId().intValue()).size();
+        return new AdminOrderSummaryResponse(order.getId(), order.getUniqueOrderId(), status != null ? status.name() : "UNKNOWN",
+                order.getUserId().longValue(), order.getRestaurantId().longValue(), customerName, restaurantName, itemCount,
+                order.getTotal(), order.getPayable(), order.getPaymentMode(), order.getCouponName(), order.getCreatedAt());
+    }
+
     OrderResponse toResponse(Order order) {
         List<OrderItem> items = orderItemRepository.findByOrderId(order.getId().intValue());
         List<OrderItemResponse> itemResponses = items.stream().map(oi -> {
@@ -207,10 +237,16 @@ public class OrderService {
         }).toList();
 
         OrderStatusCode status = orderStatusService.codeFor(order.getOrderstatusId());
+        String customerName = userRepository.findById(order.getUserId().longValue()).map(User::getName).orElse("Unknown");
+        String restaurantName = restaurantRepository.findById(order.getRestaurantId().longValue()).map(Restaurant::getName).orElse("Unknown");
         return new OrderResponse(order.getId(), order.getUniqueOrderId(), status != null ? status.name() : "UNKNOWN",
-                order.getRestaurantId().longValue(), order.getAddress(), order.getTax(), order.getRestaurantCharge(),
+                order.getOrderstatusId(), order.getUserId().longValue(), order.getRestaurantId().longValue(),
+                customerName, restaurantName, order.getAddress(), order.getTax(), order.getRestaurantCharge(),
                 order.getDeliveryCharge(), order.getDriverTipAmount(), order.getTotal(), order.getPayable(),
-                order.getPaymentMode(), order.getDeliveryPin(), order.getOrderComment(), order.getCreatedAt(), itemResponses);
+                order.getPaymentMode(), order.getDeliveryPin(), order.getOrderComment(), order.getCouponName(),
+                order.getTransactionId(), order.getDeliveryType(), order.getOrderFrom(),
+                order.getRestaurantAcceptAt(), order.getRestaurantReadyAt(), order.getRiderAcceptAt(),
+                order.getRiderPickedAt(), order.getRiderDeliverAt(), order.getCreatedAt(), itemResponses);
     }
 
     private OrderSummaryResponse toSummary(Order order) {

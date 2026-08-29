@@ -7,9 +7,12 @@ import com.pureeats.catalog.dto.ItemResponse;
 import com.pureeats.catalog.repository.ItemCategoryRepository;
 import com.pureeats.catalog.repository.ItemRepository;
 import com.pureeats.domain.common.exception.ResourceNotFoundException;
+import com.pureeats.domain.common.response.PageResponse;
 import com.pureeats.domain.entity.Item;
 import com.pureeats.domain.entity.ItemCategory;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,6 +43,22 @@ public class MenuService {
     public List<ItemCategoryResponse> listCategories(Long ownerUserId) {
         return itemCategoryRepository.findByUserId(ownerUserId.intValue()).stream()
                 .map(this::toCategoryResponse).toList();
+    }
+
+    /** Admin listing - every item, optionally scoped to one restaurant and/or a name search. */
+    @Transactional(readOnly = true)
+    public PageResponse<ItemResponse> listItemsPaged(Long restaurantId, String search, Pageable pageable) {
+        Page<Item> page = itemRepository.findPage(restaurantId != null ? restaurantId.intValue() : null, search, pageable);
+        return PageResponse.of(page.getContent().stream().map(this::toItemResponse).toList(),
+                page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
+    }
+
+    /** Admin listing - every item category, enabled or not. */
+    @Transactional(readOnly = true)
+    public PageResponse<ItemCategoryResponse> listCategoriesPaged(Pageable pageable) {
+        Page<ItemCategory> page = itemCategoryRepository.findAll(pageable);
+        return PageResponse.of(page.getContent().stream().map(this::toCategoryResponse).toList(),
+                page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
     }
 
     @Transactional

@@ -7,10 +7,14 @@ import com.pureeats.catalog.dto.CouponResponse;
 import com.pureeats.catalog.repository.CouponRepository;
 import com.pureeats.catalog.repository.CouponUsageRepository;
 import com.pureeats.domain.common.exception.BadRequestException;
+import com.pureeats.domain.common.exception.ResourceNotFoundException;
+import com.pureeats.domain.common.response.PageResponse;
 import com.pureeats.domain.entity.Coupon;
 import com.pureeats.domain.entity.CouponUsage;
 import com.pureeats.domain.enums.DiscountType;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +36,20 @@ public class CouponService {
     public List<CouponResponse> listAvailable(Integer restaurantId) {
         return couponRepository.findByIsActiveTrueAndRestaurantIdIn(List.of(GLOBAL_RESTAURANT_ID, restaurantId))
                 .stream().map(this::toResponse).toList();
+    }
+
+    /** Admin listing - every coupon, optionally filtered by a name/code search. */
+    @Transactional(readOnly = true)
+    public PageResponse<CouponResponse> listPaged(String search, Pageable pageable) {
+        Page<Coupon> page = couponRepository.findPage(search, pageable);
+        return PageResponse.of(page.getContent().stream().map(this::toResponse).toList(),
+                page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
+    }
+
+    @Transactional(readOnly = true)
+    public CouponResponse getById(Long id) {
+        return toResponse(couponRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Coupon not found: " + id)));
     }
 
     @Transactional

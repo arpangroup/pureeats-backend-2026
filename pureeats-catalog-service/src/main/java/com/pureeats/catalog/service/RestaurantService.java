@@ -5,11 +5,14 @@ import com.pureeats.catalog.repository.RestaurantRepository;
 import com.pureeats.catalog.repository.RestaurantUserRepository;
 import com.pureeats.domain.common.exception.ForbiddenException;
 import com.pureeats.domain.common.exception.ResourceNotFoundException;
+import com.pureeats.domain.common.response.PageResponse;
 import com.pureeats.domain.entity.Restaurant;
 import com.pureeats.domain.entity.RestaurantUser;
 import com.pureeats.domain.enums.Role;
 import com.pureeats.user.service.RoleService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,6 +48,14 @@ public class RestaurantService {
     @Transactional(readOnly = true)
     public RestaurantDetailResponse getById(Long id) {
         return toDetail(findOrThrow(id));
+    }
+
+    /** Admin listing - every restaurant regardless of active/accepted status. */
+    @Transactional(readOnly = true)
+    public PageResponse<RestaurantSummaryResponse> listPaged(String search, Pageable pageable) {
+        Page<Restaurant> page = restaurantRepository.findPage(search, pageable);
+        return PageResponse.of(page.getContent().stream().map(this::toSummary).toList(),
+                page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
     }
 
     @Transactional(readOnly = true)
