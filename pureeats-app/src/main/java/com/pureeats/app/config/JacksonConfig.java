@@ -1,5 +1,6 @@
 package com.pureeats.app.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.jackson.autoconfigure.JsonMapperBuilderCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,5 +17,10 @@ public class JacksonConfig {
     @Bean
     public JsonMapperBuilderCustomizer primitiveDefaultsCustomizer() {
         return builder -> builder.disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES);
+    }
+
+    @Bean
+    public ObjectMapper objectMapper() {
+        return new ObjectMapper();
     }
 }
