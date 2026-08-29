@@ -37,8 +37,14 @@ public class JwtTokenProvider {
     }
 
     public String generateToken(AuthenticatedUser user) {
+        return generateToken(user, expirationMs);
+    }
+
+    /** Same claims as {@link #generateToken(AuthenticatedUser)}, but with a caller-chosen lifetime - used by the
+     * OTP-challenge flow's short-lived (default 15 min) access tokens instead of the legacy 24h default. */
+    public String generateToken(AuthenticatedUser user, long expirationMsOverride) {
         Date now = new Date();
-        Date expiry = new Date(now.getTime() + expirationMs);
+        Date expiry = new Date(now.getTime() + expirationMsOverride);
 
         var builder = Jwts.builder()
                 .subject(String.valueOf(user.userId()))

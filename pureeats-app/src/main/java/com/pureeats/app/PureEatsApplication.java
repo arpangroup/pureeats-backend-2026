@@ -16,7 +16,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
  * spins up an unused in-memory user and logs a generated password on every startup.
  */
 @SpringBootApplication(scanBasePackages = "com.pureeats", exclude = UserDetailsServiceAutoConfiguration.class)
-@EntityScan(basePackages = "com.pureeats.domain.entity")
+@EntityScan(basePackages = {"com.pureeats.domain.entity", "com.pureeats.user.entity", "com.pureeats.notification.entity"})
 @EnableJpaRepositories(basePackages = "com.pureeats")
 public class PureEatsApplication {
 

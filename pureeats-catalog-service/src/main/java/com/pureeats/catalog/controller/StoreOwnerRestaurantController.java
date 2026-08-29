@@ -38,7 +38,7 @@ public class StoreOwnerRestaurantController {
     @Operation(summary = "Register a new restaurant (pending admin acceptance)")
     public ApiResponse<RestaurantDetailResponse> create(@AuthenticationPrincipal AuthenticatedUser principal,
                                                          @Valid @RequestBody RestaurantCreateRequest request) {
-        return ApiResponse.success("Restaurant created (awaiting admin approval) - log in again to receive a RESTAURANT_OWNER-role token",
+        return ApiResponse.success("Restaurant created (awaiting admin approval) - log in again to receive a STORE_OWNER-role token",
                 restaurantService.create(principal.userId(), request));
     }
 

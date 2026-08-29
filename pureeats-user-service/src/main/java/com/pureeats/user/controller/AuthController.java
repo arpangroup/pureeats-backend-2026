@@ -1,10 +1,15 @@
 package com.pureeats.user.controller;
 
+import com.pureeats.domain.common.CurrentUserContext;
 import com.pureeats.domain.common.response.ApiResponse;
 import com.pureeats.user.dto.*;
+import com.pureeats.user.security.metadata.RequestMetadata;
+import com.pureeats.user.security.metadata.RequestMetadataResolver;
 import com.pureeats.user.service.AuthService;
+import com.pureeats.user.service.AuthenticationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -13,14 +18,16 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
-@Tag(name = "Auth", description = "Registration, password login and OTP login")
+@Tag(name = "Auth", description = "Registration, password login, legacy OTP login and the OTP-challenge auth flow")
 public class AuthController {
 
     private final AuthService authService;
+    private final AuthenticationService authenticationService;
+    private final RequestMetadataResolver requestMetadataResolver;
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Register a new customer account")
+    @Operation(summary = "Register a new customer account (email/phone + password)")
     public ApiResponse<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
         return ApiResponse.success("Registered successfully", authService.register(request));
     }
@@ -32,14 +39,65 @@ public class AuthController {
     }
 
     @PostMapping("/otp/send")
-    @Operation(summary = "Send a login OTP to a phone number")
+    @Operation(summary = "[Legacy] Send a login OTP to a phone number - superseded by /otp/initiate")
     public ApiResponse<OtpSentResponse> sendLoginOtp(@Valid @RequestBody SendOtpRequest request) {
         return ApiResponse.success(authService.sendLoginOtp(request.phone()));
     }
 
     @PostMapping("/otp/login")
-    @Operation(summary = "Login (or auto-register) using a verified phone OTP")
+    @Operation(summary = "[Legacy] Login (or auto-register) using a verified phone OTP - superseded by /otp/initiate + /otp/verify")
     public ApiResponse<AuthResponse> loginWithOtp(@Valid @RequestBody OtpLoginRequest request) {
         return ApiResponse.success("Logged in successfully", authService.loginWithOtp(request));
+    }
+
+    // --- OTP-challenge auth flow (section: signup / login / verify / resend / refresh / logout) ---
+
+    @PostMapping("/signup")
+    @Operation(summary = "Create an account by email and send a verification OTP")
+    public ApiResponse<LoginChallengeResponse> signup(@Valid @RequestBody SignupRequest request, HttpServletRequest httpRequest) {
+        return ApiResponse.success(authenticationService.signup(request, metadata(httpRequest)));
+    }
+
+    @PostMapping("/otp/initiate")
+    @Operation(summary = "Start an OTP-based login challenge for a phone or email")
+    public ApiResponse<LoginChallengeResponse> initiateOtpLogin(@Valid @RequestBody LoginChallengeRequest request, HttpServletRequest httpRequest) {
+        return ApiResponse.success(authenticationService.initiateLogin(request, metadata(httpRequest)));
+    }
+
+    @PostMapping("/otp/verify")
+    @Operation(summary = "Verify a challenge's OTP and receive an access + refresh token")
+    public ApiResponse<AuthTokenResponse> verifyOtp(@Valid @RequestBody VerifyOtpRequest request, HttpServletRequest httpRequest) {
+        return ApiResponse.success("Authentication successful.",
+                authenticationService.verifyOtp(request.challengeId(), request.otp(), metadata(httpRequest)));
+    }
+
+    @PostMapping("/otp/resend")
+    @Operation(summary = "Resend the OTP for an existing challenge")
+    public ApiResponse<ResendOtpResponse> resendOtp(@Valid @RequestBody ResendOtpRequest request, HttpServletRequest httpRequest) {
+        return ApiResponse.success(authenticationService.resendOtp(request.challengeId(), metadata(httpRequest)));
+    }
+
+    @PostMapping("/refresh")
+    @Operation(summary = "Exchange a refresh token for a new access + refresh token (rotated)")
+    public ApiResponse<AuthTokenResponse> refresh(@Valid @RequestBody RefreshTokenRequest request, HttpServletRequest httpRequest) {
+        return ApiResponse.success(authenticationService.refresh(request.refreshToken(), metadata(httpRequest)));
+    }
+
+    @PostMapping("/logout")
+    @Operation(summary = "Revoke a single refresh token / session")
+    public ApiResponse<Void> logout(@Valid @RequestBody LogoutRequest request, HttpServletRequest httpRequest) {
+        authenticationService.logout(request.refreshToken(), metadata(httpRequest));
+        return ApiResponse.success("Logged out successfully", null);
+    }
+
+    @PostMapping("/logout-all")
+    @Operation(summary = "Revoke every session for the currently authenticated user")
+    public ApiResponse<Void> logoutAll(HttpServletRequest httpRequest) {
+        authenticationService.logoutAll(CurrentUserContext.get(), metadata(httpRequest));
+        return ApiResponse.success("Logged out of all devices", null);
+    }
+
+    private RequestMetadata metadata(HttpServletRequest request) {
+        return requestMetadataResolver.resolve(request);
     }
 }

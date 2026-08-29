@@ -66,9 +66,9 @@ curl -s -X POST http://localhost:8080/api/v1/users/me/addresses \
 
 ## 3. Getting a token for a different role
 
-Every new account starts as `CUSTOMER`. `RESTAURANT_OWNER` and `DELIVERY` are granted by specific actions — **and since the JWT is stateless, you must log in again afterward to receive a token with the new role**:
+Every new account starts as `CUSTOMER`. `STORE_OWNER` and `DELIVERY` are granted by specific actions — **and since the JWT is stateless, you must log in again afterward to receive a token with the new role**:
 
-- **Become a restaurant owner**: `POST /api/v1/store-owner/restaurants` with your current (customer) token → grants `RESTAURANT_OWNER` → log in again to get an owner-role token.
+- **Become a restaurant owner**: `POST /api/v1/store-owner/restaurants` with your current (customer) token → grants `STORE_OWNER` → log in again to get an owner-role token.
 - **Become a rider**: `POST /api/v1/users/me/rider-profile` with your current token → grants `DELIVERY` → log in again to get a rider-role token.
 
 ```bash

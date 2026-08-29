@@ -37,6 +37,10 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // Carved out before the broad "/api/v1/auth/**" permitAll below: revoking
+                        // every session for "the current user" only means something once a JWT
+                        // identifies who that is - same pattern as the store-owner-onboarding route.
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/auth/logout-all").authenticated()
                         .requestMatchers(
                                 "/api/v1/auth/**",
                                 "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**",
@@ -55,12 +59,12 @@ public class SecurityConfig {
                                 "/api/v1/ratings/restaurants/**",
                                 "/api/v1/ratings/drivers/**"
                         ).permitAll()
-                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
                         // Onboarding: any authenticated user may register their first restaurant, which is
-                        // what grants the RESTAURANT_OWNER role (see RestaurantService.create) - so this one
+                        // what grants the STORE_OWNER role (see RestaurantService.create) - so this one
                         // route must be reachable before a user actually holds that role.
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/store-owner/restaurants").authenticated()
-                        .requestMatchers("/api/v1/store-owner/**").hasRole("RESTAURANT_OWNER")
+                        .requestMatchers("/api/v1/store-owner/**").hasRole("STORE_OWNER")
                         .requestMatchers("/api/v1/delivery/**").hasRole("DELIVERY")
                         .anyRequest().authenticated()
                 )

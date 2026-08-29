@@ -97,7 +97,7 @@ public class RestaurantService {
         link.setUpdatedAt(LocalDateTime.now());
         restaurantUserRepository.save(link);
 
-        roleService.assignRole(ownerUserId, Role.RESTAURANT_OWNER);
+        roleService.assignRole(ownerUserId, Role.STORE_OWNER);
 
         return toDetail(restaurant);
     }

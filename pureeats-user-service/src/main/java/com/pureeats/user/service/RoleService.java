@@ -1,5 +1,7 @@
 package com.pureeats.user.service;
 
+import com.pureeats.domain.common.CurrentUserContext;
+import com.pureeats.domain.common.exception.ForbiddenException;
 import com.pureeats.domain.entity.ModelHasRole;
 import com.pureeats.domain.entity.Role;
 import com.pureeats.user.repository.ModelHasRoleRepository;
@@ -27,13 +29,14 @@ public class RoleService {
 
     /**
      * A user can hold several rows in {@code model_has_roles} at once (e.g. every account starts
-     * as CUSTOMER, then gains RESTAURANT_OWNER on registering a restaurant) - this resolves to the
+     * as CUSTOMER, then gains STORE_OWNER on registering a restaurant) - this resolves to the
      * single highest-privilege role for the JWT, in this fixed priority order.
      */
     private static final List<com.pureeats.domain.enums.Role> ROLE_PRIORITY = List.of(
+            com.pureeats.domain.enums.Role.SUPER_ADMIN,
             com.pureeats.domain.enums.Role.ADMIN,
             com.pureeats.domain.enums.Role.EMPLOYEE,
-            com.pureeats.domain.enums.Role.RESTAURANT_OWNER,
+            com.pureeats.domain.enums.Role.STORE_OWNER,
             com.pureeats.domain.enums.Role.DELIVERY,
             com.pureeats.domain.enums.Role.CUSTOMER
     );
@@ -60,6 +63,33 @@ public class RoleService {
                 .anyMatch(a -> a.getRoleId().equals(roleEntity.getId()));
         if (!alreadyAssigned) {
             modelHasRoleRepository.save(new ModelHasRole(roleEntity.getId(), USER_MORPH_TYPE, userId));
+        }
+    }
+
+    /** Whether any user currently holds {@code role} at all - used by the SUPER_ADMIN startup seeder to stay idempotent. */
+    @Transactional(readOnly = true)
+    public boolean anyUserHasRole(com.pureeats.domain.enums.Role role) {
+        return roleRepository.findByName(role.legacyName())
+                .map(entity -> modelHasRoleRepository.existsByRoleId(entity.getId()))
+                .orElse(false);
+    }
+
+    /**
+     * Self-registration (password signup, email signup) must never be reachable from a session
+     * that already holds an elevated role - {@code SUPER_ADMIN} is seeded once at startup and
+     * {@code ADMIN} accounts are meant to be provisioned by a SUPER_ADMIN, not created through the
+     * public signup flow. A no-op for anonymous callers (the normal case - these endpoints are
+     * public), since {@link CurrentUserContext} is only populated when a valid JWT was presented.
+     */
+    @Transactional(readOnly = true)
+    public void assertCallerNotPrivileged() {
+        Long callerId = CurrentUserContext.get();
+        if (callerId == null) {
+            return;
+        }
+        if (resolveRole(callerId).isPrivileged()) {
+            throw new ForbiddenException("REGISTRATION_BLOCKED_FOR_PRIVILEGED_ROLE",
+                    "Admin and Super Admin accounts cannot use the self-registration flow.");
         }
     }
 

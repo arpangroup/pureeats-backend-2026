@@ -22,17 +22,16 @@ public class AuthService {
     public static final String STATUS_ACTIVE = "ACTIVE";
     public static final String STATUS_INACTIVE = "INACTIVE";
 
-    /** Placeholder-email domain used when a user is created purely via phone+OTP (email is NOT NULL/unique on `users`). */
-    private static final String OTP_PLACEHOLDER_EMAIL_DOMAIN = "@otp.pureeats.local";
-
     private final UserRepository userRepository;
     private final RoleService roleService;
     private final OtpService otpService;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final UserProvisioningService userProvisioningService;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
+        roleService.assertCallerNotPrivileged();
         if (userRepository.existsByEmail(request.email())) {
             throw new ConflictException("An account with this email already exists");
         }
@@ -83,25 +82,11 @@ public class AuthService {
         otpService.verify(request.phone(), request.otp());
 
         User user = userRepository.findByPhone(request.phone())
-                .orElseGet(() -> registerViaOtp(request.phone(), request.name()));
+                .orElseGet(() -> userProvisioningService.provisionViaPhoneOtp(request.phone(), request.name()));
         assertActive(user);
 
         Role role = roleService.resolveRole(user.getId());
         return issueToken(user, role);
-    }
-
-    private User registerViaOtp(String phone, String name) {
-        User user = new User();
-        user.setName(name != null && !name.isBlank() ? name : "PureEats User");
-        user.setEmail(phone + OTP_PLACEHOLDER_EMAIL_DOMAIN);
-        user.setPhone(phone);
-        user.setPassword(null);
-        user.setIsActive(STATUS_ACTIVE);
-        user.setCreatedAt(LocalDateTime.now());
-        user.setUpdatedAt(LocalDateTime.now());
-        user = userRepository.save(user);
-        roleService.assignRole(user.getId(), Role.CUSTOMER);
-        return user;
     }
 
     private java.util.Optional<User> findByEmailOrPhone(String emailOrPhone) {

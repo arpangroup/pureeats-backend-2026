@@ -23,6 +23,7 @@ CREATE DATABASE pureeatsdev;
 - [Getting started](#getting-started)
 - [Explore the API](#explore-the-api)
 - [Security & JWT](#security--jwt)
+- [OTP-based auth & security subsystem](#otp-based-auth--security-subsystem)
 - [Entity relationships](#entity-relationships)
 - [API reference](#api-reference)
 - [Configuration reference](#configuration-reference)
@@ -52,9 +53,9 @@ CREATE DATABASE pureeatsdev;
 ```
 pureeats-parent (pom)
 ├── domain                          entities, enums, exceptions, response envelope — no web/JPA-impl deps
-├── pureeats-user-service           auth, JWT issuance/validation, users, addresses, rider onboarding, roles
+├── pureeats-notification-service   push tokens, in-app alerts, NotificationDispatchService, email/SMS NotificationService
+├── pureeats-user-service           auth (password + OTP-challenge), JWT/refresh tokens, users, addresses, rider onboarding, roles, blocklist/rate-limit/audit
 ├── pureeats-catalog-service        restaurants, menu, addons, coupons, discovery content
-├── pureeats-notification-service   push tokens, in-app alerts, NotificationDispatchService
 ├── pureeats-order-service          orders, delivery/rider workflow, wallet, earnings, support tickets
 ├── pureeats-rating-service         restaurant & driver ratings
 └── pureeats-app                    the ONLY runnable module — security config, OpenAPI, application.yml
@@ -64,9 +65,10 @@ pureeats-parent (pom)
 
 ```mermaid
 graph LR
+    domain --> notif[pureeats-notification-service]
     domain --> user[pureeats-user-service]
     domain --> catalog[pureeats-catalog-service]
-    domain --> notif[pureeats-notification-service]
+    notif --> user
     user --> catalog
     user --> order[pureeats-order-service]
     catalog --> order
@@ -83,10 +85,10 @@ graph LR
 **Why this split:**
 - `domain` is the shared kernel: every module depends on it, it depends on nothing (no Spring Web/Data — just `jakarta.persistence-api` + Lombok). Holds JPA entities (flat, FK-as-`Long`/`Integer` columns — **no `@ManyToOne`/`@OneToMany`**, deliberately, to avoid cross-module lazy-loading and keep entities framework-light), shared enums (`Role`, `OrderStatusCode`, `DiscountType`, `PaymentMode`, `DeliveryType`, `CommissionBasis`), the `ApiException`/`ApiResponse` envelope, and `CurrentUserContext` (a `ThreadLocal<Long>` set by the JWT filter).
 - `pureeats-user-service` owns identity: issuing/validating JWTs, password auth, OTP login, roles (mirrors the legacy Spatie `roles`/`model_has_roles` schema so seeded data keeps working), addresses, rider (`DeliveryGuyDetail`) profiles.
-- `pureeats-catalog-service` depends on `user-service` only to call `RoleService.assignRole(...)` when a user registers their first restaurant (grants `RESTAURANT_OWNER`).
+- `pureeats-catalog-service` depends on `user-service` only to call `RoleService.assignRole(...)` when a user registers their first restaurant (grants `STORE_OWNER`).
 - `pureeats-order-service` is the busiest module — it depends on `user-service` (addresses, rider limits), `catalog-service` (menu pricing, coupon validation), and `notification-service` (order-event pushes).
-- `pureeats-notification-service` and `pureeats-rating-service` are kept minimal/independent so nothing else is forced to depend on them.
-- **Authorization is centralized**, not scattered: `pureeats-app`'s single `SecurityFilterChain` gates URL prefixes by role (`/api/v1/store-owner/**` → `RESTAURANT_OWNER`, `/api/v1/delivery/**` → `DELIVERY`, `/api/v1/admin/**` → `ADMIN`). Business modules never need a Spring Security dependency for that — they read `CurrentUserContext.get()` (plain `Long`, no framework needed) or `@AuthenticationPrincipal AuthenticatedUser` for row-level ownership checks (e.g. "does this restaurant belong to this owner").
+- `pureeats-notification-service` depends only on `domain` and sits *below* `pureeats-user-service` (which depends on it for `NotificationService` — OTP email/SMS delivery) — no cycle, since notification-service never needs to know about users/auth. `pureeats-rating-service` stays minimal/independent.
+- **Authorization is centralized**, not scattered: `pureeats-app`'s single `SecurityFilterChain` gates URL prefixes by role (`/api/v1/store-owner/**` → `STORE_OWNER`, `/api/v1/delivery/**` → `DELIVERY`, `/api/v1/admin/**` → `ADMIN`). Business modules never need a Spring Security dependency for that — they read `CurrentUserContext.get()` (plain `Long`, no framework needed) or `@AuthenticationPrincipal AuthenticatedUser` for row-level ownership checks (e.g. "does this restaurant belong to this owner").
 
 ---
 
@@ -141,10 +143,28 @@ DB_HOST=localhost;DB_PORT=3306;DB_NAME=pureeats_dev;DB_USERNAME=root;DB_PASSWORD
 ## Security & JWT
 
 - **Login/register** (`pureeats-user-service`) issue an HS256 JWT containing: `sub` (userId), `name`, `email`, `phone`, `role`, and `deliveryGuyDetailId` (riders only) — enough for the frontend or any internal caller to know "who is this and what can they do" without another API call.
-- **Roles**: `ADMIN`, `RESTAURANT_OWNER`, `DELIVERY`, `CUSTOMER`, `EMPLOYEE`. Every account starts as `CUSTOMER`; registering a restaurant grants `RESTAURANT_OWNER`, registering a rider profile grants `DELIVERY`. A user can hold multiple roles simultaneously (mirrors the legacy schema) — the JWT carries the single highest-priority one (`ADMIN` > `EMPLOYEE` > `RESTAURANT_OWNER` > `DELIVERY` > `CUSTOMER`).
-- **Role changes require re-login** — the JWT is stateless and not re-issued mid-session (e.g. after `POST /api/v1/store-owner/restaurants`, log in again to get a `RESTAURANT_OWNER`-role token).
+- **Roles**: `SUPER_ADMIN`, `ADMIN`, `STORE_OWNER`, `DELIVERY`, `CUSTOMER`, `EMPLOYEE`. Every self-registered account starts as `CUSTOMER`; registering a restaurant grants `STORE_OWNER`, registering a rider profile grants `DELIVERY`. A user can hold multiple roles simultaneously (mirrors the legacy schema) — the JWT carries the single highest-priority one (`SUPER_ADMIN` > `ADMIN` > `EMPLOYEE` > `STORE_OWNER` > `DELIVERY` > `CUSTOMER`). `/api/v1/admin/**` accepts either `ADMIN` or `SUPER_ADMIN`.
+- **`SUPER_ADMIN` and `ADMIN` are never self-registered.** There is exactly one `SUPER_ADMIN` account, created once by `SuperAdminSeeder` (a startup `ApplicationRunner` in `pureeats-user-service`) if none exists yet — see [Configuration reference](#configuration-reference) for its env vars. `POST /auth/register` and `POST /auth/signup` both reject the call with `403 REGISTRATION_BLOCKED_FOR_PRIVILEGED_ROLE` if the caller's *currently DB-assigned* role (re-checked on every call, not trusted from the JWT claim) is `ADMIN`/`SUPER_ADMIN` — `RoleService.assertCallerNotPrivileged()`. `ADMIN` accounts are meant to be provisioned by a `SUPER_ADMIN` through a future admin panel, not through public signup.
+- **Role changes require re-login** — the JWT is stateless and not re-issued mid-session (e.g. after `POST /api/v1/store-owner/restaurants`, log in again to get a `STORE_OWNER`-role token).
 - **Onboarding exception**: `POST /api/v1/store-owner/restaurants` is reachable by *any* authenticated user (not just existing owners), since that's the endpoint that grants the role in the first place — every other `/api/v1/store-owner/**` route requires the role already.
 - Stateless sessions, CSRF disabled (no cookies involved), permissive CORS (tighten `SecurityConfig.corsConfigurationSource()` for production).
+
+---
+
+## OTP-based auth & security subsystem
+
+A second, richer authentication flow lives alongside the password login above: OTP-challenge
+signup/login (email or phone) with configurable attempt/lock/resend policy, short-lived access
+tokens + rotating refresh tokens, device/session tracking, login history with best-effort IP
+geolocation, an IP/device/email/phone/user blocklist, DB-backed rate limiting, a pluggable
+email/SMS notification abstraction (console by default, Gmail SMTP ready to enable), and an
+audit-log of every security-relevant event. None of it changes or removes anything above — see
+**[AUTH_SECURITY.md](AUTH_SECURITY.md)** for the full architecture, API reference, Gmail setup,
+and configuration reference.
+
+New endpoints at a glance (all under `/api/v1/auth`, all public except `logout-all`):
+`POST /signup`, `POST /otp/initiate`, `POST /otp/verify`, `POST /otp/resend`, `POST /refresh`,
+`POST /logout`, `POST /logout-all` 🔒.
 
 ---
 
@@ -356,6 +376,13 @@ Base path: `/api/v1`. All endpoints return the envelope `{ success, message, dat
 | POST | `/auth/password/forgot` | public | Send a password-reset code by email |
 | POST | `/auth/password/verify` | public | Verify a password-reset code |
 | POST | `/auth/password/reset` | public | Set a new password using a verified code |
+| POST | `/auth/signup` | public | Email signup + verification OTP (see [AUTH_SECURITY.md](AUTH_SECURITY.md)) |
+| POST | `/auth/otp/initiate` | public | Start an OTP-challenge login (phone or email) |
+| POST | `/auth/otp/verify` | public | Verify a challenge's OTP → access + refresh token |
+| POST | `/auth/otp/resend` | public | Resend the OTP for an existing challenge |
+| POST | `/auth/refresh` | public | Exchange (and rotate) a refresh token for a new access token |
+| POST | `/auth/logout` | public | Revoke one refresh token / session |
+| POST | `/auth/logout-all` | 🔒 | Revoke every session for the current user |
 
 ### User profile & addresses — `UserController`, `AddressController`, `RiderController`
 | Method | Path | Auth | Description |
@@ -380,7 +407,7 @@ Base path: `/api/v1`. All endpoints return the envelope `{ success, message, dat
 | GET | `/restaurants/{id}/items` | public | Active menu items |
 | POST | `/restaurants/{id}/check-delivery-area` | public | Haversine check: is a lat/long in delivery radius |
 | GET | `/store-owner/restaurants` | 🔒 owner | List restaurants you own |
-| POST | `/store-owner/restaurants` | 🔒 any | Onboard a new restaurant (grants `RESTAURANT_OWNER`) |
+| POST | `/store-owner/restaurants` | 🔒 any | Onboard a new restaurant (grants `STORE_OWNER`) |
 | PUT | `/store-owner/restaurants/{id}` | 🔒 owner | Update a restaurant you own |
 | PATCH | `/store-owner/restaurants/{id}/enable` \| `/disable` | 🔒 owner | Toggle a restaurant |
 | GET / POST | `/store-owner/item-categories` | 🔒 owner | List / create item categories |
@@ -462,6 +489,11 @@ All in `pureeats-app/src/main/resources/application.yml`, overridable via enviro
 | `OTP_DEV_MODE` | `true` | When true, generated OTP/reset codes are returned in the API response (no SMS/email gateway wired up yet) — **set false once one is** |
 | `TAX_PERCENTAGE` | `5` | Flat tax % applied at order placement |
 | `COMMISSION_BASIS` | `FULL_ORDER` | `FULL_ORDER` or `DELIVERY_CHARGE_ONLY` — what a rider's commission % is applied against |
+| `SUPER_ADMIN_NAME` | `Super Admin` | Display name for the one seeded `SUPER_ADMIN` account |
+| `SUPER_ADMIN_EMAIL` | `superadmin@pureeats.local` | Login email for the seeded `SUPER_ADMIN` account |
+| `SUPER_ADMIN_PASSWORD` | dev placeholder | **Must override before any shared deployment** — password for the seeded `SUPER_ADMIN` account |
+
+**OTP auth, notification, rate-limit, blocklist and geolocation config** (`security.*`/`notification.*`/`spring.mail.*`) has its own full env-var table in **[AUTH_SECURITY.md → Environment variables](AUTH_SECURITY.md#environment-variables)**.
 
 ---
 
@@ -469,8 +501,8 @@ All in `pureeats-app/src/main/resources/application.yml`, overridable via enviro
 
 Flagged deliberately (need external credentials or product decisions only you can make):
 
-- **Admin panel/APIs** — no `/api/v1/admin/**` controllers yet (the URL prefix is reserved and role-gated in `SecurityConfig`, ready to receive them).
+- **Admin panel/APIs** — no `/api/v1/admin/**` controllers yet (the URL prefix is reserved and role-gated in `SecurityConfig` for `ADMIN`/`SUPER_ADMIN`, ready to receive them). The one `SUPER_ADMIN` account itself does exist from first boot (`SuperAdminSeeder`) — there's just nothing behind `/admin/**` for it to call yet. Promoting a user to `ADMIN` currently means assigning the role directly in the database; there's no self-serve or admin-panel path for it (deliberately — see [Security & JWT](#security--jwt)).
 - **Real payment gateways** — Razorpay/Paytm/PayUmoney/MercadoPago are not integrated; `/payment-gateways` only lists configured rows, COD/WALLET are the only payment modes actually processed.
-- **SMS/email delivery** — OTP and password-reset codes are generated and stored but not sent; returned directly in the response while `OTP_DEV_MODE=true`.
+- **SMS/email delivery** — the legacy `/auth/otp/*` and `PasswordResetController` codes are still generated/stored only, returned directly in the response while `OTP_DEV_MODE=true`. The newer OTP-challenge flow (see [AUTH_SECURITY.md](AUTH_SECURITY.md)) has a real, pluggable delivery path (Gmail SMTP ready via config; SMS still needs a real gateway credential wired into the existing `SmsProvider` interface) but ships with console-only providers until you configure one.
 - **Bulk upload, geocoder integration, `Translation`/`SmsGateway` admin CRUD** — entities exist in `domain`, no service/controller layer yet.
 - **Delivery-charge tiering** — uses a flat `Restaurant.deliveryCharges`, not the legacy distance-tiered calculation.
