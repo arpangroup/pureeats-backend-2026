@@ -19,7 +19,8 @@ public class Setting {
     @Column(name = "id", nullable = false)
     private Long id;
 
-    @Column(name = "key", nullable = false)
+    /** Backtick-quoted: "key" is a reserved word in MySQL/MariaDB and breaks unquoted DDL/DML. */
+    @Column(name = "`key`", nullable = false)
     private String key;
 
     @Lob

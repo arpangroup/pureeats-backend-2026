@@ -55,8 +55,9 @@ public class Item {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    /** Backtick-quoted: "desc" is a reserved word in MySQL/MariaDB and breaks unquoted DDL/DML. */
     @Lob
-    @Column(name = "desc")
+    @Column(name = "`desc`")
     private String desc;
 
     @Column(name = "placeholder_image")

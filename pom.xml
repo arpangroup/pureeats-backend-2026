@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-parent</artifactId>
+		<version>4.1.1</version>
+		<relativePath/>
+	</parent>
+
+	<groupId>com.pureeats</groupId>
+	<artifactId>pureeats-parent</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<packaging>pom</packaging>
+	<name>pureeats-parent</name>
+	<description>PureEats food delivery platform - multi-module parent</description>
+
+	<modules>
+		<module>domain</module>
+		<module>pureeats-user-service</module>
+		<module>pureeats-catalog-service</module>
+		<module>pureeats-notification-service</module>
+		<module>pureeats-order-service</module>
+		<module>pureeats-rating-service</module>
+		<module>pureeats-app</module>
+	</modules>
+
+	<properties>
+		<java.version>21</java.version>
+		<jjwt.version>0.12.6</jjwt.version>
+		<springdoc.version>2.8.5</springdoc.version>
+	</properties>
+
+	<dependencyManagement>
+		<dependencies>
+			<!-- Internal modules -->
+			<dependency>
+				<groupId>com.pureeats</groupId>
+				<artifactId>domain</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.pureeats</groupId>
+				<artifactId>pureeats-user-service</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.pureeats</groupId>
+				<artifactId>pureeats-catalog-service</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.pureeats</groupId>
+				<artifactId>pureeats-notification-service</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.pureeats</groupId>
+				<artifactId>pureeats-order-service</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.pureeats</groupId>
+				<artifactId>pureeats-rating-service</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+
+			<!-- JWT -->
+			<dependency>
+				<groupId>io.jsonwebtoken</groupId>
+				<artifactId>jjwt-api</artifactId>
+				<version>${jjwt.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.jsonwebtoken</groupId>
+				<artifactId>jjwt-impl</artifactId>
+				<version>${jjwt.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.jsonwebtoken</groupId>
+				<artifactId>jjwt-jackson</artifactId>
+				<version>${jjwt.version}</version>
+			</dependency>
+
+			<!-- OpenAPI / Swagger -->
+			<dependency>
+				<groupId>org.springdoc</groupId>
+				<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+				<version>${springdoc.version}</version>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
+	<build>
+		<pluginManagement>
+			<plugins>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-compiler-plugin</artifactId>
+					<configuration>
+						<annotationProcessorPaths>
+							<path>
+								<groupId>org.projectlombok</groupId>
+								<artifactId>lombok</artifactId>
+							</path>
+						</annotationProcessorPaths>
+					</configuration>
+				</plugin>
+			</plugins>
+		</pluginManagement>
+	</build>
+
+</project>

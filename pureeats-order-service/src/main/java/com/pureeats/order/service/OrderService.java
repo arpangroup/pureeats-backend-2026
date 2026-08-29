@@ -1,0 +1,237 @@
+package com.pureeats.order.service;
+
+import com.pureeats.catalog.repository.AddonRepository;
+import com.pureeats.catalog.repository.ItemRepository;
+import com.pureeats.catalog.repository.RestaurantRepository;
+import com.pureeats.catalog.repository.RestaurantUserRepository;
+import com.pureeats.catalog.service.CouponService;
+import com.pureeats.domain.common.exception.BadRequestException;
+import com.pureeats.domain.common.exception.ForbiddenException;
+import com.pureeats.domain.common.exception.ResourceNotFoundException;
+import com.pureeats.domain.entity.*;
+import com.pureeats.domain.enums.DeliveryType;
+import com.pureeats.domain.enums.OrderStatusCode;
+import com.pureeats.notification.service.NotificationDispatchService;
+import com.pureeats.order.dto.*;
+import com.pureeats.order.repository.OrderItemAddonRepository;
+import com.pureeats.order.repository.OrderItemRepository;
+import com.pureeats.order.repository.OrderRepository;
+import com.pureeats.user.repository.AddressRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.security.SecureRandom;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+public class OrderService {
+
+    private static final SecureRandom RANDOM = new SecureRandom();
+
+    private final OrderRepository orderRepository;
+    private final OrderItemRepository orderItemRepository;
+    private final OrderItemAddonRepository orderItemAddonRepository;
+    private final OrderStatusService orderStatusService;
+    private final OrderPricingService orderPricingService;
+    private final WalletService walletService;
+
+    private final RestaurantRepository restaurantRepository;
+    private final ItemRepository itemRepository;
+    private final AddonRepository addonRepository;
+    private final RestaurantUserRepository restaurantUserRepository;
+    private final CouponService couponService;
+    private final AddressRepository addressRepository;
+    private final NotificationDispatchService notificationDispatchService;
+
+    @Transactional
+    public OrderResponse placeOrder(Long userId, PlaceOrderRequest request) {
+        Restaurant restaurant = restaurantRepository.findById(request.restaurantId())
+                .orElseThrow(() -> new ResourceNotFoundException("Restaurant not found: " + request.restaurantId()));
+        if (!Boolean.TRUE.equals(restaurant.getIsActive()) || !Boolean.TRUE.equals(restaurant.getIsAccepted())) {
+            throw new BadRequestException("This restaurant is not currently accepting orders");
+        }
+
+        Address address = addressRepository.findById(request.addressId())
+                .orElseThrow(() -> new ResourceNotFoundException("Address not found: " + request.addressId()));
+        if (!address.getUserId().equals(userId.intValue())) {
+            throw new ForbiddenException("This address does not belong to you");
+        }
+
+        Order order = new Order();
+        order.setUniqueOrderId(generateUniqueOrderId());
+        order.setUserId(userId.intValue());
+        order.setRestaurantId(restaurant.getId().intValue());
+        order.setAddress(address.getHouse() + ", " + address.getAddress());
+        order.setLocation("{\"latitude\":\"" + address.getLatitude() + "\",\"longitude\":\"" + address.getLongitude() + "\"}");
+        order.setPaymentMode(request.paymentMode().name());
+        order.setDeliveryType(request.deliveryType() == DeliveryType.SELF_PICKUP ? 1 : 0);
+        order.setOrderComment(request.orderComment());
+        order.setOrderFrom("API");
+        order.setDeliveryPin(generatePin());
+        order.setDriverTipAmount(request.driverTipAmount() != null ? request.driverTipAmount() : BigDecimal.ZERO);
+        order.setCreatedAt(LocalDateTime.now());
+        order.setUpdatedAt(LocalDateTime.now());
+
+        BigDecimal itemTotal = BigDecimal.ZERO;
+        record Line(Item item, int quantity, List<Addon> addons) {
+        }
+        List<Line> lines = request.items().stream().map(itemRequest -> {
+            Item item = itemRepository.findById(itemRequest.itemId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Item not found: " + itemRequest.itemId()));
+            if (!item.getRestaurantId().equals(restaurant.getId().intValue()) || !Boolean.TRUE.equals(item.getIsActive())) {
+                throw new BadRequestException("Item " + item.getName() + " is not available at this restaurant");
+            }
+            List<Addon> addons = itemRequest.selectedAddonIds() == null ? List.of()
+                    : itemRequest.selectedAddonIds().stream()
+                    .map(id -> addonRepository.findById(id)
+                            .orElseThrow(() -> new ResourceNotFoundException("Addon not found: " + id)))
+                    .toList();
+            return new Line(item, itemRequest.quantity(), addons);
+        }).toList();
+
+        for (Line line : lines) {
+            BigDecimal addonTotal = line.addons().stream().map(Addon::getPrice).reduce(BigDecimal.ZERO, BigDecimal::add);
+            itemTotal = itemTotal.add(line.item().getPrice().add(addonTotal).multiply(BigDecimal.valueOf(line.quantity())));
+        }
+
+        BigDecimal discount = BigDecimal.ZERO;
+        if (request.couponCode() != null && !request.couponCode().isBlank()) {
+            discount = couponService.recordUsage(request.couponCode(), restaurant.getId().intValue(), itemTotal, userId.intValue());
+            order.setCouponName(request.couponCode());
+        }
+
+        BigDecimal amountAfterDiscount = itemTotal.subtract(discount);
+        BigDecimal tax = orderPricingService.tax(amountAfterDiscount);
+        BigDecimal restaurantCharge = orderPricingService.restaurantCharge(restaurant, amountAfterDiscount);
+        BigDecimal deliveryCharge = orderPricingService.deliveryCharge(restaurant, request.deliveryType() == DeliveryType.SELF_PICKUP);
+        BigDecimal payable = amountAfterDiscount.add(tax).add(restaurantCharge).add(deliveryCharge).add(order.getDriverTipAmount());
+
+        order.setTotal(itemTotal);
+        order.setTax(tax);
+        order.setRestaurantCharge(restaurantCharge);
+        order.setDeliveryCharge(deliveryCharge);
+        order.setPayable(payable);
+
+        boolean autoAccept = Boolean.TRUE.equals(restaurant.getAutoAcceptable());
+        order.setOrderstatusId(orderStatusService.idFor(autoAccept ? OrderStatusCode.RESTAURANT_ACCEPTED : OrderStatusCode.PLACED));
+        if (autoAccept) {
+            order.setRestaurantAcceptAt(LocalDateTime.now());
+        }
+
+        order = orderRepository.save(order);
+
+        for (Line line : lines) {
+            OrderItem orderItem = new OrderItem();
+            orderItem.setOrderId(order.getId().intValue());
+            orderItem.setItemId(line.item().getId().intValue());
+            orderItem.setName(line.item().getName());
+            orderItem.setQuantity(line.quantity());
+            orderItem.setPrice(line.item().getPrice());
+            orderItem.setCreatedAt(LocalDateTime.now());
+            orderItem.setUpdatedAt(LocalDateTime.now());
+            orderItem = orderItemRepository.save(orderItem);
+
+            for (Addon addon : line.addons()) {
+                OrderItemAddon orderItemAddon = new OrderItemAddon();
+                orderItemAddon.setOrderitemId(orderItem.getId().intValue());
+                orderItemAddon.setAddonName(addon.getName());
+                orderItemAddon.setAddonPrice(addon.getPrice());
+                orderItemAddon.setAddonCategoryName("");
+                orderItemAddon.setCreatedAt(LocalDateTime.now());
+                orderItemAddon.setUpdatedAt(LocalDateTime.now());
+                orderItemAddonRepository.save(orderItemAddon);
+            }
+        }
+
+        if (order.getPaymentMode().equals("WALLET")) {
+            walletService.debit(userId, payable, "Order #" + order.getUniqueOrderId());
+        }
+
+        notifyOwners(restaurant.getId(), order.getUniqueOrderId());
+
+        return toResponse(order);
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrderSummaryResponse> myOrders(Long userId) {
+        return orderRepository.findByUserIdOrderByCreatedAtDesc(userId.intValue()).stream()
+                .map(this::toSummary).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public OrderResponse getOrder(Long userId, Long orderId) {
+        Order order = findOrThrow(orderId);
+        if (!order.getUserId().equals(userId.intValue())) {
+            throw new ForbiddenException("This order does not belong to you");
+        }
+        return toResponse(order);
+    }
+
+    @Transactional
+    public void cancelOrder(Long userId, Long orderId) {
+        Order order = findOrThrow(orderId);
+        if (!order.getUserId().equals(userId.intValue())) {
+            throw new ForbiddenException("This order does not belong to you");
+        }
+        OrderStatusCode current = orderStatusService.codeFor(order.getOrderstatusId());
+        if (current == OrderStatusCode.DELIVERED || current == OrderStatusCode.CANCELLED) {
+            throw new BadRequestException("This order can no longer be cancelled");
+        }
+
+        order.setOrderstatusId(orderStatusService.idFor(OrderStatusCode.CANCELLED));
+        order.setUpdatedAt(LocalDateTime.now());
+        orderRepository.save(order);
+
+        if ("WALLET".equals(order.getPaymentMode())) {
+            walletService.credit(userId, order.getPayable(), "Refund for cancelled order #" + order.getUniqueOrderId());
+        }
+    }
+
+    Order findOrThrow(Long orderId) {
+        return orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
+    }
+
+    OrderResponse toResponse(Order order) {
+        List<OrderItem> items = orderItemRepository.findByOrderId(order.getId().intValue());
+        List<OrderItemResponse> itemResponses = items.stream().map(oi -> {
+            List<OrderItemAddonResponse> addons = orderItemAddonRepository.findByOrderitemId(oi.getId().intValue())
+                    .stream().map(a -> new OrderItemAddonResponse(a.getAddonCategoryName(), a.getAddonName(), a.getAddonPrice()))
+                    .toList();
+            return new OrderItemResponse(oi.getId(), oi.getItemId().longValue(), oi.getName(), oi.getQuantity(), oi.getPrice(), addons);
+        }).toList();
+
+        OrderStatusCode status = orderStatusService.codeFor(order.getOrderstatusId());
+        return new OrderResponse(order.getId(), order.getUniqueOrderId(), status != null ? status.name() : "UNKNOWN",
+                order.getRestaurantId().longValue(), order.getAddress(), order.getTax(), order.getRestaurantCharge(),
+                order.getDeliveryCharge(), order.getDriverTipAmount(), order.getTotal(), order.getPayable(),
+                order.getPaymentMode(), order.getDeliveryPin(), order.getOrderComment(), order.getCreatedAt(), itemResponses);
+    }
+
+    private OrderSummaryResponse toSummary(Order order) {
+        OrderStatusCode status = orderStatusService.codeFor(order.getOrderstatusId());
+        return new OrderSummaryResponse(order.getId(), order.getUniqueOrderId(), status != null ? status.name() : "UNKNOWN",
+                order.getRestaurantId().longValue(), order.getPayable(), order.getCreatedAt());
+    }
+
+    private void notifyOwners(Long restaurantId, String uniqueOrderId) {
+        restaurantUserRepository.findByRestaurantId(restaurantId).stream()
+                .map(RestaurantUser::getUserId)
+                .distinct()
+                .forEach(ownerId -> notificationDispatchService.notifyUser(ownerId, "New order received",
+                        "Order #" + uniqueOrderId + " has been placed"));
+    }
+
+    private static String generateUniqueOrderId() {
+        return "PE-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+    }
+
+    private static String generatePin() {
+        return String.valueOf(1000 + RANDOM.nextInt(9000));
+    }
+}

@@ -7,7 +7,7 @@ import lombok.Getter;
 
 import java.time.Instant;
 
-@MappedSuperclass
+@MappedSuperclass // it indicate its a super class, not a JPA entity, hence no extra table
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 public abstract class AuditableEntity {

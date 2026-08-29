@@ -1,0 +1,106 @@
+package com.pureeats.order.service;
+
+import com.pureeats.domain.entity.Transaction;
+import com.pureeats.domain.entity.Wallet;
+import com.pureeats.order.dto.WalletBalanceResponse;
+import com.pureeats.order.dto.WalletTransactionResponse;
+import com.pureeats.order.repository.TransactionRepository;
+import com.pureeats.order.repository.WalletRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+
+/**
+ * A minimal wallet ledger (User-holder only - restaurant settlement uses
+ * {@code RestaurantEarning}/{@code RestaurantPayout} directly, see {@link RestaurantPayoutService}).
+ * Balances are stored as integer minor units (paise), matching the legacy bavix/laravel-wallet convention.
+ */
+@Service
+@RequiredArgsConstructor
+public class WalletService {
+
+    private static final String USER_HOLDER_TYPE = "App\\User";
+    private static final BigDecimal MINOR_UNIT_FACTOR = BigDecimal.valueOf(100);
+
+    public static final String TX_TYPE_DEPOSIT = "deposit";
+    public static final String TX_TYPE_WITHDRAW = "withdraw";
+
+    private final WalletRepository walletRepository;
+    private final TransactionRepository transactionRepository;
+
+    @Transactional(readOnly = true)
+    public WalletBalanceResponse getBalance(Long userId) {
+        return new WalletBalanceResponse(toDecimal(getOrCreateWallet(userId).getBalance()));
+    }
+
+    @Transactional(readOnly = true)
+    public List<WalletTransactionResponse> getTransactions(Long userId) {
+        Wallet wallet = getOrCreateWallet(userId);
+        return transactionRepository.findByWalletIdOrderByCreatedAtDesc(wallet.getId()).stream()
+                .map(t -> new WalletTransactionResponse(t.getId(), t.getType(), toDecimal(t.getAmount()), t.getMeta(), t.getCreatedAt()))
+                .toList();
+    }
+
+    @Transactional
+    public void credit(Long userId, BigDecimal amount, String meta) {
+        Wallet wallet = getOrCreateWallet(userId);
+        wallet.setBalance(wallet.getBalance() + toMinorUnits(amount));
+        wallet.setUpdatedAt(LocalDateTime.now());
+        walletRepository.save(wallet);
+        recordTransaction(wallet, TX_TYPE_DEPOSIT, amount, meta);
+    }
+
+    @Transactional
+    public void debit(Long userId, BigDecimal amount, String meta) {
+        Wallet wallet = getOrCreateWallet(userId);
+        wallet.setBalance(wallet.getBalance() - toMinorUnits(amount));
+        wallet.setUpdatedAt(LocalDateTime.now());
+        walletRepository.save(wallet);
+        recordTransaction(wallet, TX_TYPE_WITHDRAW, amount, meta);
+    }
+
+    private Wallet getOrCreateWallet(Long userId) {
+        return walletRepository.findByHolderTypeAndHolderId(USER_HOLDER_TYPE, userId)
+                .orElseGet(() -> {
+                    Wallet wallet = new Wallet();
+                    wallet.setHolderType(USER_HOLDER_TYPE);
+                    wallet.setHolderId(userId);
+                    wallet.setName("default");
+                    wallet.setSlug("default");
+                    wallet.setBalance(0L);
+                    wallet.setDecimalPlaces((short) 2);
+                    wallet.setCreatedAt(LocalDateTime.now());
+                    wallet.setUpdatedAt(LocalDateTime.now());
+                    return walletRepository.save(wallet);
+                });
+    }
+
+    private void recordTransaction(Wallet wallet, String type, BigDecimal amount, String meta) {
+        Transaction transaction = new Transaction();
+        transaction.setPayableType(USER_HOLDER_TYPE);
+        transaction.setPayableId(wallet.getHolderId());
+        transaction.setWalletId(wallet.getId());
+        transaction.setType(type);
+        transaction.setAmount(toMinorUnits(amount));
+        transaction.setConfirmed(true);
+        transaction.setMeta(meta);
+        transaction.setUuid(UUID.randomUUID().toString());
+        transaction.setCreatedAt(LocalDateTime.now());
+        transaction.setUpdatedAt(LocalDateTime.now());
+        transactionRepository.save(transaction);
+    }
+
+    private static long toMinorUnits(BigDecimal amount) {
+        return amount.multiply(MINOR_UNIT_FACTOR).setScale(0, RoundingMode.HALF_UP).longValueExact();
+    }
+
+    private static BigDecimal toDecimal(long minorUnits) {
+        return BigDecimal.valueOf(minorUnits).divide(MINOR_UNIT_FACTOR, 2, RoundingMode.HALF_UP);
+    }
+}
