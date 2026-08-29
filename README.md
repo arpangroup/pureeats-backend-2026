@@ -2,6 +2,18 @@
 
 A multi-module Spring Boot rewrite of the PureEats food-delivery API (originally Laravel). Pure REST API, no server-rendered UI — the [React frontend](../pureeats-react-ui) is the client. Secured with **Spring Security + JWT**, documented with **springdoc-openapi / Swagger UI**, backed by **MySQL**.
 
+```bash
+netstat -ano | findstr :8080
+taskkill /PID 12456 /F
+````
+
+```bash
+C:\Program Files\PostgreSQL\18\bin
+psql -U postgres -h localhost -p 5432 -d postgres
+
+CREATE DATABASE pureeatsdev;
+\c pureeatsdev
+```
 ---
 
 ## Table of contents
