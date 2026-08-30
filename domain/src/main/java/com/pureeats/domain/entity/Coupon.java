@@ -68,4 +68,8 @@ public class Coupon {
 
     @Column(name = "first_order_only")
     private Boolean firstOrderOnly;
+
+    /** Who created this coupon - an admin (global coupons) or a store owner (their own coupons). Null for coupons created before this was tracked. */
+    @Column(name = "created_by")
+    private Long createdBy;
 }

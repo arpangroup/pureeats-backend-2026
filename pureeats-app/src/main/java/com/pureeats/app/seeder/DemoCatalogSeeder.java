@@ -3,6 +3,7 @@ package com.pureeats.app.seeder;
 import com.pureeats.catalog.repository.AddonCategoryRepository;
 import com.pureeats.catalog.repository.AddonRepository;
 import com.pureeats.catalog.repository.CouponRepository;
+import com.pureeats.catalog.repository.CouponUsageRepository;
 import com.pureeats.catalog.repository.ItemCategoryRepository;
 import com.pureeats.catalog.repository.ItemRepository;
 import com.pureeats.catalog.repository.RestaurantCategoryRepository;
@@ -12,6 +13,7 @@ import com.pureeats.catalog.repository.RestaurantUserRepository;
 import com.pureeats.domain.entity.Addon;
 import com.pureeats.domain.entity.AddonCategory;
 import com.pureeats.domain.entity.Coupon;
+import com.pureeats.domain.entity.CouponUsage;
 import com.pureeats.domain.entity.Item;
 import com.pureeats.domain.entity.ItemCategory;
 import com.pureeats.domain.entity.Order;
@@ -77,6 +79,7 @@ public class DemoCatalogSeeder implements ApplicationRunner {
     private final AddonRepository addonRepository;
 
     private final CouponRepository couponRepository;
+    private final CouponUsageRepository couponUsageRepository;
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
@@ -116,6 +119,35 @@ public class DemoCatalogSeeder implements ApplicationRunner {
             orderStatusLogRepository.save(logEntry);
             previous = step;
         }
+    }
+
+    /**
+     * Seeded coupon-orders are inserted directly (bypassing {@code OrderService.placeOrder}, which
+     * is what normally calls {@code CouponService.recordUsage} to write a {@code CouponUsage} row
+     * and bump the coupon's redemption count) - without this, the admin coupon-details "Redemption
+     * history" table has nothing to show even though the order itself carries the coupon.
+     */
+    private void backfillCouponUsage(String couponCode, Integer restaurantId, Integer userId) {
+        Coupon coupon = couponRepository.findByCodeIgnoreCase(couponCode).orElse(null);
+        if (coupon == null) {
+            return;
+        }
+        if (!couponUsageRepository.findByCouponIdAndUserId(coupon.getId().intValue(), userId).isEmpty()) {
+            return;
+        }
+
+        CouponUsage usage = new CouponUsage();
+        usage.setCouponId(coupon.getId().intValue());
+        usage.setUserId(userId);
+        usage.setResturantId(restaurantId);
+        usage.setCouponUsed(1);
+        usage.setCreatedAt(LocalDateTime.now());
+        usage.setUpdatedAt(LocalDateTime.now());
+        couponUsageRepository.save(usage);
+
+        coupon.setCount((coupon.getCount() != null ? coupon.getCount() : 0) + 1);
+        coupon.setUpdatedAt(LocalDateTime.now());
+        couponRepository.save(coupon);
     }
 
     private String serializePricingBreakdown(PricingBreakdown breakdown) {
@@ -434,9 +466,10 @@ public class DemoCatalogSeeder implements ApplicationRunner {
         Order existing = orderRepository.findAll().stream()
                 .filter(o -> uniqueOrderId.equals(o.getUniqueOrderId())).findFirst().orElse(null);
         // Fully seeded by a previous run of this method (has both the coupon fields and the pricing
-        // breakdown added later) - nothing left to backfill.
+        // breakdown added later) - only the journey/usage backfills (both separately idempotent) still need a look.
         if (existing != null && existing.getPricingBreakdown() != null && existing.getCouponCode() != null) {
             backfillJourney(existing, OrderStatusCode.DELIVERED);
+            backfillCouponUsage("WELCOME50", existing.getRestaurantId(), existing.getUserId());
             return;
         }
 
@@ -503,6 +536,7 @@ public class DemoCatalogSeeder implements ApplicationRunner {
         }
 
         backfillJourney(order, OrderStatusCode.DELIVERED);
+        backfillCouponUsage("WELCOME50", order.getRestaurantId(), order.getUserId());
     }
 
     /** Same idea as {@link #seedCouponOrder}, but with the FREESHIP coupon - waives the delivery charge instead of discounting the item total. */
@@ -512,6 +546,7 @@ public class DemoCatalogSeeder implements ApplicationRunner {
                 .filter(o -> uniqueOrderId.equals(o.getUniqueOrderId())).findFirst().orElse(null);
         if (existing != null && existing.getPricingBreakdown() != null && existing.getCouponCode() != null) {
             backfillJourney(existing, OrderStatusCode.DELIVERED);
+            backfillCouponUsage("FREESHIP", existing.getRestaurantId(), existing.getUserId());
             return;
         }
 
@@ -577,6 +612,7 @@ public class DemoCatalogSeeder implements ApplicationRunner {
         }
 
         backfillJourney(order, OrderStatusCode.DELIVERED);
+        backfillCouponUsage("FREESHIP", order.getRestaurantId(), order.getUserId());
     }
 
     private static String slugify(String name) {

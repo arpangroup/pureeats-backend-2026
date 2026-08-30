@@ -16,6 +16,14 @@ public class LocalDiskMediaUrlResolver implements MediaUrlResolver {
         if (storageKey == null || storageKey.isBlank()) {
             return null;
         }
+        // A handful of images (saved before certain upload flows went through MediaAssetService)
+        // have an already-resolvable value - a full URL or an inline data: URI - stored directly in
+        // the image column. Concatenating those with the media base path would produce garbage
+        // ("http://host/media/data:image/png;base64,..."), so pass them through unchanged instead
+        // of treating every value as a bare storage key.
+        if (storageKey.startsWith("http://") || storageKey.startsWith("https://") || storageKey.startsWith("data:")) {
+            return storageKey;
+        }
         return publicBaseUrl + "/media/" + storageKey;
     }
 }

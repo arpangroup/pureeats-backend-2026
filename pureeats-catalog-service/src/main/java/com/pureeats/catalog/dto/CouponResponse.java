@@ -19,6 +19,7 @@ public record CouponResponse(
         boolean firstOrderOnly,
         Integer totalCoupon,
         Integer count,
-        Integer maxCount
+        Integer maxCount,
+        Long createdBy
 ) {
 }

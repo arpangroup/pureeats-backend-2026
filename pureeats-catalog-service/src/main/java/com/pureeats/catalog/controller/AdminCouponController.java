@@ -7,6 +7,7 @@ import com.pureeats.catalog.dto.CouponUsageResponse;
 import com.pureeats.catalog.service.CouponService;
 import com.pureeats.domain.common.response.ApiResponse;
 import com.pureeats.domain.common.response.PageResponse;
+import com.pureeats.user.security.AuthenticatedUser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -16,6 +17,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -54,8 +56,8 @@ public class AdminCouponController {
     @PostMapping("/api/v1/admin/coupons")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Create a coupon (global or scoped to one restaurant)")
-    public ApiResponse<CouponResponse> create(@Valid @RequestBody CouponCreateRequest request) {
-        return ApiResponse.success("Coupon created", couponService.create(request));
+    public ApiResponse<CouponResponse> create(@AuthenticationPrincipal AuthenticatedUser principal, @Valid @RequestBody CouponCreateRequest request) {
+        return ApiResponse.success("Coupon created", couponService.create(request, principal.userId()));
     }
 
     @PutMapping("/api/v1/admin/coupons/{id}")

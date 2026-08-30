@@ -12,6 +12,7 @@ import com.pureeats.catalog.repository.CouponUsageRepository;
 import com.pureeats.catalog.repository.RestaurantRepository;
 import com.pureeats.catalog.service.discount.DiscountCalculator;
 import com.pureeats.domain.common.exception.BadRequestException;
+import com.pureeats.domain.common.exception.ForbiddenException;
 import com.pureeats.domain.common.exception.ResourceNotFoundException;
 import com.pureeats.domain.common.response.PageResponse;
 import com.pureeats.domain.entity.Coupon;
@@ -66,6 +67,14 @@ public class CouponService {
                 page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
     }
 
+    /** Store-owner listing - only coupons scoped to one of their restaurants. */
+    @Transactional(readOnly = true)
+    public PageResponse<CouponResponse> listForRestaurant(Integer restaurantId, String search, Pageable pageable) {
+        Page<Coupon> page = couponRepository.findByRestaurantIdPage(restaurantId, search, pageable);
+        return PageResponse.of(page.getContent().stream().map(this::toResponse).toList(),
+                page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
+    }
+
     /** Best-effort lookup by code, for callers (e.g. order-service) that just want the current display name/type - not scoped to active-only. */
     @Transactional(readOnly = true)
     public java.util.Optional<CouponResponse> findByCode(String code) {
@@ -79,7 +88,7 @@ public class CouponService {
     }
 
     @Transactional
-    public CouponResponse create(CouponCreateRequest request) {
+    public CouponResponse create(CouponCreateRequest request, Long createdBy) {
         Coupon coupon = new Coupon();
         coupon.setName(request.name());
         coupon.setDescription(request.description());
@@ -95,16 +104,30 @@ public class CouponService {
         coupon.setCount(0);
         coupon.setMaxCount(request.totalCoupon());
         coupon.setFirstOrderOnly(Boolean.TRUE.equals(request.firstOrderOnly()));
+        coupon.setCreatedBy(createdBy);
         coupon.setCreatedAt(LocalDateTime.now());
         coupon.setUpdatedAt(LocalDateTime.now());
         return toResponse(couponRepository.save(coupon));
     }
 
-    /** Admin-facing full update. Unlike {@link #create}, lets the caller set {@code maxCount} and {@code isActive} directly. */
+    /** Admin-facing full update - not ownership-scoped (an admin may edit anyone's coupon), and lets the caller set {@code maxCount}/{@code isActive} directly. */
     @Transactional
     public CouponResponse update(Long id, CouponUpdateRequest request) {
         Coupon coupon = couponRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Coupon not found: " + id));
+        applyUpdate(coupon, request);
+        return toResponse(couponRepository.save(coupon));
+    }
+
+    /** Store-owner update - only the coupon's creator may edit it. */
+    @Transactional
+    public CouponResponse updateAsOwner(Long ownerUserId, Long id, CouponUpdateRequest request) {
+        Coupon coupon = findOwnedOrThrow(ownerUserId, id);
+        applyUpdate(coupon, request);
+        return toResponse(couponRepository.save(coupon));
+    }
+
+    private void applyUpdate(Coupon coupon, CouponUpdateRequest request) {
         coupon.setName(request.name());
         coupon.setDescription(request.description());
         coupon.setCode(request.code());
@@ -119,7 +142,6 @@ public class CouponService {
         coupon.setIsActive(request.isActive());
         coupon.setFirstOrderOnly(Boolean.TRUE.equals(request.firstOrderOnly()));
         coupon.setUpdatedAt(LocalDateTime.now());
-        return toResponse(couponRepository.save(coupon));
     }
 
     @Transactional(readOnly = true)
@@ -132,11 +154,27 @@ public class CouponService {
                 .toList();
     }
 
+    /** Admin-only delete - the caller already had to hold ADMIN/SUPER_ADMIN to reach this (enforced at the URL/controller layer). */
     @Transactional
     public void delete(Long id) {
         Coupon coupon = couponRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Coupon not found: " + id));
         couponRepository.delete(coupon);
+    }
+
+    /** Store-owner delete - only the coupon's creator may delete it. */
+    @Transactional
+    public void deleteAsOwner(Long ownerUserId, Long id) {
+        couponRepository.delete(findOwnedOrThrow(ownerUserId, id));
+    }
+
+    private Coupon findOwnedOrThrow(Long ownerUserId, Long id) {
+        Coupon coupon = couponRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Coupon not found: " + id));
+        if (coupon.getCreatedBy() == null || !coupon.getCreatedBy().equals(ownerUserId)) {
+            throw new ForbiddenException("You can only manage coupons you created");
+        }
+        return coupon;
     }
 
     /**
@@ -217,7 +255,7 @@ public class CouponService {
                 toWireValue(DiscountType.valueOf(c.getDiscountType())), new BigDecimal(c.getDiscount()), c.getMinOrderAmount(),
                 new BigDecimal(c.getUptoAmount()), c.getExpiryDate() != null ? c.getExpiryDate().toLocalDate() : null,
                 Boolean.TRUE.equals(c.getIsActive()), c.getRestaurantId(), Boolean.TRUE.equals(c.getFirstOrderOnly()),
-                c.getTotalCoupon(), c.getCount(), c.getMaxCount());
+                c.getTotalCoupon(), c.getCount(), c.getMaxCount(), c.getCreatedBy());
     }
 
     /** Wire format is "flat"/"percentage"/"free_delivery" (matching the React admin UI's naming), not the Java enum's own constant names. */

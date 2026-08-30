@@ -7,6 +7,7 @@ import com.pureeats.domain.entity.Restaurant;
 import com.pureeats.domain.entity.RestaurantEarning;
 import com.pureeats.domain.entity.RestaurantPayout;
 import com.pureeats.domain.entity.Transaction;
+import com.pureeats.domain.entity.TripDetail;
 import com.pureeats.domain.entity.User;
 import com.pureeats.domain.entity.Wallet;
 import com.pureeats.order.repository.DeliveryCollectionLogRepository;
@@ -14,13 +15,18 @@ import com.pureeats.order.repository.DeliveryCollectionRepository;
 import com.pureeats.order.repository.RestaurantEarningRepository;
 import com.pureeats.order.repository.RestaurantPayoutRepository;
 import com.pureeats.order.repository.TransactionRepository;
+import com.pureeats.order.repository.TripDetailRepository;
 import com.pureeats.order.repository.WalletRepository;
+import com.pureeats.user.entity.LoginHistory;
+import com.pureeats.user.enums.LoginMethod;
+import com.pureeats.user.repository.LoginHistoryRepository;
 import com.pureeats.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,6 +58,8 @@ public class DemoFinanceSeeder implements ApplicationRunner {
     private final WalletRepository walletRepository;
     private final TransactionRepository transactionRepository;
     private final UserRepository userRepository;
+    private final TripDetailRepository tripDetailRepository;
+    private final LoginHistoryRepository loginHistoryRepository;
 
     @Override
     @Transactional
@@ -62,11 +70,99 @@ public class DemoFinanceSeeder implements ApplicationRunner {
             return;
         }
         Optional<User> customer1 = userRepository.findByEmail("demo.customer1@pureeats.local");
+        Optional<User> customer2 = userRepository.findByEmail("demo.customer2@pureeats.local");
         Optional<User> delivery1 = userRepository.findByEmail("demo.delivery1@pureeats.local");
+        Optional<User> delivery2 = userRepository.findByEmail("demo.delivery2@pureeats.local");
 
         seedRestaurantPayouts(restaurants.get(0));
         delivery1.ifPresent(this::seedDeliveryCollection);
         customer1.ifPresent(this::seedWalletTransaction);
+
+        delivery1.ifPresent(rider -> seedRiderEarnings(rider, restaurants, customer1.orElse(null)));
+        delivery2.ifPresent(rider -> seedRiderEarnings(rider, restaurants, customer2.orElse(null)));
+        delivery1.ifPresent(this::seedLoginHistory);
+        delivery2.ifPresent(this::seedLoginHistory);
+    }
+
+    /** Per-order rider earnings for the delivery-partner detail page's Earnings section - seeded orders never call DeliveryOrderService.creditRiderAndSettle, so no TripDetail rows exist otherwise. */
+    private void seedRiderEarnings(User rider, List<Restaurant> restaurants, User customer) {
+        if (!tripDetailRepository.findByRiderId(rider.getId().intValue()).isEmpty()) {
+            return;
+        }
+        if (customer == null) {
+            return;
+        }
+
+        record TripSeed(int daysAgo, BigDecimal orderTotal, BigDecimal distanceKm, String paymentMode) {}
+        List<TripSeed> seeds = List.of(
+                new TripSeed(1, BigDecimal.valueOf(320), BigDecimal.valueOf(3.4), "ONLINE"),
+                new TripSeed(2, BigDecimal.valueOf(180), BigDecimal.valueOf(2.1), "COD"),
+                new TripSeed(4, BigDecimal.valueOf(560), BigDecimal.valueOf(5.8), "ONLINE"),
+                new TripSeed(6, BigDecimal.valueOf(240), BigDecimal.valueOf(1.9), "COD")
+        );
+
+        int orderIdSeed = 90000 + rider.getId().intValue();
+        for (TripSeed seed : seeds) {
+            Restaurant restaurant = restaurants.get(orderIdSeed % restaurants.size());
+            BigDecimal riderEarning = seed.orderTotal().multiply(BigDecimal.valueOf(0.12)).setScale(2, java.math.RoundingMode.HALF_UP);
+            BigDecimal restaurantEarning = seed.orderTotal().multiply(BigDecimal.valueOf(0.85)).setScale(2, java.math.RoundingMode.HALF_UP);
+            boolean isCod = "COD".equals(seed.paymentMode());
+
+            TripDetail trip = new TripDetail();
+            trip.setOrderId(orderIdSeed++);
+            trip.setCustomerId(customer.getId().intValue());
+            trip.setRestaurantId(restaurant.getId().intValue());
+            trip.setRiderId(rider.getId().intValue());
+            trip.setDeliveryCollectionId(0);
+            trip.setDistanceTravelled(seed.distanceKm());
+            trip.setRiderEarning(riderEarning);
+            trip.setRestaurantEarning(restaurantEarning);
+            trip.setCashCollectedFromCustomer(isCod ? seed.orderTotal() : BigDecimal.ZERO);
+            trip.setCashOnHold(BigDecimal.ZERO);
+            trip.setIsSettlementDone(1);
+            trip.setCreatedAt(LocalDateTime.now().minusDays(seed.daysAgo()));
+            trip.setUpdatedAt(LocalDateTime.now().minusDays(seed.daysAgo()));
+            tripDetailRepository.save(trip);
+        }
+
+        log.info("Seeded {} demo trip(s)/earning(s) for rider #{}", seeds.size(), rider.getId());
+    }
+
+    /** Last-5-logins activity feed for the delivery-partner detail page. */
+    private void seedLoginHistory(User user) {
+        if (loginHistoryRepository.findByUserId(user.getId(), PageRequest.of(0, 1)).hasContent()) {
+            return;
+        }
+
+        record LoginSeed(int hoursAgo, boolean success, String city, String region) {}
+        List<LoginSeed> seeds = List.of(
+                new LoginSeed(2, true, "Bengaluru", "Karnataka"),
+                new LoginSeed(26, true, "Bengaluru", "Karnataka"),
+                new LoginSeed(50, false, "Bengaluru", "Karnataka"),
+                new LoginSeed(74, true, "Bengaluru", "Karnataka"),
+                new LoginSeed(120, true, "Mysuru", "Karnataka")
+        );
+        for (LoginSeed seed : seeds) {
+            LoginHistory entry = new LoginHistory();
+            entry.setUserId(user.getId());
+            entry.setLoginMethod(LoginMethod.PHONE_OTP);
+            entry.setStatus(seed.success() ? "SUCCESS" : "FAILED");
+            entry.setIpAddress("10.0.0." + (10 + seed.hoursAgo() % 240));
+            entry.setDeviceId("demo-device-" + user.getId());
+            entry.setUserAgent("PureEats Rider App/1.0 (Android 14)");
+            entry.setCountry("India");
+            entry.setRegion(seed.region());
+            entry.setCity(seed.city());
+            entry.setLatitude(12.9716);
+            entry.setLongitude(77.5946);
+            entry.setOccurredAt(LocalDateTime.now().minusHours(seed.hoursAgo()));
+            if (!seed.success()) {
+                entry.setFailureReason("Incorrect OTP");
+            }
+            loginHistoryRepository.save(entry);
+        }
+
+        log.info("Seeded {} demo login-history entries for user #{}", seeds.size(), user.getId());
     }
 
     private void seedRestaurantPayouts(Restaurant restaurant) {

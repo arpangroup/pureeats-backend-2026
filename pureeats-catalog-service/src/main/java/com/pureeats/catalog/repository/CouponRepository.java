@@ -21,4 +21,9 @@ public interface CouponRepository extends JpaRepository<Coupon, Long> {
     @Query("select c from Coupon c where :search is null or :search = '' " +
             "or lower(c.name) like lower(concat('%', :search, '%')) or lower(c.code) like lower(concat('%', :search, '%'))")
     Page<Coupon> findPage(@Param("search") String search, Pageable pageable);
+
+    /** Store-owner listing - only coupons scoped to this one restaurant (not the global ones admins manage). */
+    @Query("select c from Coupon c where c.restaurantId = :restaurantId and (:search is null or :search = '' " +
+            "or lower(c.name) like lower(concat('%', :search, '%')) or lower(c.code) like lower(concat('%', :search, '%')))")
+    Page<Coupon> findByRestaurantIdPage(@Param("restaurantId") Integer restaurantId, @Param("search") String search, Pageable pageable);
 }
