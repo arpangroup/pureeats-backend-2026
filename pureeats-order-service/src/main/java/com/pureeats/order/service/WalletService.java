@@ -1,8 +1,10 @@
 package com.pureeats.order.service;
 
 import com.pureeats.domain.common.exception.ResourceNotFoundException;
+import com.pureeats.domain.common.response.PageResponse;
 import com.pureeats.domain.entity.Transaction;
 import com.pureeats.domain.entity.Wallet;
+import com.pureeats.order.dto.AdminTransactionResponse;
 import com.pureeats.order.dto.AdminWalletResponse;
 import com.pureeats.order.dto.AdminWalletTransactionResponse;
 import com.pureeats.order.dto.WalletAdjustRequest;
@@ -11,12 +13,15 @@ import com.pureeats.order.dto.WalletTransactionResponse;
 import com.pureeats.order.repository.TransactionRepository;
 import com.pureeats.order.repository.WalletRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -93,6 +98,25 @@ public class WalletService {
             credit(wallet.getHolderId(), request.amount(), request.message());
         }
         return toAdminResponse(getOrCreateWallet(wallet.getHolderId()));
+    }
+
+    /** Platform-wide ledger across every wallet - resolves the holder's wallet name per row for display. */
+    @Transactional(readOnly = true)
+    public PageResponse<AdminTransactionResponse> listAllTransactions(Pageable pageable) {
+        Page<Transaction> page = transactionRepository.findAllByOrderByCreatedAtDesc(pageable);
+        Map<Long, Wallet> walletsById = new HashMap<>();
+        List<AdminTransactionResponse> content = page.getContent().stream().map(t -> {
+            Wallet wallet = t.getWalletId() != null
+                    ? walletsById.computeIfAbsent(t.getWalletId(), id -> walletRepository.findById(id).orElse(null))
+                    : null;
+            String type = TX_TYPE_DEPOSIT.equals(t.getType()) ? "credit" : "debit";
+            Map<String, Object> meta = t.getMeta() != null ? Map.of("reason", t.getMeta()) : null;
+            return new AdminTransactionResponse(t.getId(), t.getPayableType(), t.getPayableId(), t.getWalletId(),
+                    type, toDecimal(t.getAmount()), Boolean.TRUE.equals(t.getConfirmed()), meta, t.getUuid(),
+                    t.getCreatedAt(), t.getUpdatedAt(), wallet != null ? wallet.getName() : "Unknown wallet",
+                    wallet != null ? wallet.getHolderType() : "", wallet != null ? wallet.getHolderId() : null);
+        }).toList();
+        return PageResponse.of(content, page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
     }
 
     private AdminWalletResponse toAdminResponse(Wallet w) {

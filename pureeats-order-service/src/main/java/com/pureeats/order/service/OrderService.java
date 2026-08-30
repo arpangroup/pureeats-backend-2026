@@ -1,5 +1,7 @@
 package com.pureeats.order.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pureeats.catalog.dto.CouponRedemptionResult;
 import com.pureeats.catalog.repository.AddonRepository;
 import com.pureeats.catalog.repository.ItemRepository;
 import com.pureeats.catalog.repository.RestaurantRepository;
@@ -20,6 +22,7 @@ import com.pureeats.order.repository.OrderRepository;
 import com.pureeats.user.repository.AddressRepository;
 import com.pureeats.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -33,6 +36,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class OrderService {
 
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -53,6 +57,7 @@ public class OrderService {
     private final NotificationDispatchService notificationDispatchService;
     private final UserRepository userRepository;
     private final OrderStatusLogService orderStatusLogService;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public OrderResponse placeOrder(Long userId, PlaceOrderRequest request) {
@@ -106,28 +111,40 @@ public class OrderService {
         }
 
         BigDecimal discount = BigDecimal.ZERO;
+        boolean freeDelivery = false;
         if (request.couponCode() != null && !request.couponCode().isBlank()) {
-            discount = couponService.recordUsage(request.couponCode(), restaurant.getId().intValue(), itemTotal, userId.intValue());
-            order.setCouponName(request.couponCode());
+            boolean isFirstOrder = orderRepository.findByUserIdOrderByCreatedAtDesc(userId.intValue()).isEmpty();
+            CouponRedemptionResult redemption = couponService.recordUsage(request.couponCode(),
+                    restaurant.getId().intValue(), itemTotal, userId.intValue(), isFirstOrder);
+            discount = redemption.discountAmount();
+            freeDelivery = redemption.freeDelivery();
+            order.setCouponCode(redemption.code());
+            order.setCouponName(redemption.name());
         }
 
         BigDecimal amountAfterDiscount = itemTotal.subtract(discount);
         BigDecimal tax = orderPricingService.tax(amountAfterDiscount);
         BigDecimal restaurantCharge = orderPricingService.restaurantCharge(restaurant, amountAfterDiscount);
-        BigDecimal deliveryCharge = orderPricingService.deliveryCharge(restaurant, request.deliveryType() == DeliveryType.SELF_PICKUP);
+        boolean isSelfPickup = request.deliveryType() == DeliveryType.SELF_PICKUP;
+        DeliveryChargeResult deliveryChargeResult = orderPricingService.computeDeliveryCharge(
+                restaurant, isSelfPickup, freeDelivery, address.getLatitude(), address.getLongitude());
+        BigDecimal deliveryCharge = deliveryChargeResult.amount();
         BigDecimal payable = amountAfterDiscount.add(tax).add(restaurantCharge).add(deliveryCharge).add(order.getDriverTipAmount());
 
         order.setTotal(itemTotal);
+        order.setDiscountAmount(discount);
         order.setTax(tax);
         order.setRestaurantCharge(restaurantCharge);
         order.setDeliveryCharge(deliveryCharge);
         order.setPayable(payable);
+        order.setPricingBreakdown(serializeBreakdown(new PricingBreakdown(
+                itemTotal, discount, amountAfterDiscount, tax, orderPricingService.taxPercentage(),
+                restaurantCharge, restaurant.getRestaurantCharges(), deliveryCharge, deliveryChargeResult.basis(),
+                deliveryChargeResult.distanceKm(), restaurant.getLatitude(), restaurant.getLongitude(),
+                address.getLatitude(), address.getLongitude())));
 
         boolean autoAccept = Boolean.TRUE.equals(restaurant.getAutoAcceptable());
         order.setOrderstatusId(orderStatusService.idFor(autoAccept ? OrderStatusCode.RESTAURANT_ACCEPTED : OrderStatusCode.PLACED));
-        if (autoAccept) {
-            order.setRestaurantAcceptAt(LocalDateTime.now());
-        }
 
         order = orderRepository.save(order);
         orderStatusLogService.record(order.getId(), null,
@@ -211,7 +228,6 @@ public class OrderService {
                     + (from != null ? from.name() : "UNKNOWN") + " to " + toStatus.name());
         }
 
-        applyStatusTimestamp(order, toStatus);
         order.setOrderstatusId(orderStatusService.idFor(toStatus));
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
@@ -225,18 +241,6 @@ public class OrderService {
         notificationDispatchService.notifyUser(order.getUserId().longValue(), "Order status updated",
                 "Your order #" + order.getUniqueOrderId() + " is now " + toStatus.name());
         return toResponse(order);
-    }
-
-    private static void applyStatusTimestamp(Order order, OrderStatusCode toStatus) {
-        LocalDateTime now = LocalDateTime.now();
-        switch (toStatus) {
-            case RESTAURANT_ACCEPTED -> order.setRestaurantAcceptAt(now);
-            case READY_FOR_PICKUP -> order.setRestaurantReadyAt(now);
-            case RIDER_ASSIGNED -> order.setRiderAcceptAt(now);
-            case PICKED_UP -> order.setRiderPickedAt(now);
-            case DELIVERED -> order.setRiderDeliverAt(now);
-            default -> { }
-        }
     }
 
     Order findOrThrow(Long orderId) {
@@ -266,7 +270,7 @@ public class OrderService {
         int itemCount = orderItemRepository.findByOrderId(order.getId().intValue()).size();
         return new AdminOrderSummaryResponse(order.getId(), order.getUniqueOrderId(), status != null ? status.name() : "UNKNOWN",
                 order.getUserId().longValue(), order.getRestaurantId().longValue(), customerName, restaurantName, itemCount,
-                order.getTotal(), order.getPayable(), order.getPaymentMode(), order.getCouponName(), order.getCreatedAt());
+                order.getTotal(), order.getPayable(), order.getPaymentMode(), order.getCouponCode(), order.getCreatedAt());
     }
 
     OrderResponse toResponse(Order order) {
@@ -279,17 +283,48 @@ public class OrderService {
         }).toList();
 
         OrderStatusCode status = orderStatusService.codeFor(order.getOrderstatusId());
-        String customerName = userRepository.findById(order.getUserId().longValue()).map(User::getName).orElse("Unknown");
-        String restaurantName = restaurantRepository.findById(order.getRestaurantId().longValue()).map(Restaurant::getName).orElse("Unknown");
+        User customer = userRepository.findById(order.getUserId().longValue()).orElse(null);
+        Restaurant restaurant = restaurantRepository.findById(order.getRestaurantId().longValue()).orElse(null);
         List<String> legalNextStatuses = OrderStatusTransitions.legalNext(status).stream().map(Enum::name).toList();
+
+        OrderCustomerSummary customerSummary = new OrderCustomerSummary(order.getUserId().longValue(),
+                customer != null ? customer.getName() : "Unknown", customer != null ? customer.getEmail() : null,
+                customer != null ? customer.getPhone() : null);
+        OrderRestaurantSummary restaurantSummary = new OrderRestaurantSummary(order.getRestaurantId().longValue(),
+                restaurant != null ? restaurant.getName() : "Unknown", restaurant != null ? restaurant.getContactNumber() : null);
+        var liveCoupon = order.getCouponCode() == null ? null : couponService.findByCode(order.getCouponCode()).orElse(null);
+        OrderCouponSummary couponSummary = order.getCouponCode() == null ? null : new OrderCouponSummary(
+                liveCoupon != null ? liveCoupon.id() : null, order.getCouponCode(), order.getCouponName(),
+                liveCoupon != null ? liveCoupon.discountType() : null, order.getDiscountAmount());
+
         return new OrderResponse(order.getId(), order.getUniqueOrderId(), status != null ? status.name() : "UNKNOWN",
-                order.getOrderstatusId(), order.getUserId().longValue(), order.getRestaurantId().longValue(),
-                customerName, restaurantName, order.getAddress(), order.getTax(), order.getRestaurantCharge(),
-                order.getDeliveryCharge(), order.getDriverTipAmount(), order.getTotal(), order.getPayable(),
-                order.getPaymentMode(), order.getDeliveryPin(), order.getOrderComment(), order.getCouponName(),
-                order.getTransactionId(), order.getDeliveryType(), order.getOrderFrom(),
-                order.getRestaurantAcceptAt(), order.getRestaurantReadyAt(), order.getRiderAcceptAt(),
-                order.getRiderPickedAt(), order.getRiderDeliverAt(), order.getCreatedAt(), itemResponses, legalNextStatuses);
+                order.getOrderstatusId(), customerSummary, restaurantSummary, couponSummary, itemResponses,
+                order.getAddress(), order.getTax(), order.getRestaurantCharge(),
+                order.getDeliveryCharge(), order.getDriverTipAmount(), order.getDiscountAmount(), order.getTotal(), order.getPayable(),
+                order.getPaymentMode(), order.getDeliveryPin(), order.getOrderComment(),
+                order.getTransactionId(), order.getDeliveryType(), order.getOrderFrom(), order.getCreatedAt(),
+                legalNextStatuses, deserializeBreakdown(order.getPricingBreakdown()));
+    }
+
+    private String serializeBreakdown(PricingBreakdown breakdown) {
+        try {
+            return objectMapper.writeValueAsString(breakdown);
+        } catch (Exception e) {
+            log.warn("Failed to serialize pricing breakdown for order", e);
+            return null;
+        }
+    }
+
+    private PricingBreakdown deserializeBreakdown(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(json, PricingBreakdown.class);
+        } catch (Exception e) {
+            log.warn("Failed to deserialize pricing breakdown for order", e);
+            return null;
+        }
     }
 
     private OrderSummaryResponse toSummary(Order order) {

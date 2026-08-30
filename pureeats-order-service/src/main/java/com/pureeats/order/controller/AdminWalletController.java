@@ -1,6 +1,8 @@
 package com.pureeats.order.controller;
 
 import com.pureeats.domain.common.response.ApiResponse;
+import com.pureeats.domain.common.response.PageResponse;
+import com.pureeats.order.dto.AdminTransactionResponse;
 import com.pureeats.order.dto.AdminWalletResponse;
 import com.pureeats.order.dto.AdminWalletTransactionResponse;
 import com.pureeats.order.dto.WalletAdjustRequest;
@@ -9,6 +11,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,6 +37,13 @@ public class AdminWalletController {
     @Operation(summary = "Get (or lazily create) a holder's wallet")
     public ApiResponse<AdminWalletResponse> getWallet(@RequestParam String holderType, @RequestParam Long holderId) {
         return ApiResponse.success(walletService.getWalletForHolder(holderId));
+    }
+
+    @GetMapping("/api/v1/admin/wallet/transactions")
+    @Operation(summary = "Platform-wide transaction ledger across every wallet, newest first")
+    public ApiResponse<PageResponse<AdminTransactionResponse>> allTransactions(
+            @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ApiResponse.success(walletService.listAllTransactions(pageable));
     }
 
     @GetMapping("/api/v1/admin/wallet/{walletId}/transactions")

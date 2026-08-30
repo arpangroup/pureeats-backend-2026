@@ -56,4 +56,25 @@ public class DeliveryGuyDetail {
 
     @Column(name = "rating", nullable = false)
     private BigDecimal rating;
+
+    @Column(name = "is_active")
+    private Boolean isActive;
+
+    @Column(name = "is_online")
+    private Boolean isOnline;
+
+    @Column(name = "last_lat")
+    private BigDecimal lastLat;
+
+    @Column(name = "last_lng")
+    private BigDecimal lastLng;
+
+    @Column(name = "last_seen_at")
+    private LocalDateTime lastSeenAt;
+
+    @Column(name = "created_by")
+    private Long createdBy;
+
+    @Column(name = "updated_by")
+    private Long updatedBy;
 }

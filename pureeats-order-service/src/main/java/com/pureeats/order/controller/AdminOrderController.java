@@ -6,6 +6,7 @@ import com.pureeats.order.dto.AdminOrderSummaryResponse;
 import com.pureeats.order.dto.OrderResponse;
 import com.pureeats.order.dto.OrderStatusLogResponse;
 import com.pureeats.order.dto.OrderStatusResponse;
+import com.pureeats.order.dto.OrderTimelineResponse;
 import com.pureeats.order.dto.UpdateOrderStatusRequest;
 import com.pureeats.order.service.OrderService;
 import com.pureeats.order.service.OrderStatusLogService;
@@ -73,5 +74,11 @@ public class AdminOrderController {
     @Operation(summary = "Get an order's full status-transition journey - who changed what, and when")
     public ApiResponse<List<OrderStatusLogResponse>> journey(@PathVariable Long id) {
         return ApiResponse.success(orderStatusLogService.journey(id));
+    }
+
+    @GetMapping("/api/v1/admin/orders/{id}/timeline")
+    @Operation(summary = "Get the compact milestone timeline for an order")
+    public ApiResponse<OrderTimelineResponse> timeline(@PathVariable Long id) {
+        return ApiResponse.success(orderStatusLogService.timeline(id));
     }
 }

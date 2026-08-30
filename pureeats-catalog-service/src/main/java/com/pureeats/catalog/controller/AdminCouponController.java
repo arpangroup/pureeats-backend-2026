@@ -3,6 +3,7 @@ package com.pureeats.catalog.controller;
 import com.pureeats.catalog.dto.CouponCreateRequest;
 import com.pureeats.catalog.dto.CouponResponse;
 import com.pureeats.catalog.dto.CouponUpdateRequest;
+import com.pureeats.catalog.dto.CouponUsageResponse;
 import com.pureeats.catalog.service.CouponService;
 import com.pureeats.domain.common.response.ApiResponse;
 import com.pureeats.domain.common.response.PageResponse;
@@ -24,6 +25,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 /** Admin-panel coupon directory - every coupon, not just the ones valid for one restaurant. */
 @RestController
@@ -66,5 +69,11 @@ public class AdminCouponController {
     public ApiResponse<Void> delete(@PathVariable Long id) {
         couponService.delete(id);
         return ApiResponse.success("Coupon deleted", null);
+    }
+
+    @GetMapping("/api/v1/admin/coupons/{id}/usages")
+    @Operation(summary = "List a coupon's redemption history")
+    public ApiResponse<List<CouponUsageResponse>> usages(@PathVariable Long id) {
+        return ApiResponse.success(couponService.listUsages(id));
     }
 }

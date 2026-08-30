@@ -56,7 +56,6 @@ public class StoreOwnerOrderService {
         requireStatus(order, OrderStatusCode.PLACED);
 
         order.setOrderstatusId(orderStatusService.idFor(OrderStatusCode.RESTAURANT_ACCEPTED));
-        order.setRestaurantAcceptAt(LocalDateTime.now());
         order.setPrepareTime(DEFAULT_PREPARE_TIME_MINUTES);
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
@@ -73,7 +72,6 @@ public class StoreOwnerOrderService {
         requireStatus(order, OrderStatusCode.RESTAURANT_ACCEPTED);
 
         order.setOrderstatusId(orderStatusService.idFor(OrderStatusCode.READY_FOR_PICKUP));
-        order.setRestaurantReadyAt(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
         orderStatusLogService.record(order.getId(), OrderStatusCode.RESTAURANT_ACCEPTED, OrderStatusCode.READY_FOR_PICKUP, "STORE_OWNER", ownerUserId, null);

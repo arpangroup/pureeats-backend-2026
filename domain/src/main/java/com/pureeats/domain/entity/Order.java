@@ -31,8 +31,20 @@ public class Order {
     @Column(name = "user_id", nullable = false)
     private Integer userId;
 
+    /** Snapshot of the coupon's display NAME at order-placement time (not the code - see {@link #couponCode}). */
     @Column(name = "coupon_name")
     private String couponName;
+
+    @Column(name = "coupon_code")
+    private String couponCode;
+
+    @Column(name = "discount_amount")
+    private BigDecimal discountAmount;
+
+    /** JSON snapshot of how this order's charges were computed - see {@code PricingBreakdown}. */
+    @Lob
+    @Column(name = "pricing_breakdown")
+    private String pricingBreakdown;
 
     @Lob
     @Column(name = "location")
@@ -87,21 +99,6 @@ public class Order {
 
     @Column(name = "prepare_time")
     private Integer prepareTime;
-
-    @Column(name = "restaurant_accept_at")
-    private LocalDateTime restaurantAcceptAt;
-
-    @Column(name = "restaurant_ready_at")
-    private LocalDateTime restaurantReadyAt;
-
-    @Column(name = "rider_accept_at")
-    private LocalDateTime riderAcceptAt;
-
-    @Column(name = "rider_picked_at")
-    private LocalDateTime riderPickedAt;
-
-    @Column(name = "rider_deliver_at")
-    private LocalDateTime riderDeliverAt;
 
     @Column(name = "order_from", nullable = false)
     private String orderFrom;

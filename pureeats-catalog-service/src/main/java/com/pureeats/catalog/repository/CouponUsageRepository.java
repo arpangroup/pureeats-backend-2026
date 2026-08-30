@@ -7,4 +7,6 @@ import java.util.List;
 
 public interface CouponUsageRepository extends JpaRepository<CouponUsage, Long> {
     List<CouponUsage> findByCouponIdAndUserId(Integer couponId, Integer userId);
+
+    List<CouponUsage> findByCouponIdOrderByCreatedAtDesc(Integer couponId);
 }

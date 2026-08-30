@@ -78,7 +78,6 @@ public class DeliveryOrderService {
 
         OrderStatusCode from = orderStatusService.codeFor(order.getOrderstatusId());
         order.setOrderstatusId(orderStatusService.idFor(OrderStatusCode.RIDER_ASSIGNED));
-        order.setRiderAcceptAt(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
         orderStatusLogService.record(order.getId(), from, OrderStatusCode.RIDER_ASSIGNED, "DELIVERY", riderUserId, null);
@@ -93,7 +92,6 @@ public class DeliveryOrderService {
         Order order = ownedByRider(riderUserId, orderId);
         OrderStatusCode from = orderStatusService.codeFor(order.getOrderstatusId());
         order.setOrderstatusId(orderStatusService.idFor(OrderStatusCode.PICKED_UP));
-        order.setRiderPickedAt(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
         orderStatusLogService.record(order.getId(), from, OrderStatusCode.PICKED_UP, "DELIVERY", riderUserId, null);
@@ -127,7 +125,6 @@ public class DeliveryOrderService {
 
         OrderStatusCode from = orderStatusService.codeFor(order.getOrderstatusId());
         order.setOrderstatusId(orderStatusService.idFor(OrderStatusCode.DELIVERED));
-        order.setRiderDeliverAt(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
         orderStatusLogService.record(order.getId(), from, OrderStatusCode.DELIVERED, actorType, actorUserId, note);

@@ -16,7 +16,7 @@ public record AdminOrderSummaryResponse(
         BigDecimal total,
         BigDecimal payable,
         String paymentMode,
-        String couponName,
+        String couponCode,
         LocalDateTime createdAt
 ) {
 }

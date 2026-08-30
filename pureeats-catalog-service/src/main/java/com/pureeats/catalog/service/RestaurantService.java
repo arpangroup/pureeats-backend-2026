@@ -23,6 +23,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -182,9 +183,26 @@ public class RestaurantService {
         applyField(restaurant.getId(), "address", restaurant.getAddress(), request.address(), isPrivileged, callerUserId, restaurant::setAddress);
         applyField(restaurant.getId(), "pincode", restaurant.getPincode(), request.pincode(), isPrivileged, callerUserId, restaurant::setPincode);
         applyField(restaurant.getId(), "landmark", restaurant.getLandmark(), request.landmark(), isPrivileged, callerUserId, restaurant::setLandmark);
+        applyField(restaurant.getId(), "certificate", restaurant.getCertificate(), request.certificate(), isPrivileged, callerUserId, restaurant::setCertificate);
+        applyField(restaurant.getId(), "isPureveg", restaurant.getIsPureveg(), request.isPureveg(), isPrivileged, callerUserId, restaurant::setIsPureveg);
+        applyField(restaurant.getId(), "locationId", restaurant.getLocationId(), request.locationId(), isPrivileged, callerUserId, restaurant::setLocationId);
+        applyField(restaurant.getId(), "latitude", restaurant.getLatitude(), request.latitude(), isPrivileged, callerUserId, restaurant::setLatitude);
+        applyField(restaurant.getId(), "longitude", restaurant.getLongitude(), request.longitude(), isPrivileged, callerUserId, restaurant::setLongitude);
+        applyField(restaurant.getId(), "restaurantCharges", restaurant.getRestaurantCharges(), request.restaurantCharges(), isPrivileged, callerUserId, restaurant::setRestaurantCharges);
         applyField(restaurant.getId(), "deliveryCharges", restaurant.getDeliveryCharges(), request.deliveryCharges(), isPrivileged, callerUserId, restaurant::setDeliveryCharges);
         applyField(restaurant.getId(), "deliveryRadius", restaurant.getDeliveryRadius(), request.deliveryRadius(), isPrivileged, callerUserId, restaurant::setDeliveryRadius);
         applyField(restaurant.getId(), "minOrderPrice", restaurant.getMinOrderPrice(), request.minOrderPrice(), isPrivileged, callerUserId, restaurant::setMinOrderPrice);
+        if (request.deliveryType() != null) {
+            applyField(restaurant.getId(), "deliveryType", deliveryTypeLabel(restaurant.getDeliveryType()), request.deliveryType(),
+                    isPrivileged, callerUserId, label -> restaurant.setDeliveryType(deliveryTypeCode(label)));
+        }
+        applyField(restaurant.getId(), "deliveryChargeType", restaurant.getDeliveryChargeType(), request.deliveryChargeType(), isPrivileged, callerUserId, restaurant::setDeliveryChargeType);
+        applyField(restaurant.getId(), "baseDeliveryCharge", restaurant.getBaseDeliveryCharge(), request.baseDeliveryCharge(), isPrivileged, callerUserId, restaurant::setBaseDeliveryCharge);
+        applyField(restaurant.getId(), "baseDeliveryDistance", restaurant.getBaseDeliveryDistance(), request.baseDeliveryDistance(), isPrivileged, callerUserId, restaurant::setBaseDeliveryDistance);
+        applyField(restaurant.getId(), "extraDeliveryCharge", restaurant.getExtraDeliveryCharge(), request.extraDeliveryCharge(), isPrivileged, callerUserId, restaurant::setExtraDeliveryCharge);
+        applyField(restaurant.getId(), "extraDeliveryDistance", restaurant.getExtraDeliveryDistance(), request.extraDeliveryDistance(), isPrivileged, callerUserId, restaurant::setExtraDeliveryDistance);
+        applyField(restaurant.getId(), "isSchedulable", restaurant.getIsSchedulable(), request.isSchedulable(), isPrivileged, callerUserId, restaurant::setIsSchedulable);
+        applyField(restaurant.getId(), "isNotifiable", restaurant.getIsNotifiable(), request.isNotifiable(), isPrivileged, callerUserId, restaurant::setIsNotifiable);
         applyField(restaurant.getId(), "isAcceptCod", restaurant.getIsAcceptCod(), request.isAcceptCod(), isPrivileged, callerUserId, restaurant::setIsAcceptCod);
         applyField(restaurant.getId(), "autoAcceptable", restaurant.getAutoAcceptable(), request.autoAcceptable(), isPrivileged, callerUserId, restaurant::setAutoAcceptable);
         applyField(restaurant.getId(), "isActive", restaurant.getIsActive(), request.isActive(), isPrivileged, callerUserId, restaurant::setIsActive);
@@ -312,10 +330,23 @@ public class RestaurantService {
         return new RestaurantDetailResponse(r.getId(), r.getName(), r.getDescription(), r.getSlug(),
                 r.getContactNumber(), r.getOpeningTime(), r.getClosingTime(), mediaUrlResolver.resolve(r.getImage()), r.getRating(),
                 r.getDeliveryTime(), r.getPriceRange(), Boolean.TRUE.equals(r.getIsPureveg()), r.getAddress(),
-                r.getPincode(), r.getLandmark(), r.getLatitude(), r.getLongitude(), r.getRestaurantCharges(),
-                r.getDeliveryCharges(), r.getDeliveryRadius(), r.getMinOrderPrice(),
-                Boolean.TRUE.equals(r.getIsActive()), Boolean.TRUE.equals(r.getIsAccepted()),
+                r.getPincode(), r.getLandmark(), r.getCertificate(), r.getLocationId(), r.getLatitude(), r.getLongitude(), r.getRestaurantCharges(),
+                r.getDeliveryCharges(), r.getDeliveryRadius(), r.getMinOrderPrice(), deliveryTypeLabel(r.getDeliveryType()),
+                r.getDeliveryChargeType(), r.getBaseDeliveryCharge(), r.getBaseDeliveryDistance(),
+                r.getExtraDeliveryCharge(), r.getExtraDeliveryDistance(), Boolean.TRUE.equals(r.getIsSchedulable()),
+                Boolean.TRUE.equals(r.getIsNotifiable()), Boolean.TRUE.equals(r.getIsActive()), Boolean.TRUE.equals(r.getIsAccepted()),
                 Boolean.TRUE.equals(r.getIsFeatured()), Boolean.TRUE.equals(r.getIsAcceptCod()),
                 Boolean.TRUE.equals(r.getAutoAcceptable()));
+    }
+
+    private static final Map<String, Integer> DELIVERY_TYPE_TO_INT = Map.of("self-pickup", 0, "delivery", 1, "both", 2);
+    private static final Map<Integer, String> DELIVERY_TYPE_TO_LABEL = Map.of(0, "self-pickup", 1, "delivery", 2, "both");
+
+    private static Integer deliveryTypeCode(String label) {
+        return DELIVERY_TYPE_TO_INT.getOrDefault(label, 1);
+    }
+
+    private static String deliveryTypeLabel(Integer code) {
+        return DELIVERY_TYPE_TO_LABEL.getOrDefault(code, "delivery");
     }
 }

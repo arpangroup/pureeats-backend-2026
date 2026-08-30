@@ -13,6 +13,8 @@ import java.util.Optional;
 public interface CouponRepository extends JpaRepository<Coupon, Long> {
     Optional<Coupon> findByCodeIgnoreCaseAndIsActiveTrue(String code);
 
+    Optional<Coupon> findByCodeIgnoreCase(String code);
+
     List<Coupon> findByIsActiveTrueAndRestaurantIdIn(List<Integer> restaurantIdsIncludingZeroForGlobal);
 
     /** Admin listing - every coupon, optionally filtered by a name/code search. */

@@ -65,4 +65,7 @@ public class Coupon {
 
     @Column(name = "max_count", nullable = false)
     private Integer maxCount;
+
+    @Column(name = "first_order_only")
+    private Boolean firstOrderOnly;
 }

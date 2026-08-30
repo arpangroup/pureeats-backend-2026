@@ -1,7 +1,5 @@
 package com.pureeats.catalog.dto;
 
-import com.pureeats.domain.enums.DiscountType;
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
@@ -10,12 +8,17 @@ public record CouponResponse(
         String name,
         String description,
         String code,
-        DiscountType discountType,
+        /** "flat", "percentage" or "free_delivery". */
+        String discountType,
         BigDecimal discount,
         BigDecimal minOrderAmount,
         BigDecimal uptoAmount,
         LocalDate expiryDate,
         boolean isActive,
-        Integer restaurantId
+        Integer restaurantId,
+        boolean firstOrderOnly,
+        Integer totalCoupon,
+        Integer count,
+        Integer maxCount
 ) {
 }

@@ -24,8 +24,12 @@ import com.pureeats.domain.entity.User;
 import com.pureeats.domain.enums.DiscountType;
 import com.pureeats.domain.enums.OrderStatusCode;
 import com.pureeats.domain.enums.PaymentMode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pureeats.order.dto.PricingBreakdown;
+import com.pureeats.order.entity.OrderStatusLog;
 import com.pureeats.order.repository.OrderItemRepository;
 import com.pureeats.order.repository.OrderRepository;
+import com.pureeats.order.repository.OrderStatusLogRepository;
 import com.pureeats.order.service.OrderStatusService;
 import com.pureeats.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -77,6 +81,59 @@ public class DemoCatalogSeeder implements ApplicationRunner {
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final OrderStatusService orderStatusService;
+    private final OrderStatusLogRepository orderStatusLogRepository;
+    private final ObjectMapper objectMapper;
+
+    private static final List<OrderStatusCode> DELIVERY_PATH = List.of(
+            OrderStatusCode.PLACED, OrderStatusCode.RESTAURANT_ACCEPTED, OrderStatusCode.READY_FOR_PICKUP,
+            OrderStatusCode.RIDER_ASSIGNED, OrderStatusCode.PICKED_UP, OrderStatusCode.DELIVERED);
+
+    /**
+     * Backfills a plausible status-transition journey for a seeded order, since these orders are
+     * inserted directly (bypassing every OrderService method that would normally call
+     * {@code OrderStatusLogService.record}) - without this, the admin "Order journey" tile has
+     * nothing to show for any seeded order.
+     */
+    private void backfillJourney(Order order, OrderStatusCode finalStatus) {
+        if (!orderStatusLogRepository.findByOrderIdOrderByCreatedAtAsc(order.getId()).isEmpty()) {
+            return;
+        }
+        List<OrderStatusCode> path = finalStatus == OrderStatusCode.CANCELLED
+                ? List.of(OrderStatusCode.PLACED, OrderStatusCode.CANCELLED)
+                : DELIVERY_PATH.subList(0, DELIVERY_PATH.indexOf(finalStatus) + 1);
+
+        OrderStatusCode previous = null;
+        for (int i = 0; i < path.size(); i++) {
+            OrderStatusCode step = path.get(i);
+            OrderStatusLog logEntry = new OrderStatusLog();
+            logEntry.setOrderId(order.getId());
+            logEntry.setFromStatus(previous != null ? previous.name() : null);
+            logEntry.setToStatus(step.name());
+            logEntry.setActorType(actorTypeFor(step));
+            logEntry.setActorUserId(order.getUserId().longValue());
+            logEntry.setNote(step == OrderStatusCode.PLACED ? "Order placed" : null);
+            logEntry.setCreatedAt(order.getCreatedAt().plusMinutes(i * 8L));
+            orderStatusLogRepository.save(logEntry);
+            previous = step;
+        }
+    }
+
+    private String serializePricingBreakdown(PricingBreakdown breakdown) {
+        try {
+            return objectMapper.writeValueAsString(breakdown);
+        } catch (Exception e) {
+            log.warn("Failed to serialize seeded pricing breakdown", e);
+            return null;
+        }
+    }
+
+    private static String actorTypeFor(OrderStatusCode step) {
+        return switch (step) {
+            case PLACED -> "CUSTOMER";
+            case RESTAURANT_ACCEPTED, READY_FOR_PICKUP, CANCELLED -> "STORE_OWNER";
+            default -> "DELIVERY";
+        };
+    }
 
     @Override
     @Transactional
@@ -99,6 +156,8 @@ public class DemoCatalogSeeder implements ApplicationRunner {
         seedAddons(owner1.get(), addonCategories);
         seedCoupons(restaurants);
         seedOrders(restaurants, items, List.of(customer1.get(), customer2.get()));
+        seedCouponOrder(restaurants, items, customer1.get());
+        seedFreeDeliveryCouponOrder(restaurants, items, customer2.get());
 
         log.info("Demo catalog seed complete: {} categories, {} restaurants, {} items, {} coupons",
                 categories.size(), restaurants.size(), items.size(), 2);
@@ -273,11 +332,14 @@ public class DemoCatalogSeeder implements ApplicationRunner {
     }
 
     private void seedCoupons(List<Restaurant> restaurants) {
-        record Seed(String code, String name, DiscountType type, String discount, String upto, BigDecimal minOrder, Integer restaurantId) {}
+        record Seed(String code, String name, DiscountType type, String discount, String upto, BigDecimal minOrder,
+                    Integer restaurantId, boolean firstOrderOnly) {}
         List<Seed> seeds = List.of(
-                new Seed("WELCOME50", "Welcome Offer", DiscountType.AMOUNT, "50", "50", BigDecimal.valueOf(199), 0),
+                new Seed("WELCOME50", "Welcome Offer", DiscountType.AMOUNT, "50", "50", BigDecimal.valueOf(199), 0, false),
                 new Seed("SAVE10", "10% Off", DiscountType.PERCENTAGE, "10", "100", BigDecimal.valueOf(299),
-                        restaurants.get(0).getId().intValue())
+                        restaurants.get(0).getId().intValue(), false),
+                new Seed("FREESHIP", "Free Delivery", DiscountType.FREE_DELIVERY, "0", "0", BigDecimal.valueOf(149), 0, false),
+                new Seed("FIRSTORDER", "First Order Special", DiscountType.AMOUNT, "75", "75", BigDecimal.valueOf(249), 0, true)
         );
         for (Seed seed : seeds) {
             if (couponRepository.findByCodeIgnoreCaseAndIsActiveTrue(seed.code()).isPresent()) {
@@ -297,6 +359,7 @@ public class DemoCatalogSeeder implements ApplicationRunner {
             coupon.setTotalCoupon(100);
             coupon.setCount(0);
             coupon.setMaxCount(100);
+            coupon.setFirstOrderOnly(seed.firstOrderOnly());
             coupon.setCreatedAt(LocalDateTime.now());
             coupon.setUpdatedAt(LocalDateTime.now());
             couponRepository.save(coupon);
@@ -354,7 +417,166 @@ public class DemoCatalogSeeder implements ApplicationRunner {
             orderItem.setCreatedAt(order.getCreatedAt());
             orderItem.setUpdatedAt(order.getCreatedAt());
             orderItemRepository.save(orderItem);
+
+            backfillJourney(order, statusCycle[i % statusCycle.length]);
         }
+    }
+
+    /**
+     * One extra demo order with the global WELCOME50 coupon applied (flat 50 off, min order 199),
+     * so the admin Order Details screen has something to show for the "applied coupon" card and
+     * the coupon-adjusted total, without needing to drive the full place-order flow through the
+     * customer-facing app. Mirrors {@link com.pureeats.order.service.OrderService#placeOrder}'s own
+     * math (item total -> discount -> tax/charges on the discounted amount -> payable).
+     */
+    private void seedCouponOrder(List<Restaurant> restaurants, List<Item> items, User customer) {
+        String uniqueOrderId = "PE-DEMO-COUPON-01";
+        Order existing = orderRepository.findAll().stream()
+                .filter(o -> uniqueOrderId.equals(o.getUniqueOrderId())).findFirst().orElse(null);
+        // Fully seeded by a previous run of this method (has both the coupon fields and the pricing
+        // breakdown added later) - nothing left to backfill.
+        if (existing != null && existing.getPricingBreakdown() != null && existing.getCouponCode() != null) {
+            backfillJourney(existing, OrderStatusCode.DELIVERED);
+            return;
+        }
+
+        Restaurant restaurant = restaurants.get(restaurants.size() - 1);
+        Item item = items.get(items.size() - 1);
+
+        String restaurantLat = restaurant.getLatitude() != null ? restaurant.getLatitude() : "12.9716";
+        String restaurantLng = restaurant.getLongitude() != null ? restaurant.getLongitude() : "77.5946";
+        String customerLat = "12.9352";
+        String customerLng = "77.6146";
+
+        BigDecimal itemTotal = item.getPrice();
+        BigDecimal discount = BigDecimal.valueOf(50);
+        BigDecimal amountAfterDiscount = itemTotal.subtract(discount);
+        BigDecimal taxPercentage = BigDecimal.valueOf(5);
+        BigDecimal tax = amountAfterDiscount.multiply(taxPercentage).divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+        BigDecimal restaurantChargePercentage = restaurant.getRestaurantCharges() != null ? restaurant.getRestaurantCharges() : BigDecimal.TEN;
+        BigDecimal restaurantCharge = BigDecimal.valueOf(10);
+        BigDecimal deliveryCharge = BigDecimal.valueOf(30);
+        BigDecimal distanceKm = BigDecimal.valueOf(4.68);
+        BigDecimal payable = amountAfterDiscount.add(tax).add(restaurantCharge).add(deliveryCharge);
+
+        boolean isNew = existing == null;
+        Order order = isNew ? new Order() : existing;
+        order.setUniqueOrderId(uniqueOrderId);
+        order.setOrderstatusId(orderStatusService.idFor(OrderStatusCode.DELIVERED));
+        order.setUserId(customer.getId().intValue());
+        order.setRestaurantId(restaurant.getId().intValue());
+        order.setCouponCode("WELCOME50");
+        order.setCouponName("Welcome Offer");
+        order.setDiscountAmount(discount);
+        order.setAddress("456 Demo Avenue, Bengaluru");
+        order.setLocation("{\"latitude\":\"" + customerLat + "\",\"longitude\":\"" + customerLng + "\"}");
+        order.setTax(tax);
+        order.setRestaurantCharge(restaurantCharge);
+        order.setDeliveryCharge(deliveryCharge);
+        order.setDriverTipAmount(BigDecimal.ZERO);
+        order.setTotal(itemTotal);
+        order.setPayable(payable);
+        order.setPricingBreakdown(serializePricingBreakdown(new PricingBreakdown(
+                itemTotal, discount, amountAfterDiscount, tax, taxPercentage, restaurantCharge, restaurantChargePercentage,
+                deliveryCharge, "FIXED", distanceKm, restaurantLat, restaurantLng, customerLat, customerLng)));
+        order.setPaymentMode(PaymentMode.WALLET.name());
+        order.setDeliveryPin("2050");
+        order.setDeliveryType(0);
+        order.setOrderFrom("SEED");
+        order.setOrderComment("Please ring the bell twice.");
+        if (isNew) {
+            order.setCreatedAt(LocalDateTime.now().minusHours(3));
+        }
+        order.setUpdatedAt(LocalDateTime.now().minusHours(1));
+        order = orderRepository.save(order);
+
+        if (isNew) {
+            OrderItem orderItem = new OrderItem();
+            orderItem.setOrderId(order.getId().intValue());
+            orderItem.setItemId(item.getId().intValue());
+            orderItem.setName(item.getName());
+            orderItem.setQuantity(1);
+            orderItem.setPrice(item.getPrice());
+            orderItem.setCreatedAt(order.getCreatedAt());
+            orderItem.setUpdatedAt(order.getCreatedAt());
+            orderItemRepository.save(orderItem);
+        }
+
+        backfillJourney(order, OrderStatusCode.DELIVERED);
+    }
+
+    /** Same idea as {@link #seedCouponOrder}, but with the FREESHIP coupon - waives the delivery charge instead of discounting the item total. */
+    private void seedFreeDeliveryCouponOrder(List<Restaurant> restaurants, List<Item> items, User customer) {
+        String uniqueOrderId = "PE-DEMO-COUPON-02";
+        Order existing = orderRepository.findAll().stream()
+                .filter(o -> uniqueOrderId.equals(o.getUniqueOrderId())).findFirst().orElse(null);
+        if (existing != null && existing.getPricingBreakdown() != null && existing.getCouponCode() != null) {
+            backfillJourney(existing, OrderStatusCode.DELIVERED);
+            return;
+        }
+
+        Restaurant restaurant = restaurants.get(0);
+        Item item = items.get(0);
+
+        String restaurantLat = restaurant.getLatitude() != null ? restaurant.getLatitude() : "12.9716";
+        String restaurantLng = restaurant.getLongitude() != null ? restaurant.getLongitude() : "77.5946";
+        String customerLat = "12.9784";
+        String customerLng = "77.6408";
+
+        BigDecimal itemTotal = item.getPrice();
+        BigDecimal discount = BigDecimal.ZERO;
+        BigDecimal taxPercentage = BigDecimal.valueOf(5);
+        BigDecimal tax = itemTotal.multiply(taxPercentage).divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+        BigDecimal restaurantChargePercentage = restaurant.getRestaurantCharges() != null ? restaurant.getRestaurantCharges() : BigDecimal.TEN;
+        BigDecimal restaurantCharge = BigDecimal.valueOf(10);
+        BigDecimal deliveryCharge = BigDecimal.ZERO;
+        BigDecimal distanceKm = BigDecimal.valueOf(6.15);
+        BigDecimal payable = itemTotal.add(tax).add(restaurantCharge).add(deliveryCharge);
+
+        boolean isNew = existing == null;
+        Order order = isNew ? new Order() : existing;
+        order.setUniqueOrderId(uniqueOrderId);
+        order.setOrderstatusId(orderStatusService.idFor(OrderStatusCode.DELIVERED));
+        order.setUserId(customer.getId().intValue());
+        order.setRestaurantId(restaurant.getId().intValue());
+        order.setCouponCode("FREESHIP");
+        order.setCouponName("Free Delivery");
+        order.setDiscountAmount(discount);
+        order.setAddress("789 Demo Layout, Bengaluru");
+        order.setLocation("{\"latitude\":\"" + customerLat + "\",\"longitude\":\"" + customerLng + "\"}");
+        order.setTax(tax);
+        order.setRestaurantCharge(restaurantCharge);
+        order.setDeliveryCharge(deliveryCharge);
+        order.setDriverTipAmount(BigDecimal.ZERO);
+        order.setTotal(itemTotal);
+        order.setPayable(payable);
+        order.setPricingBreakdown(serializePricingBreakdown(new PricingBreakdown(
+                itemTotal, discount, itemTotal, tax, taxPercentage, restaurantCharge, restaurantChargePercentage,
+                deliveryCharge, "FREE_DELIVERY_COUPON", distanceKm, restaurantLat, restaurantLng, customerLat, customerLng)));
+        order.setPaymentMode(PaymentMode.COD.name());
+        order.setDeliveryPin("3070");
+        order.setDeliveryType(0);
+        order.setOrderFrom("SEED");
+        order.setOrderComment(null);
+        if (isNew) {
+            order.setCreatedAt(LocalDateTime.now().minusHours(5));
+        }
+        order.setUpdatedAt(LocalDateTime.now().minusHours(2));
+        order = orderRepository.save(order);
+
+        if (isNew) {
+            OrderItem orderItem = new OrderItem();
+            orderItem.setOrderId(order.getId().intValue());
+            orderItem.setItemId(item.getId().intValue());
+            orderItem.setName(item.getName());
+            orderItem.setQuantity(2);
+            orderItem.setPrice(item.getPrice());
+            orderItem.setCreatedAt(order.getCreatedAt());
+            orderItem.setUpdatedAt(order.getCreatedAt());
+            orderItemRepository.save(orderItem);
+        }
+
+        backfillJourney(order, OrderStatusCode.DELIVERED);
     }
 
     private static String slugify(String name) {

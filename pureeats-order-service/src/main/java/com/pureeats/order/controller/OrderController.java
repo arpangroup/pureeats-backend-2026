@@ -4,9 +4,11 @@ import com.pureeats.domain.common.response.ApiResponse;
 import com.pureeats.order.dto.DeliverOrderRequest;
 import com.pureeats.order.dto.OrderResponse;
 import com.pureeats.order.dto.OrderSummaryResponse;
+import com.pureeats.order.dto.OrderTimelineResponse;
 import com.pureeats.order.dto.PlaceOrderRequest;
 import com.pureeats.order.service.DeliveryOrderService;
 import com.pureeats.order.service.OrderService;
+import com.pureeats.order.service.OrderStatusLogService;
 import com.pureeats.user.security.AuthenticatedUser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -28,6 +30,7 @@ public class OrderController {
 
     private final OrderService orderService;
     private final DeliveryOrderService deliveryOrderService;
+    private final OrderStatusLogService orderStatusLogService;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -47,6 +50,13 @@ public class OrderController {
     @Operation(summary = "Get order details")
     public ApiResponse<OrderResponse> get(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long id) {
         return ApiResponse.success(orderService.getOrder(principal.userId(), id));
+    }
+
+    @GetMapping("/{id}/timeline")
+    @Operation(summary = "Get the compact milestone timeline for an order you placed")
+    public ApiResponse<OrderTimelineResponse> timeline(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long id) {
+        orderService.getOrder(principal.userId(), id);
+        return ApiResponse.success(orderStatusLogService.timeline(id));
     }
 
     @PatchMapping("/{id}/cancel")
