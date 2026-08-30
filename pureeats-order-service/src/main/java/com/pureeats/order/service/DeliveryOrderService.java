@@ -87,6 +87,35 @@ public class DeliveryOrderService {
         return orderService.toResponse(order);
     }
 
+    /** Admin override - assigns a specific rider to a specific order directly, skipping the rider's own concurrent-delivery-limit check (an explicit admin decision, not a rider self-service action). */
+    @Transactional
+    public OrderResponse assignDriverAsAdmin(Long adminUserId, Long orderId, Long riderUserId) {
+        riderProfile(riderUserId);
+        Order order = orderService.findOrThrow(orderId);
+        if (acceptDeliveryRepository.findByOrderId(order.getId().intValue()).isPresent()) {
+            throw new BadRequestException("This order has already been assigned to a rider");
+        }
+
+        AcceptDelivery accept = new AcceptDelivery();
+        accept.setOrderId(order.getId().intValue());
+        accept.setUserId(riderUserId.intValue());
+        accept.setCustomerId(order.getUserId());
+        accept.setIsComplete(false);
+        acceptDeliveryRepository.save(accept);
+
+        OrderStatusCode from = orderStatusService.codeFor(order.getOrderstatusId());
+        order.setOrderstatusId(orderStatusService.idFor(OrderStatusCode.RIDER_ASSIGNED));
+        order.setUpdatedAt(LocalDateTime.now());
+        orderRepository.save(order);
+        orderStatusLogService.record(order.getId(), from, OrderStatusCode.RIDER_ASSIGNED, "ADMIN", adminUserId, "Driver assigned by admin");
+
+        notificationDispatchService.notifyUser(order.getUserId().longValue(), "Rider assigned",
+                "A delivery partner has been assigned to order #" + order.getUniqueOrderId());
+        notificationDispatchService.notifyUser(riderUserId, "New delivery assigned",
+                "You've been assigned to deliver order #" + order.getUniqueOrderId());
+        return orderService.toResponse(order);
+    }
+
     @Transactional
     public OrderResponse pickedUp(Long riderUserId, Long orderId) {
         Order order = ownedByRider(riderUserId, orderId);
