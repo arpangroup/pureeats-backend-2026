@@ -1,0 +1,53 @@
+AcceptDelivery: id, orderId, userId, customerId, isComplete, createdAt, updatedAt
+AddonCategory: id, name, type, userId, createdAt, updatedAt
+AddonCategoryItem: id, addonCategoryId, itemId, createdAt, updatedAt
+Addon: id, name, price, addonCategoryId, userId, createdAt, updatedAt, isActive
+Address: id, userId, address, house, landmark, tag, createdAt, updatedAt, latitude, longitude
+Alert: id, data, userId, isRead, createdAt, updatedAt
+CouponUsage: id, couponId, userId, resturantId, couponUsed, createdAt, updatedAt
+Coupon: id, name, description, code, discountType, discount, expiryDate, isActive, createdAt, updatedAt, restaurantId, minOrderAmount, uptoAmount, totalCoupon, count, maxCount
+DeliveryCollectionLog: id, deliveryCollectionId, amount, type, message, createdAt, updatedAt
+DeliveryCollection: id, userId, amount, createdAt, updatedAt
+DeliveryGuyDetail: id, name, age, gender, photo, description, vehicleNumber, createdAt, updatedAt, commissionRate, isNotifiable, maxAcceptDeliveryLimit, rating
+GpsTable: id, orderId, userLat, userLong, deliveryLat, deliveryLong, createdAt, updatedAt, heading, bearing
+ItemCategory: id, name, isEnabled, createdAt, updatedAt, userId
+Item: id, restaurantId, itemCategoryId, name, price, oldPrice, image, isRecommended, isPopular, isNew, createdAt, updatedAt, desc, placeholderImage, isActive, isVeg
+Location: id, name, description, isPopular, isActive
+LoginSession: id, userId, location, loginAt, lastCheckoutAt, logoutAt, createdAt, updatedAt
+Migration: id, migration, batch
+ModelHasPermission: permissionId, modelType, modelId
+ModelHasRole: roleId, modelType, modelId
+Module: id, name, description, version, isActive, isInstalled, createdAt, updatedAt, shortName, code, settingsPath, updateDate
+OrderItemAddon: id, orderitemId, addonCategoryName, addonName, addonPrice, createdAt, updatedAt
+OrderItem: id, orderId, itemId, name, quantity, price, createdAt, updatedAt
+Order: id, uniqueOrderId, orderstatusId, userId, couponName, location, address, tax, restaurantCharge, deliveryCharge, driverTipAmount, total, createdAt, updatedAt, paymentMode, orderComment, restaurantId, transactionId, deliveryType, deliveryPin, payable, prepareTime, restaurantAcceptAt, restaurantReadyAt, riderAcceptAt, riderPickedAt, riderDeliverAt, orderFrom
+OrderStatus: id, name
+Page: id, name, slug, body, createdAt, updatedAt
+PasswordResetOtp: id, userId, code, createdAt, updatedAt
+PasswordReset: email, token, createdAt
+PaymentGateway: id, name, description, logo, isActive, createdAt, updatedAt
+Permission: id, name, guardName, createdAt, updatedAt
+PopularGeoPlace: id, name, latitude, longitude, isActive, createdAt, updatedAt
+PromoSlider: id, name, isActive, createdAt, updatedAt, locationId, positionId, size
+PushToken: id, token, status, isSent, isActive, userId, createdAt, updatedAt
+Rating: id, createdAt, updatedAt, rating, orderId, name, tags, comment, rateableType, rateableId, userId
+RestaurantCategory: id, name, isActive, createdAt, updatedAt
+RestaurantCategoryRestaurant: id, restaurantCategoryId, restaurantId, createdAt, updatedAt
+RestaurantCategorySlider: id, name, image, imagePlaceholder, categoriesIds, isActive, createdAt, updatedAt
+RestaurantEarning: id, restaurantId, userId, amount, isRequested, isProcessed, createdAt, updatedAt, restaurantPayoutId
+RestaurantPayout: id, restaurantId, restaurantEarningId, amount, status, transactionMode, transactionId, message, createdAt, updatedAt
+RestaurantUser: id, userId, restaurantId, createdAt, updatedAt
+Restaurant: id, name, description, contactNumber, openingTime, closingTime, locationId, image, rating, deliveryTime, priceRange, isPureveg, createdAt, updatedAt, slug, placeholderImage, latitude, longitude, certificate, restaurantCharges, deliveryCharges, address, pincode, landmark, sku, isActive, isAccepted, isFeatured, commissionRate, deliveryType, deliveryRadius, deliveryChargeType, baseDeliveryCharge, baseDeliveryDistance, extraDeliveryCharge, extraDeliveryDistance, minOrderPrice, isNotifiable, autoAcceptable, scheduleData, isSchedulable, isAcceptCod
+RoleHasPermission: permissionId, roleId
+Role: id, name, guardName, createdAt, updatedAt
+Setting: id, key, value
+Slide: id, promoSliderId, uniqueId, name, description, image, imagePlaceholder, url, isActive, createdAt, updatedAt
+SmsGateway: id, gatewayName, createdAt, updatedAt
+SmsOtp: id, otp, phone, createdAt, updatedAt
+Support: id, userId, orderId, resturantId, issue, message, media, resolved, resolvedBy, createdAt, updatedAt
+Transaction: id, payableType, payableId, walletId, type, amount, confirmed, meta, uuid, createdAt, updatedAt
+Transfer: id, fromType, fromId, toType, toId, status, statusLast, depositId, withdrawId, discount, fee, uuid, createdAt, updatedAt
+Translation: id, languageName, data, createdAt, updatedAt, isDefault, isActive
+TripDetail: id, orderId, customerId, restaurantId, riderId, deliveryCollectionId, distanceTravelled, riderEarning, restaurantEarning, cashCollectedFromCustomer, cashOnHold, route, meta, createdAt, updatedAt, isSettlementDone
+User: id, name, email, emailVerifiedAt, password, rememberToken, createdAt, updatedAt, authToken, phone, isActive, defaultAddressId, deliveryPin, deliveryGuyDetailId, photo
+Wallet: id, holderType, holderId, name, slug, description, balance, decimalPlaces, createdAt, updatedAt

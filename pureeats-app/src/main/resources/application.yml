@@ -1,0 +1,125 @@
+application:
+  title: pureeats-app
+  version: 26.08.1-SNAPSHOT
+spring:
+  application:
+    name: pureeats-app
+  profiles:
+    active: dev
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:pureeats}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  servlet:
+    multipart:
+      max-file-size: ${MEDIA_MAX_FILE_SIZE:10MB}
+      max-request-size: ${MEDIA_MAX_REQUEST_SIZE:10MB}
+
+  # Only read when notification.email-provider=smtp (see AUTH_SECURITY.md's Gmail setup section).
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+
+pureeats:
+  jwt:
+    secret: ${JWT_SECRET:change-this-dev-only-secret-key-please-override-in-prod-min-32-bytes}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+  otp:
+    dev-mode: ${OTP_DEV_MODE:true}
+  # SuperAdminSeeder creates exactly this one account on startup if no SUPER_ADMIN exists yet.
+  # There is no API to create/promote a SUPER_ADMIN - override these before any shared deployment.
+  super-admin:
+    name: ${SUPER_ADMIN_NAME:Super Admin}
+    email: ${SUPER_ADMIN_EMAIL:superadmin@pureeats.local}
+    password: ${SUPER_ADMIN_PASSWORD:ChangeMe@SuperAdmin123}
+  tax:
+    percentage: ${TAX_PERCENTAGE:5}
+  commission:
+    basis: ${COMMISSION_BASIS:FULL_ORDER}
+  # Image upload - local disk today; swap to an S3 implementation of MediaStorage/MediaUrlResolver
+  # later by changing `provider` alone (see pureeats-media-service).
+  media:
+    provider: ${MEDIA_PROVIDER:local}
+    max-size-bytes: ${MEDIA_MAX_SIZE_BYTES:5242880}
+    local:
+      base-dir: ${MEDIA_LOCAL_BASE_DIR:./uploads}
+    public-base-url: ${MEDIA_PUBLIC_BASE_URL:http://localhost:8081}
+
+# OTP-challenge auth subsystem (signup/otp/refresh/logout endpoints) - see AUTH_SECURITY.md.
+security:
+  otp:
+    length: ${OTP_LENGTH:6}
+    expiry-minutes: ${OTP_EXPIRY_MINUTES:10}
+    max-attempts: ${OTP_MAX_ATTEMPTS:5}
+    resend-cooldown-seconds: ${OTP_RESEND_COOLDOWN_SECONDS:30}
+    max-resends: ${OTP_MAX_RESENDS:3}
+    max-requests-per-destination-per-hour: ${OTP_MAX_REQUESTS_PER_DESTINATION_PER_HOUR:10}
+    max-requests-per-ip-per-hour: ${OTP_MAX_REQUESTS_PER_IP_PER_HOUR:20}
+  session:
+    access-token-expiry-minutes: ${ACCESS_TOKEN_EXPIRY_MINUTES:15}
+    refresh-token-expiry-days: ${REFRESH_TOKEN_EXPIRY_DAYS:30}
+  rate-limit:
+    login-ip:
+      limit: ${RATE_LIMIT_LOGIN_IP_LIMIT:10}
+      window-seconds: ${RATE_LIMIT_LOGIN_IP_WINDOW_SECONDS:60}
+    login-destination:
+      limit: ${RATE_LIMIT_LOGIN_DESTINATION_LIMIT:5}
+      window-seconds: ${RATE_LIMIT_LOGIN_DESTINATION_WINDOW_SECONDS:60}
+    verify-ip:
+      limit: ${RATE_LIMIT_VERIFY_IP_LIMIT:20}
+      window-seconds: ${RATE_LIMIT_VERIFY_IP_WINDOW_SECONDS:60}
+    resend-ip:
+      limit: ${RATE_LIMIT_RESEND_IP_LIMIT:10}
+      window-seconds: ${RATE_LIMIT_RESEND_IP_WINDOW_SECONDS:60}
+  geolocation:
+    enabled: ${GEOLOCATION_ENABLED:true}
+    provider: ${GEOLOCATION_PROVIDER:ip-api}
+    timeout-ms: ${GEOLOCATION_TIMEOUT_MS:2000}
+    cache-ttl-minutes: ${GEOLOCATION_CACHE_TTL_MINUTES:60}
+
+notification:
+  email-provider: ${NOTIFICATION_EMAIL_PROVIDER:console}
+  sms-provider: ${NOTIFICATION_SMS_PROVIDER:console}
+  from-address: ${NOTIFICATION_FROM_ADDRESS:no-reply@pureeats.local}
+  from-name: ${NOTIFICATION_FROM_NAME:PureEats}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    com.pureeats: INFO
+server:
+  port: ${SERVER_PORT:8081}

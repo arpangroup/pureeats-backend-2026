@@ -1,0 +1,70 @@
+
+Can you enhance with below features:
+
+1. As in our application we need media upload like image to store store images, items image, sliders image, drivers image, coupons etc,
+	- there would be a seperate service like media-service
+	- the image resolver will resolve the image to be return in the other APIs response
+	- Currently as of now we want to store the image in disk, but later we can implement S3 to store the object, so our code will be flexible
+2. SOmetime after the page refresh its not loading the data like restaurants list, its showing 403 error, seems the token got expired, but we are returning a token with longer expiry time like 2 days.
+	- even if the token expired the UI will try to get new access_token using the refresh token, which seems to be not working.
+	The verify response is returning everything, even the expiresIn
+	{
+		"data": {
+			"accessToken": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiIxIiwibmFtZSI6IlN1cGVyIEFkbWluIiwiZW1haWwiOiJzdXBlcmFkbWluQHB1cmVlYXRzLmxvY2FsIiwicm9sZSI6IlNVUEVSX0FETUlOIiwiaWF0IjoxNzg4MDM4MDk3LCJleHAiOjE3ODgwMzg5OTd9.e730t5ag5osQWSK1gQR-D59Pk4qFoZPsy-biQPI9xfh1ZehPQufWP2Xa4rZP6wzYLEGdUhxqsMBUgFnrXifg2Q",
+			"refreshToken": "he5RCTecu9I2qEZ1YstiHTa-Z7QVkoA9Fu8BFeLi-Mk",
+			"tokenType": "Bearer",
+			"expiresIn": 900
+		},
+		"errorCode": null,
+		"message": "Authentication successful.",
+		"requestId": null,
+		"success": true,
+		"timestamp": "2026-08-29T21:14:57.231131900Z"
+	}
+
+3. implement  update order status api
+	- in order details ui page clicking on mark as dropdown will call the backend api and it will update the order status
+	- if the backend api is not available, create it
+	- As the order status can be update from various source, so design the API or backend service intelligently. like
+	-- Store owner can accept order, update order status like preparing etc
+	-- Delivery boy can accept order, deliver order etc
+	-- User can mark deliver by providing otp
+	-- Also validate the sequence before update the order status like a picked order should not be update to placed etc, also showing only the meaningful nark as status in UI, not the previous state, make those diable
+	-- updating the order status will create an log with required informations like who updatedBy the driver or store owner or user or admin, so that we can see the journey of that order from placed to deliver
+	-- The order details UI page will also show that particular orders log or complete jopurney, cretae backend endpoint for that.
+	-- order details will also have applied coupon information, if any extra attribute require in backend or database, implement it, show that the UI screen show the applied coupons information
+	-- Order details UI page will also have an Print button, so that it can generate the invoice and print
+4. Store Category
+	-- Integrate the react with the StoreCategory API with both CRUD feature
+5. Items Category
+	-- Integrate the react with the item category API with both CRUD feature
+6. Addon Category and Addons
+	-- Integrate the react with the Addon category and addons API with both CRUD feature
+7. Restaurants List page
+	- in stores list page the store category should be populated from the API
+	- integrate CRUD restaurant API in frontend with backend and connect it to the react-ui page
+8. Restaurant Details page
+	- Edit on restaurant details should call PUT api to backend to partial update
+	- Only SuperAdmin or admin can update restaurantName, Commission rate, Active on platform,  Application accepted, Auto-accept new orders, Featured on homepage fields. use an array of restricted fields, so later we can add or remove any fields for specific user
+	- if restaurant image is uploaded call an seperate API to upload the image, max 2mb image and max 5 images for a store
+	- Any update on restauran details will have an audit log, with which field got chaged with old value and new value and the updater user
+	- The Store details screen will have a audit table below
+9. Implement Bulk item upload in Backend
+	- Clicking on Bulk upload in items screen will upload multiple items
+	- Backend will verify the store id and items info and store accordingly
+10. Item Details
+	- Implement partial update for item details
+	- If image is changed or new image uploaded call seperate API to update image when submit
+11. Coupons
+	- Implement Add/Edit coupon API in backend and connect to react-ui, so that we can add or update a coupon details
+12. Sliders and Slider category
+	- integrate the UI with backend API for sliders with image upload
+13. User Details
+	- Integrate User Details page with upload users image in backend
+	- implement image upload for user if not yet in backend
+	- user details page will show users activity like login history etc
+	- integrate with backend for wallet details/ wallet transactions / add or subtract money to wallet
+	- if these feature is not implemented in backend implement these feature in backend and connect with react ui
+14. Integrate Dashboard UI with backend APIs
+15. Notifications
+	- Integrate notifications with backend, so that admin can see the notifications, mark as read and delete also

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>com.pureeats</groupId>
+		<artifactId>pureeats-parent</artifactId>
+		<version>0.0.1-SNAPSHOT</version>
+		<relativePath>../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>domain</artifactId>
+	<packaging>jar</packaging>
+	<name>domain</name>
+	<description>Shared JPA entities, enums and audit kernel. No web/framework dependencies.</description>
+
+	<dependencies>
+		<!--
+			We depend only on the Jakarta Persistence API in the domain module,
+			not on a JPA implementation such as Hibernate or Spring Data JPA.
+
+			In our multi-module architecture, the domain module must remain
+			independent of infrastructure/framework implementations. The API
+			dependency provides only the standard JPA annotations such as
+			@Entity, @MappedSuperclass, @Id, @Column, etc.
+		-->
+		<dependency>
+			<groupId>jakarta.persistence</groupId>
+			<artifactId>jakarta.persistence-api</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok</artifactId>
+			<optional>true</optional>
+		</dependency>
+
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>
