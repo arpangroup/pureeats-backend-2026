@@ -91,6 +91,13 @@ public class AdminRestaurantController {
         return ApiResponse.success(restaurantAuditLogService.journey(id, pageable));
     }
 
+    @PostMapping("/api/v1/admin/restaurants/{id}/image")
+    @Operation(summary = "Replace a restaurant's main/cover image (max 2MB)")
+    public ApiResponse<RestaurantImageResponse> uploadCoverImage(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long id,
+                                                                    @RequestParam("file") MultipartFile file) {
+        return ApiResponse.success("Image uploaded", restaurantService.uploadCoverImage(id, file, principal.userId()));
+    }
+
     @PostMapping("/api/v1/admin/restaurants/{id}/images")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Upload an image to a restaurant's gallery (max 2MB, max 5 images per store)")

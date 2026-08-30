@@ -43,6 +43,7 @@ public class RestaurantService {
     private final MediaAssetService mediaAssetService;
 
     private static final String IMAGE_OWNER_TYPE = "RESTAURANT";
+    private static final String COVER_IMAGE_OWNER_TYPE = "RESTAURANT_COVER";
     private static final long MAX_IMAGE_BYTES = 2L * 1024 * 1024;
     private static final int MAX_IMAGES = 5;
 
@@ -212,6 +213,19 @@ public class RestaurantService {
     @Transactional
     public void deleteAsAdmin(Long restaurantId) {
         restaurantRepository.delete(findOrThrow(restaurantId));
+    }
+
+    /** Replaces the restaurant's single main/cover image (distinct from the gallery - separate owner type, no 5-image cap). */
+    @Transactional
+    public RestaurantImageResponse uploadCoverImage(Long restaurantId, MultipartFile file, Long uploadedBy) {
+        Restaurant restaurant = findOrThrow(restaurantId);
+        String oldImage = restaurant.getImage();
+        var uploaded = mediaAssetService.upload(file, COVER_IMAGE_OWNER_TYPE, restaurantId, uploadedBy, MAX_IMAGE_BYTES);
+        restaurant.setImage(uploaded.storageKey());
+        restaurant.setUpdatedAt(LocalDateTime.now());
+        restaurantRepository.save(restaurant);
+        restaurantAuditLogService.record(restaurantId, "image", oldImage, uploaded.storageKey(), uploadedBy);
+        return new RestaurantImageResponse(uploaded.id(), uploaded.url());
     }
 
     @Transactional
