@@ -33,6 +33,7 @@ public record OrderResponse(
         LocalDateTime riderPickedAt,
         LocalDateTime riderDeliverAt,
         LocalDateTime createdAt,
-        List<OrderItemResponse> items
+        List<OrderItemResponse> items,
+        List<String> legalNextStatuses
 ) {
 }

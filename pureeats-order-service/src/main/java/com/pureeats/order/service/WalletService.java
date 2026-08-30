@@ -1,7 +1,11 @@
 package com.pureeats.order.service;
 
+import com.pureeats.domain.common.exception.ResourceNotFoundException;
 import com.pureeats.domain.entity.Transaction;
 import com.pureeats.domain.entity.Wallet;
+import com.pureeats.order.dto.AdminWalletResponse;
+import com.pureeats.order.dto.AdminWalletTransactionResponse;
+import com.pureeats.order.dto.WalletAdjustRequest;
 import com.pureeats.order.dto.WalletBalanceResponse;
 import com.pureeats.order.dto.WalletTransactionResponse;
 import com.pureeats.order.repository.TransactionRepository;
@@ -14,6 +18,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -63,6 +68,45 @@ public class WalletService {
         wallet.setUpdatedAt(LocalDateTime.now());
         walletRepository.save(wallet);
         recordTransaction(wallet, TX_TYPE_WITHDRAW, amount, meta);
+    }
+
+    /** Admin-facing lookup (or lazy-create) of any user's wallet - unlike {@link #getBalance}, returns the full record. */
+    @Transactional
+    public AdminWalletResponse getWalletForHolder(Long userId) {
+        return toAdminResponse(getOrCreateWallet(userId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<AdminWalletTransactionResponse> getTransactionsForWallet(Long walletId) {
+        return transactionRepository.findByWalletIdOrderByCreatedAtDesc(walletId).stream()
+                .map(this::toAdminTransactionResponse).toList();
+    }
+
+    /** Admin-initiated credit/debit against a wallet the admin is viewing (identified by walletId, not userId). */
+    @Transactional
+    public AdminWalletResponse adjust(Long walletId, WalletAdjustRequest request) {
+        Wallet wallet = walletRepository.findById(walletId)
+                .orElseThrow(() -> new ResourceNotFoundException("Wallet not found: " + walletId));
+        if ("debit".equalsIgnoreCase(request.type())) {
+            debit(wallet.getHolderId(), request.amount(), request.message());
+        } else {
+            credit(wallet.getHolderId(), request.amount(), request.message());
+        }
+        return toAdminResponse(getOrCreateWallet(wallet.getHolderId()));
+    }
+
+    private AdminWalletResponse toAdminResponse(Wallet w) {
+        return new AdminWalletResponse(w.getId(), w.getHolderType(), w.getHolderId(), w.getName(), w.getSlug(),
+                w.getDescription(), toDecimal(w.getBalance()), w.getDecimalPlaces() != null ? w.getDecimalPlaces().intValue() : 2,
+                w.getCreatedAt(), w.getUpdatedAt());
+    }
+
+    private AdminWalletTransactionResponse toAdminTransactionResponse(Transaction t) {
+        String type = TX_TYPE_DEPOSIT.equals(t.getType()) ? "credit" : "debit";
+        Map<String, Object> meta = t.getMeta() != null ? Map.of("reason", t.getMeta()) : null;
+        return new AdminWalletTransactionResponse(t.getId(), t.getPayableType(), t.getPayableId(), t.getWalletId(),
+                type, toDecimal(t.getAmount()), Boolean.TRUE.equals(t.getConfirmed()), meta, t.getUuid(),
+                t.getCreatedAt(), t.getUpdatedAt());
     }
 
     private Wallet getOrCreateWallet(Long userId) {

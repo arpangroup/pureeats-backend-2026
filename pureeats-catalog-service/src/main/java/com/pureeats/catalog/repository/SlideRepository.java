@@ -7,4 +7,12 @@ import java.util.List;
 
 public interface SlideRepository extends JpaRepository<Slide, Long> {
     List<Slide> findByPromoSliderIdAndIsActiveTrue(Integer promoSliderId);
+
+    List<Slide> findByPromoSliderIdOrderByPositionIdAsc(Integer promoSliderId);
+
+    List<Slide> findByRestaurantCategorySliderIdOrderByPositionIdAsc(Integer restaurantCategorySliderId);
+
+    List<Slide> findByPromoSliderIdIsNotNull();
+
+    List<Slide> findByRestaurantCategorySliderIdIsNotNull();
 }

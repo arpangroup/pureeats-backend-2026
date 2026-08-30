@@ -9,13 +9,13 @@ final class UserMapper {
     private UserMapper() {
     }
 
-    static UserResponse toResponse(User user, Role role) {
+    static UserResponse toResponse(User user, Role role, String resolvedPhotoUrl) {
         return new UserResponse(
                 user.getId(),
                 user.getName(),
                 user.getEmail(),
                 user.getPhone(),
-                user.getPhoto(),
+                resolvedPhotoUrl,
                 role,
                 user.getDefaultAddressId() != null ? user.getDefaultAddressId().longValue() : null);
     }

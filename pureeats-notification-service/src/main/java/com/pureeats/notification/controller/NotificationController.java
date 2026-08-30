@@ -56,4 +56,11 @@ public class NotificationController {
         alertService.markRead(CurrentUserContext.get(), id);
         return ApiResponse.success("Notification marked as read", null);
     }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Delete one notification")
+    public ApiResponse<Void> delete(@PathVariable Long id) {
+        alertService.delete(CurrentUserContext.get(), id);
+        return ApiResponse.success("Notification deleted", null);
+    }
 }

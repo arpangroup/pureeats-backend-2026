@@ -95,6 +95,43 @@ public class AddonService {
         addonRepository.save(addon);
     }
 
+    /** Admin update - no ownership check, unlike the store-owner-scoped methods above. */
+    @Transactional
+    public AddonCategoryResponse updateCategoryAsAdmin(Long categoryId, AddonCategoryRequest request) {
+        AddonCategory category = addonCategoryRepository.findById(categoryId)
+                .orElseThrow(() -> new ResourceNotFoundException("Addon category not found: " + categoryId));
+        category.setName(request.name());
+        category.setType(request.type());
+        category.setUpdatedAt(LocalDateTime.now());
+        category = addonCategoryRepository.save(category);
+        return new AddonCategoryResponse(category.getId(), category.getName(), category.getType());
+    }
+
+    @Transactional
+    public void deleteCategoryAsAdmin(Long categoryId) {
+        AddonCategory category = addonCategoryRepository.findById(categoryId)
+                .orElseThrow(() -> new ResourceNotFoundException("Addon category not found: " + categoryId));
+        addonCategoryRepository.delete(category);
+    }
+
+    @Transactional
+    public AddonResponse updateAddonAsAdmin(Long addonId, AddonRequest request) {
+        Addon addon = addonRepository.findById(addonId)
+                .orElseThrow(() -> new ResourceNotFoundException("Addon not found: " + addonId));
+        addon.setName(request.name());
+        addon.setPrice(request.price());
+        addon.setAddonCategoryId(request.addonCategoryId().intValue());
+        addon.setUpdatedAt(LocalDateTime.now());
+        return toResponse(addonRepository.save(addon));
+    }
+
+    @Transactional
+    public void deleteAddonAsAdmin(Long addonId) {
+        Addon addon = addonRepository.findById(addonId)
+                .orElseThrow(() -> new ResourceNotFoundException("Addon not found: " + addonId));
+        addonRepository.delete(addon);
+    }
+
     private void assertCategoryOwnership(Long ownerUserId, Long addonCategoryId) {
         AddonCategory category = addonCategoryRepository.findById(addonCategoryId)
                 .orElseThrow(() -> new ResourceNotFoundException("Addon category not found: " + addonCategoryId));

@@ -52,6 +52,7 @@ public class OrderService {
     private final AddressRepository addressRepository;
     private final NotificationDispatchService notificationDispatchService;
     private final UserRepository userRepository;
+    private final OrderStatusLogService orderStatusLogService;
 
     @Transactional
     public OrderResponse placeOrder(Long userId, PlaceOrderRequest request) {
@@ -129,6 +130,8 @@ public class OrderService {
         }
 
         order = orderRepository.save(order);
+        orderStatusLogService.record(order.getId(), null,
+                autoAccept ? OrderStatusCode.RESTAURANT_ACCEPTED : OrderStatusCode.PLACED, "CUSTOMER", userId, "Order placed");
 
         for (Line line : lines) {
             OrderItem orderItem = new OrderItem();
@@ -195,6 +198,45 @@ public class OrderService {
         if ("WALLET".equals(order.getPaymentMode())) {
             walletService.credit(userId, order.getPayable(), "Refund for cancelled order #" + order.getUniqueOrderId());
         }
+        orderStatusLogService.record(order.getId(), current, OrderStatusCode.CANCELLED, "CUSTOMER", userId, "Cancelled by customer");
+    }
+
+    /** Admin override - the only path that can jump straight to any status legal from the current one, not just the next role-specific step. */
+    @Transactional
+    public OrderResponse adminUpdateStatus(Long adminUserId, Long orderId, OrderStatusCode toStatus) {
+        Order order = findOrThrow(orderId);
+        OrderStatusCode from = orderStatusService.codeFor(order.getOrderstatusId());
+        if (!OrderStatusTransitions.isLegal(from, toStatus)) {
+            throw new BadRequestException("Cannot change order status from "
+                    + (from != null ? from.name() : "UNKNOWN") + " to " + toStatus.name());
+        }
+
+        applyStatusTimestamp(order, toStatus);
+        order.setOrderstatusId(orderStatusService.idFor(toStatus));
+        order.setUpdatedAt(LocalDateTime.now());
+        orderRepository.save(order);
+
+        if (toStatus == OrderStatusCode.CANCELLED && "WALLET".equals(order.getPaymentMode())) {
+            walletService.credit(order.getUserId().longValue(), order.getPayable(),
+                    "Refund for cancelled order #" + order.getUniqueOrderId());
+        }
+
+        orderStatusLogService.record(order.getId(), from, toStatus, "ADMIN", adminUserId, "Updated by admin");
+        notificationDispatchService.notifyUser(order.getUserId().longValue(), "Order status updated",
+                "Your order #" + order.getUniqueOrderId() + " is now " + toStatus.name());
+        return toResponse(order);
+    }
+
+    private static void applyStatusTimestamp(Order order, OrderStatusCode toStatus) {
+        LocalDateTime now = LocalDateTime.now();
+        switch (toStatus) {
+            case RESTAURANT_ACCEPTED -> order.setRestaurantAcceptAt(now);
+            case READY_FOR_PICKUP -> order.setRestaurantReadyAt(now);
+            case RIDER_ASSIGNED -> order.setRiderAcceptAt(now);
+            case PICKED_UP -> order.setRiderPickedAt(now);
+            case DELIVERED -> order.setRiderDeliverAt(now);
+            default -> { }
+        }
     }
 
     Order findOrThrow(Long orderId) {
@@ -239,6 +281,7 @@ public class OrderService {
         OrderStatusCode status = orderStatusService.codeFor(order.getOrderstatusId());
         String customerName = userRepository.findById(order.getUserId().longValue()).map(User::getName).orElse("Unknown");
         String restaurantName = restaurantRepository.findById(order.getRestaurantId().longValue()).map(Restaurant::getName).orElse("Unknown");
+        List<String> legalNextStatuses = OrderStatusTransitions.legalNext(status).stream().map(Enum::name).toList();
         return new OrderResponse(order.getId(), order.getUniqueOrderId(), status != null ? status.name() : "UNKNOWN",
                 order.getOrderstatusId(), order.getUserId().longValue(), order.getRestaurantId().longValue(),
                 customerName, restaurantName, order.getAddress(), order.getTax(), order.getRestaurantCharge(),
@@ -246,7 +289,7 @@ public class OrderService {
                 order.getPaymentMode(), order.getDeliveryPin(), order.getOrderComment(), order.getCouponName(),
                 order.getTransactionId(), order.getDeliveryType(), order.getOrderFrom(),
                 order.getRestaurantAcceptAt(), order.getRestaurantReadyAt(), order.getRiderAcceptAt(),
-                order.getRiderPickedAt(), order.getRiderDeliverAt(), order.getCreatedAt(), itemResponses);
+                order.getRiderPickedAt(), order.getRiderDeliverAt(), order.getCreatedAt(), itemResponses, legalNextStatuses);
     }
 
     private OrderSummaryResponse toSummary(Order order) {

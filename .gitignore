@@ -1,3 +1,7 @@
+### Local media uploads (pureeats-media-service, local-disk provider) ###
+/uploads/
+**/uploads/
+
 ### Maven (applies to every module in this reactor) ###
 target/
 **/target/

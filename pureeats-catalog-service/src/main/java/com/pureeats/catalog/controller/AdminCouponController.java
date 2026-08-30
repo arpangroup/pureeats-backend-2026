@@ -1,26 +1,35 @@
 package com.pureeats.catalog.controller;
 
+import com.pureeats.catalog.dto.CouponCreateRequest;
 import com.pureeats.catalog.dto.CouponResponse;
+import com.pureeats.catalog.dto.CouponUpdateRequest;
 import com.pureeats.catalog.service.CouponService;
 import com.pureeats.domain.common.response.ApiResponse;
 import com.pureeats.domain.common.response.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /** Admin-panel coupon directory - every coupon, not just the ones valid for one restaurant. */
 @RestController
 @RequiredArgsConstructor
 @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
-@Tag(name = "Admin Coupons", description = "Read-only coupon directory - ADMIN or SUPER_ADMIN only")
+@Tag(name = "Admin Coupons", description = "Coupon directory and management - ADMIN or SUPER_ADMIN only")
 public class AdminCouponController {
 
     private final CouponService couponService;
@@ -37,5 +46,25 @@ public class AdminCouponController {
     @Operation(summary = "Get a coupon's detail")
     public ApiResponse<CouponResponse> getById(@PathVariable Long id) {
         return ApiResponse.success(couponService.getById(id));
+    }
+
+    @PostMapping("/api/v1/admin/coupons")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Create a coupon (global or scoped to one restaurant)")
+    public ApiResponse<CouponResponse> create(@Valid @RequestBody CouponCreateRequest request) {
+        return ApiResponse.success("Coupon created", couponService.create(request));
+    }
+
+    @PutMapping("/api/v1/admin/coupons/{id}")
+    @Operation(summary = "Update a coupon")
+    public ApiResponse<CouponResponse> update(@PathVariable Long id, @Valid @RequestBody CouponUpdateRequest request) {
+        return ApiResponse.success("Coupon updated", couponService.update(id, request));
+    }
+
+    @DeleteMapping("/api/v1/admin/coupons/{id}")
+    @Operation(summary = "Delete a coupon")
+    public ApiResponse<Void> delete(@PathVariable Long id) {
+        couponService.delete(id);
+        return ApiResponse.success("Coupon deleted", null);
     }
 }

@@ -4,6 +4,7 @@ import com.pureeats.catalog.dto.CouponApplyRequest;
 import com.pureeats.catalog.dto.CouponApplyResponse;
 import com.pureeats.catalog.dto.CouponCreateRequest;
 import com.pureeats.catalog.dto.CouponResponse;
+import com.pureeats.catalog.dto.CouponUpdateRequest;
 import com.pureeats.catalog.repository.CouponRepository;
 import com.pureeats.catalog.repository.CouponUsageRepository;
 import com.pureeats.domain.common.exception.BadRequestException;
@@ -62,7 +63,7 @@ public class CouponService {
         coupon.setDiscount(request.discount().toPlainString());
         coupon.setMinOrderAmount(request.minOrderAmount());
         coupon.setUptoAmount(request.uptoAmount().toPlainString());
-        coupon.setExpiryDate(request.expiryDate());
+        coupon.setExpiryDate(request.expiryDate() != null ? request.expiryDate().atTime(23, 59, 59) : null);
         coupon.setRestaurantId(request.restaurantId() != null ? request.restaurantId() : GLOBAL_RESTAURANT_ID);
         coupon.setIsActive(true);
         coupon.setTotalCoupon(request.totalCoupon());
@@ -71,6 +72,34 @@ public class CouponService {
         coupon.setCreatedAt(LocalDateTime.now());
         coupon.setUpdatedAt(LocalDateTime.now());
         return toResponse(couponRepository.save(coupon));
+    }
+
+    /** Admin-facing full update. Unlike {@link #create}, lets the caller set {@code maxCount} and {@code isActive} directly. */
+    @Transactional
+    public CouponResponse update(Long id, CouponUpdateRequest request) {
+        Coupon coupon = couponRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Coupon not found: " + id));
+        coupon.setName(request.name());
+        coupon.setDescription(request.description());
+        coupon.setCode(request.code());
+        coupon.setDiscountType(request.discountType().name());
+        coupon.setDiscount(request.discount().toPlainString());
+        coupon.setMinOrderAmount(request.minOrderAmount());
+        coupon.setUptoAmount(request.uptoAmount().toPlainString());
+        coupon.setExpiryDate(request.expiryDate() != null ? request.expiryDate().atTime(23, 59, 59) : null);
+        coupon.setRestaurantId(request.restaurantId() != null ? request.restaurantId() : GLOBAL_RESTAURANT_ID);
+        coupon.setTotalCoupon(request.totalCoupon());
+        coupon.setMaxCount(request.maxCount());
+        coupon.setIsActive(request.isActive());
+        coupon.setUpdatedAt(LocalDateTime.now());
+        return toResponse(couponRepository.save(coupon));
+    }
+
+    @Transactional
+    public void delete(Long id) {
+        Coupon coupon = couponRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Coupon not found: " + id));
+        couponRepository.delete(coupon);
     }
 
     /**
@@ -145,7 +174,7 @@ public class CouponService {
     private CouponResponse toResponse(Coupon c) {
         return new CouponResponse(c.getId(), c.getName(), c.getDescription(), c.getCode(),
                 DiscountType.valueOf(c.getDiscountType()), new BigDecimal(c.getDiscount()), c.getMinOrderAmount(),
-                new BigDecimal(c.getUptoAmount()), c.getExpiryDate(), Boolean.TRUE.equals(c.getIsActive()),
-                c.getRestaurantId());
+                new BigDecimal(c.getUptoAmount()), c.getExpiryDate() != null ? c.getExpiryDate().toLocalDate() : null,
+                Boolean.TRUE.equals(c.getIsActive()), c.getRestaurantId());
     }
 }

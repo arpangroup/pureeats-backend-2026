@@ -20,6 +20,7 @@
 	<modules>
 		<module>domain</module>
 		<module>pureeats-user-service</module>
+		<module>pureeats-media-service</module>
 		<module>pureeats-catalog-service</module>
 		<module>pureeats-notification-service</module>
 		<module>pureeats-order-service</module>
@@ -44,6 +45,11 @@
 			<dependency>
 				<groupId>com.pureeats</groupId>
 				<artifactId>pureeats-user-service</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.pureeats</groupId>
+				<artifactId>pureeats-media-service</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>

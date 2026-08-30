@@ -38,6 +38,7 @@ public class DeliveryOrderService {
     private final NotificationDispatchService notificationDispatchService;
     private final UserRepository userRepository;
     private final DeliveryGuyDetailRepository deliveryGuyDetailRepository;
+    private final OrderStatusLogService orderStatusLogService;
 
     @Value("${pureeats.commission.basis:FULL_ORDER}")
     private CommissionBasis commissionBasis;
@@ -75,10 +76,12 @@ public class DeliveryOrderService {
         accept.setIsComplete(false);
         acceptDeliveryRepository.save(accept);
 
+        OrderStatusCode from = orderStatusService.codeFor(order.getOrderstatusId());
         order.setOrderstatusId(orderStatusService.idFor(OrderStatusCode.RIDER_ASSIGNED));
         order.setRiderAcceptAt(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
+        orderStatusLogService.record(order.getId(), from, OrderStatusCode.RIDER_ASSIGNED, "DELIVERY", riderUserId, null);
 
         notificationDispatchService.notifyUser(order.getUserId().longValue(), "Rider assigned",
                 "A delivery partner has been assigned to order #" + order.getUniqueOrderId());
@@ -88,30 +91,60 @@ public class DeliveryOrderService {
     @Transactional
     public OrderResponse pickedUp(Long riderUserId, Long orderId) {
         Order order = ownedByRider(riderUserId, orderId);
+        OrderStatusCode from = orderStatusService.codeFor(order.getOrderstatusId());
         order.setOrderstatusId(orderStatusService.idFor(OrderStatusCode.PICKED_UP));
         order.setRiderPickedAt(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
+        orderStatusLogService.record(order.getId(), from, OrderStatusCode.PICKED_UP, "DELIVERY", riderUserId, null);
         return orderService.toResponse(order);
     }
 
     @Transactional
     public OrderResponse deliver(Long riderUserId, Long orderId, String deliveryPin) {
         Order order = ownedByRider(riderUserId, orderId);
+        return completeDelivery(order, deliveryPin, "DELIVERY", riderUserId, "Verified by delivery PIN");
+    }
+
+    /** The customer confirms delivery themself by reading out the same PIN - e.g. handed to the rider in person. */
+    @Transactional
+    public OrderResponse customerConfirmDelivery(Long customerUserId, Long orderId, String deliveryPin) {
+        Order order = orderService.findOrThrow(orderId);
+        if (!order.getUserId().equals(customerUserId.intValue())) {
+            throw new ForbiddenException("This order does not belong to you");
+        }
+        return completeDelivery(order, deliveryPin, "CUSTOMER", customerUserId, "Confirmed by customer via delivery PIN");
+    }
+
+    /**
+     * Shared by both delivery-confirmation paths - whoever confirms it, the assigned rider (if
+     * any) is who actually gets credited/logged in the trip, not necessarily the caller.
+     */
+    private OrderResponse completeDelivery(Order order, String deliveryPin, String actorType, Long actorUserId, String note) {
         if (!order.getDeliveryPin().equalsIgnoreCase(deliveryPin)) {
             throw new BadRequestException("Incorrect delivery PIN");
         }
 
+        OrderStatusCode from = orderStatusService.codeFor(order.getOrderstatusId());
         order.setOrderstatusId(orderStatusService.idFor(OrderStatusCode.DELIVERED));
         order.setRiderDeliverAt(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
+        orderStatusLogService.record(order.getId(), from, OrderStatusCode.DELIVERED, actorType, actorUserId, note);
 
-        acceptDeliveryRepository.findByOrderId(order.getId().intValue()).ifPresent(a -> {
-            a.setIsComplete(true);
-            acceptDeliveryRepository.save(a);
-        });
+        AcceptDelivery assignment = acceptDeliveryRepository.findByOrderId(order.getId().intValue()).orElse(null);
+        if (assignment != null) {
+            assignment.setIsComplete(true);
+            acceptDeliveryRepository.save(assignment);
+            creditRiderAndSettle(order, assignment.getUserId().longValue());
+        }
 
+        notificationDispatchService.notifyUser(order.getUserId().longValue(), "Order delivered",
+                "Your order #" + order.getUniqueOrderId() + " has been delivered. Enjoy your meal!");
+        return orderService.toResponse(order);
+    }
+
+    private void creditRiderAndSettle(Order order, Long riderUserId) {
         DeliveryGuyDetail rider = riderProfile(riderUserId);
         BigDecimal commissionBase = commissionBasis == CommissionBasis.DELIVERY_CHARGE_ONLY
                 ? order.getDeliveryCharge() : order.getTotal();
@@ -143,10 +176,6 @@ public class DeliveryOrderService {
         trip.setCreatedAt(LocalDateTime.now());
         trip.setUpdatedAt(LocalDateTime.now());
         tripDetailRepository.save(trip);
-
-        notificationDispatchService.notifyUser(order.getUserId().longValue(), "Order delivered",
-                "Your order #" + order.getUniqueOrderId() + " has been delivered. Enjoy your meal!");
-        return orderService.toResponse(order);
     }
 
     @Transactional

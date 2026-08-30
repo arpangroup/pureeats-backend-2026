@@ -9,4 +9,6 @@ public interface AcceptDeliveryRepository extends JpaRepository<AcceptDelivery, 
     Optional<AcceptDelivery> findByOrderId(Integer orderId);
 
     java.util.List<AcceptDelivery> findByUserIdAndIsCompleteFalse(Integer userId);
+
+    java.util.List<AcceptDelivery> findByIsCompleteFalse();
 }

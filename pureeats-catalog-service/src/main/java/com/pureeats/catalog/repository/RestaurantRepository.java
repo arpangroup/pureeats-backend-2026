@@ -25,4 +25,6 @@ public interface RestaurantRepository extends JpaRepository<Restaurant, Long> {
     @Query("select r from Restaurant r where :search is null or :search = '' " +
             "or lower(r.name) like lower(concat('%', :search, '%'))")
     Page<Restaurant> findPage(@Param("search") String search, Pageable pageable);
+
+    long countByIsActiveTrueAndIsAcceptedTrue();
 }

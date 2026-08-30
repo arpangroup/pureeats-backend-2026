@@ -29,6 +29,7 @@ public class StoreOwnerOrderService {
     private final RestaurantPayoutService restaurantPayoutService;
     private final WalletService walletService;
     private final NotificationDispatchService notificationDispatchService;
+    private final OrderStatusLogService orderStatusLogService;
 
     @Transactional(readOnly = true)
     public List<OrderSummaryResponse> newOrders(Long ownerUserId, Long restaurantId) {
@@ -59,6 +60,7 @@ public class StoreOwnerOrderService {
         order.setPrepareTime(DEFAULT_PREPARE_TIME_MINUTES);
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
+        orderStatusLogService.record(order.getId(), OrderStatusCode.PLACED, OrderStatusCode.RESTAURANT_ACCEPTED, "STORE_OWNER", ownerUserId, null);
 
         notificationDispatchService.notifyUser(order.getUserId().longValue(), "Order accepted",
                 "Your order #" + order.getUniqueOrderId() + " has been accepted by the restaurant");
@@ -74,6 +76,7 @@ public class StoreOwnerOrderService {
         order.setRestaurantReadyAt(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
+        orderStatusLogService.record(order.getId(), OrderStatusCode.RESTAURANT_ACCEPTED, OrderStatusCode.READY_FOR_PICKUP, "STORE_OWNER", ownerUserId, null);
         return orderService.toResponse(order);
     }
 
@@ -85,6 +88,7 @@ public class StoreOwnerOrderService {
         order.setOrderstatusId(orderStatusService.idFor(OrderStatusCode.SELF_PICKUP_COMPLETED));
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
+        orderStatusLogService.record(order.getId(), OrderStatusCode.READY_FOR_PICKUP, OrderStatusCode.SELF_PICKUP_COMPLETED, "STORE_OWNER", ownerUserId, null);
 
         BigDecimal restaurantEarning = order.getTotal().subtract(order.getRestaurantCharge());
         restaurantPayoutService.recordEarning(order.getRestaurantId(), restaurantEarning);
@@ -108,6 +112,7 @@ public class StoreOwnerOrderService {
             walletService.credit(order.getUserId().longValue(), order.getPayable(),
                     "Refund for cancelled order #" + order.getUniqueOrderId());
         }
+        orderStatusLogService.record(order.getId(), current, OrderStatusCode.CANCELLED, "STORE_OWNER", ownerUserId, null);
         notificationDispatchService.notifyUser(order.getUserId().longValue(), "Order cancelled",
                 "Your order #" + order.getUniqueOrderId() + " was cancelled by the restaurant");
         return orderService.toResponse(order);

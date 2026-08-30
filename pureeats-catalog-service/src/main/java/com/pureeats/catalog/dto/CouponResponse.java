@@ -3,7 +3,7 @@ package com.pureeats.catalog.dto;
 import com.pureeats.domain.enums.DiscountType;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 public record CouponResponse(
         Long id,
@@ -14,7 +14,7 @@ public record CouponResponse(
         BigDecimal discount,
         BigDecimal minOrderAmount,
         BigDecimal uptoAmount,
-        LocalDateTime expiryDate,
+        LocalDate expiryDate,
         boolean isActive,
         Integer restaurantId
 ) {

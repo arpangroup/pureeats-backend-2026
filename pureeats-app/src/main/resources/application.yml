@@ -21,6 +21,11 @@ spring:
         format_sql: true
         dialect: org.hibernate.dialect.MySQLDialect
 
+  servlet:
+    multipart:
+      max-file-size: ${MEDIA_MAX_FILE_SIZE:10MB}
+      max-request-size: ${MEDIA_MAX_REQUEST_SIZE:10MB}
+
   # Only read when notification.email-provider=smtp (see AUTH_SECURITY.md's Gmail setup section).
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
@@ -52,6 +57,14 @@ pureeats:
     percentage: ${TAX_PERCENTAGE:5}
   commission:
     basis: ${COMMISSION_BASIS:FULL_ORDER}
+  # Image upload - local disk today; swap to an S3 implementation of MediaStorage/MediaUrlResolver
+  # later by changing `provider` alone (see pureeats-media-service).
+  media:
+    provider: ${MEDIA_PROVIDER:local}
+    max-size-bytes: ${MEDIA_MAX_SIZE_BYTES:5242880}
+    local:
+      base-dir: ${MEDIA_LOCAL_BASE_DIR:./uploads}
+    public-base-url: ${MEDIA_PUBLIC_BASE_URL:http://localhost:8081}
 
 # OTP-challenge auth subsystem (signup/otp/refresh/logout endpoints) - see AUTH_SECURITY.md.
 security:

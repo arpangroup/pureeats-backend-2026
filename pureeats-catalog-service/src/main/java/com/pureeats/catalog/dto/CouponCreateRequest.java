@@ -6,7 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 public record CouponCreateRequest(
         @NotBlank String name,
@@ -16,7 +16,7 @@ public record CouponCreateRequest(
         @NotNull @Positive BigDecimal discount,
         @NotNull BigDecimal minOrderAmount,
         @NotNull BigDecimal uptoAmount,
-        LocalDateTime expiryDate,
+        LocalDate expiryDate,
         /** 0/null = global coupon, otherwise scoped to this restaurant. */
         Integer restaurantId,
         @NotNull @Positive Integer totalCoupon

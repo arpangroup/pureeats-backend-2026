@@ -21,8 +21,12 @@ public class Slide {
     @Column(name = "id", nullable = false)
     private Long id;
 
-    @Column(name = "promo_slider_id", nullable = false)
+    /** Exactly one of promoSliderId / restaurantCategorySliderId is set, depending on which container this slide belongs to. */
+    @Column(name = "promo_slider_id")
     private Integer promoSliderId;
+
+    @Column(name = "restaurant_category_slider_id")
+    private Integer restaurantCategorySliderId;
 
     @Column(name = "unique_id")
     private String uniqueId;
@@ -41,9 +45,21 @@ public class Slide {
     @Column(name = "image_placeholder")
     private String imagePlaceholder;
 
+    @Column(name = "link_type")
+    private String linkType;
+
+    @Column(name = "category_id")
+    private Integer categoryId;
+
+    @Column(name = "restaurant_id")
+    private Integer restaurantId;
+
     @Lob
     @Column(name = "url")
     private String url;
+
+    @Column(name = "position_id")
+    private Integer positionId;
 
     @Column(name = "is_active", nullable = false)
     private Boolean isActive;

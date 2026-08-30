@@ -71,7 +71,11 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/v1/auth/**",
                                 "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**",
-                                "/actuator/health"
+                                "/actuator/health",
+                                // Uploaded images (local-disk provider) - <img src> requests never carry
+                                // an Authorization header, so this must be public regardless of who
+                                // uploaded the file it points at.
+                                "/media/**"
                         ).permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
                                 "/api/v1/restaurants/**",

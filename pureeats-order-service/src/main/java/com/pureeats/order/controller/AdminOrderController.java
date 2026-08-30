@@ -4,18 +4,26 @@ import com.pureeats.domain.common.response.ApiResponse;
 import com.pureeats.domain.common.response.PageResponse;
 import com.pureeats.order.dto.AdminOrderSummaryResponse;
 import com.pureeats.order.dto.OrderResponse;
+import com.pureeats.order.dto.OrderStatusLogResponse;
 import com.pureeats.order.dto.OrderStatusResponse;
+import com.pureeats.order.dto.UpdateOrderStatusRequest;
 import com.pureeats.order.service.OrderService;
+import com.pureeats.order.service.OrderStatusLogService;
 import com.pureeats.order.service.OrderStatusService;
+import com.pureeats.user.security.AuthenticatedUser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -25,11 +33,12 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
-@Tag(name = "Admin Orders", description = "Read-only order directory - ADMIN or SUPER_ADMIN only")
+@Tag(name = "Admin Orders", description = "Order directory + status override - ADMIN or SUPER_ADMIN only")
 public class AdminOrderController {
 
     private final OrderService orderService;
     private final OrderStatusService orderStatusService;
+    private final OrderStatusLogService orderStatusLogService;
 
     @GetMapping("/api/v1/admin/orders")
     @Operation(summary = "List every order, optionally filtered by restaurant, status, or a uniqueOrderId search")
@@ -51,5 +60,18 @@ public class AdminOrderController {
     @Operation(summary = "List every order status lookup row (id + name), for filter dropdowns")
     public ApiResponse<List<OrderStatusResponse>> listStatuses() {
         return ApiResponse.success(orderStatusService.listAll());
+    }
+
+    @PatchMapping("/api/v1/admin/orders/{id}/status")
+    @Operation(summary = "Override an order's status (validated against the same transition graph the UI uses to grey out illegal choices)")
+    public ApiResponse<OrderResponse> updateStatus(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long id,
+                                                    @Valid @RequestBody UpdateOrderStatusRequest request) {
+        return ApiResponse.success("Order status updated", orderService.adminUpdateStatus(principal.userId(), id, request.toStatus()));
+    }
+
+    @GetMapping("/api/v1/admin/orders/{id}/log")
+    @Operation(summary = "Get an order's full status-transition journey - who changed what, and when")
+    public ApiResponse<List<OrderStatusLogResponse>> journey(@PathVariable Long id) {
+        return ApiResponse.success(orderStatusLogService.journey(id));
     }
 }

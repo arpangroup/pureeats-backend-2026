@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/v1/users/me")
@@ -33,5 +34,12 @@ public class UserController {
     public ApiResponse<UserResponse> updateProfile(@AuthenticationPrincipal AuthenticatedUser principal,
                                                      @Valid @RequestBody UpdateUserRequest request) {
         return ApiResponse.success("Profile updated", userService.updateProfile(principal.userId(), request));
+    }
+
+    @PostMapping("/photo")
+    @Operation(summary = "Upload/replace the signed-in user's profile photo")
+    public ApiResponse<UserResponse> uploadPhoto(@AuthenticationPrincipal AuthenticatedUser principal,
+                                                  @RequestParam("file") MultipartFile file) {
+        return ApiResponse.success("Photo updated", userService.updatePhoto(principal.userId(), file));
     }
 }

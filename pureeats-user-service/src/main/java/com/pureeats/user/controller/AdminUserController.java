@@ -4,6 +4,7 @@ import com.pureeats.domain.common.response.ApiResponse;
 import com.pureeats.domain.common.response.PageResponse;
 import com.pureeats.domain.enums.Role;
 import com.pureeats.user.dto.AdminUserResponse;
+import com.pureeats.user.security.AuthenticatedUser;
 import com.pureeats.user.service.AdminUserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -12,11 +13,14 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 /** Admin-panel user directory - list by {@code userType} (defaults to CUSTOMER) and detail. */
 @RestController
@@ -41,5 +45,12 @@ public class AdminUserController {
     @Operation(summary = "Get a user's full admin-panel detail")
     public ApiResponse<AdminUserResponse> getUser(@PathVariable Long id) {
         return ApiResponse.success(adminUserService.getUser(id));
+    }
+
+    @PostMapping("/{id}/photo")
+    @Operation(summary = "Upload/replace a user's photo, as an admin")
+    public ApiResponse<AdminUserResponse> uploadPhoto(@PathVariable Long id, @RequestParam("file") MultipartFile file,
+                                                        @AuthenticationPrincipal AuthenticatedUser principal) {
+        return ApiResponse.success("Photo updated", adminUserService.uploadPhoto(id, file, principal.userId()));
     }
 }
