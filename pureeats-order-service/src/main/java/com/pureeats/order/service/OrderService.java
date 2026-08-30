@@ -16,6 +16,7 @@ import com.pureeats.domain.enums.DeliveryType;
 import com.pureeats.domain.enums.OrderStatusCode;
 import com.pureeats.notification.service.NotificationDispatchService;
 import com.pureeats.order.dto.*;
+import com.pureeats.order.repository.AcceptDeliveryRepository;
 import com.pureeats.order.repository.OrderItemAddonRepository;
 import com.pureeats.order.repository.OrderItemRepository;
 import com.pureeats.order.repository.OrderRepository;
@@ -58,6 +59,7 @@ public class OrderService {
     private final UserRepository userRepository;
     private final OrderStatusLogService orderStatusLogService;
     private final ObjectMapper objectMapper;
+    private final AcceptDeliveryRepository acceptDeliveryRepository;
 
     @Transactional
     public OrderResponse placeOrder(Long userId, PlaceOrderRequest request) {
@@ -297,13 +299,21 @@ public class OrderService {
                 liveCoupon != null ? liveCoupon.id() : null, order.getCouponCode(), order.getCouponName(),
                 liveCoupon != null ? liveCoupon.discountType() : null, order.getDiscountAmount());
 
+        Long deliveryGuyId = null;
+        String deliveryGuyName = null;
+        var acceptedDelivery = acceptDeliveryRepository.findByOrderId(order.getId().intValue()).orElse(null);
+        if (acceptedDelivery != null) {
+            deliveryGuyId = acceptedDelivery.getUserId().longValue();
+            deliveryGuyName = userRepository.findById(deliveryGuyId).map(User::getName).orElse("Unknown");
+        }
+
         return new OrderResponse(order.getId(), order.getUniqueOrderId(), status != null ? status.name() : "UNKNOWN",
                 order.getOrderstatusId(), customerSummary, restaurantSummary, couponSummary, itemResponses,
                 order.getAddress(), order.getTax(), order.getRestaurantCharge(),
                 order.getDeliveryCharge(), order.getDriverTipAmount(), order.getDiscountAmount(), order.getTotal(), order.getPayable(),
                 order.getPaymentMode(), order.getDeliveryPin(), order.getOrderComment(),
                 order.getTransactionId(), order.getDeliveryType(), order.getOrderFrom(), order.getCreatedAt(),
-                legalNextStatuses, deserializeBreakdown(order.getPricingBreakdown()));
+                legalNextStatuses, deserializeBreakdown(order.getPricingBreakdown()), deliveryGuyId, deliveryGuyName);
     }
 
     private String serializeBreakdown(PricingBreakdown breakdown) {

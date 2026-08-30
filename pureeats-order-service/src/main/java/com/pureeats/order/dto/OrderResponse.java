@@ -31,6 +31,9 @@ public record OrderResponse(
         LocalDateTime createdAt,
         List<String> legalNextStatuses,
         /** Null for orders placed before this was tracked. */
-        PricingBreakdown pricingBreakdown
+        PricingBreakdown pricingBreakdown,
+        /** Null until a rider has been assigned (via the delivery flow or admin override). */
+        Long deliveryGuyId,
+        String deliveryGuyName
 ) {
 }
