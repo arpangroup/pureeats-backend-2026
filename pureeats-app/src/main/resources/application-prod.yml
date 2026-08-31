@@ -43,3 +43,6 @@ security:
     provider: ${GEOLOCATION_PROVIDER:ip-api}
     timeout-ms: ${GEOLOCATION_TIMEOUT_MS:2000}
     cache-ttl-minutes: ${GEOLOCATION_CACHE_TTL_MINUTES:60}
+
+notification:
+  email-provider: console
