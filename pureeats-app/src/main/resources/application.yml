@@ -4,8 +4,6 @@ application:
 spring:
   application:
     name: pureeats-app
-  profiles:
-    active: dev
 
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:pureeats}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
@@ -128,5 +126,12 @@ management:
 logging:
   level:
     com.pureeats: INFO
+  file:
+    name: ${LOG_FILE:./logs/pureeats-app.log}
+  logback:
+    rollingpolicy:
+      max-file-size: ${LOG_MAX_FILE_SIZE:10MB}
+      max-history: ${LOG_MAX_HISTORY:14}
+      total-size-cap: ${LOG_TOTAL_SIZE_CAP:500MB}
 server:
   port: ${SERVER_PORT:8081}
