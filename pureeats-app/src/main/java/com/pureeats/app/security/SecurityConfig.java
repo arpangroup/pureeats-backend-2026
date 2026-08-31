@@ -78,6 +78,8 @@ public class SecurityConfig {
                                 "/media/**"
                         ).permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
+                                "/ping",
+                                "/actuator/**",
                                 "/api/v1/restaurants/**",
                                 "/api/v1/restaurant-categories/**",
                                 "/api/v1/locations/**",

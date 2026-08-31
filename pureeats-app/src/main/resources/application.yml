@@ -117,6 +117,13 @@ management:
     web:
       exposure:
         include: health,info
+  health:
+    # spring.mail.host being set (below) is enough for Boot to auto-configure a JavaMailSender
+    # bean and register a MailHealthIndicator that SMTP-connects on every health check - even
+    # though this app only actually sends mail when notification.email-provider=smtp. Don't let
+    # an idle/misconfigured mail config take the whole /actuator/health endpoint DOWN.
+    mail:
+      enabled: false
 
 logging:
   level:

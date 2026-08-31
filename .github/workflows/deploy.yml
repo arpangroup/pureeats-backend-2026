@@ -1,0 +1,61 @@
+name: Deploy backend API
+
+# Builds the Vite app and rsyncs the static output to the backend API
+# root on the PureEats server (see setup-server.sh in the server-setup
+# repo for how that server/user was provisioned).
+on:
+  push:
+    branches: [feature/26.08.30-initial-dev-3]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-backend-api
+  cancel-in-progress: true
+
+env:
+  DEPLOY_USER: pureeats-deploy
+  DEPLOY_PATH: /var/www/api.pureeats.in/html
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          # Unset -> defaults to VITE_DATA_SOURCE=mock (see src/config/env.ts),
+          # so the deployed build is self-contained and needs no backend.
+          # Optional: only takes effect if the secret is set.
+          VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+
+      - name: Configure SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Trust server host key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy dist/ to server
+        run: |
+          rsync -avz --delete \
+            dist/ "${DEPLOY_USER}@${{ secrets.DEPLOY_HOST }}:${DEPLOY_PATH}/"
+
+      - name: Reload Apache
+        run: |
+          ssh "${DEPLOY_USER}@${{ secrets.DEPLOY_HOST }}" \
+            'sudo /bin/systemctl reload apache2'
