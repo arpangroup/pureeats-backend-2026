@@ -3,6 +3,7 @@ package com.pureeats.app.deliveryguy.service;
 import com.pureeats.app.deliveryguy.dto.AdminDeliveryGuyRequest;
 import com.pureeats.app.deliveryguy.dto.AdminDeliveryGuyResponse;
 import com.pureeats.app.deliveryguy.dto.TripDetailResponse;
+import com.pureeats.domain.common.PiiMaskUtil;
 import com.pureeats.domain.common.exception.BadRequestException;
 import com.pureeats.domain.common.exception.ResourceNotFoundException;
 import com.pureeats.domain.common.response.PageResponse;
@@ -17,6 +18,7 @@ import com.pureeats.user.repository.DeliveryGuyRestaurantRepository;
 import com.pureeats.user.repository.UserRepository;
 import com.pureeats.user.service.RoleService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -32,6 +34,7 @@ import java.util.List;
  * (TripDetail, for earnings) - user-service can't depend on order-service (order-service already
  * depends on user-service, so the reverse would be circular), so this can't live in either.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AdminDeliveryGuyService {
@@ -57,9 +60,11 @@ public class AdminDeliveryGuyService {
     @Transactional
     public AdminDeliveryGuyResponse create(AdminDeliveryGuyRequest request) {
         if (request.email() == null || request.email().isBlank()) {
+            log.warn("Rejected delivery partner creation: email is required");
             throw new BadRequestException("Email is required");
         }
         if (userRepository.existsByEmail(request.email())) {
+            log.warn("Rejected delivery partner creation: email {} already exists", PiiMaskUtil.maskEmail(request.email()));
             throw new BadRequestException("A user with this email already exists");
         }
 
@@ -84,6 +89,7 @@ public class AdminDeliveryGuyService {
 
         roleService.assignRole(user.getId(), Role.DELIVERY);
 
+        log.info("Created delivery partner {} (user {})", detail.getId(), user.getId());
         return toResponse(detail);
     }
 
@@ -93,6 +99,7 @@ public class AdminDeliveryGuyService {
         applyRequest(detail, request);
         detail.setUpdatedAt(LocalDateTime.now());
         deliveryGuyDetailRepository.save(detail);
+        log.info("Updated delivery partner {}", id);
         return toResponse(detail);
     }
 
@@ -106,6 +113,7 @@ public class AdminDeliveryGuyService {
             userRepository.save(user);
         });
         deliveryGuyDetailRepository.delete(detail);
+        log.info("Deleted delivery partner {}", id);
     }
 
     @Transactional(readOnly = true)
@@ -170,7 +178,10 @@ public class AdminDeliveryGuyService {
 
     private DeliveryGuyDetail findOrThrow(Long id) {
         return deliveryGuyDetailRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Delivery partner not found: " + id));
+                .orElseThrow(() -> {
+                    log.warn("Delivery partner {} not found", id);
+                    return new ResourceNotFoundException("Delivery partner not found: " + id);
+                });
     }
 
     private java.util.Optional<User> findLinkedUser(Long deliveryGuyDetailId) {

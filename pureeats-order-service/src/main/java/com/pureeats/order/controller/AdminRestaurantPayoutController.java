@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Admin settlement of store payout requests - ADMIN or SUPER_ADMIN only. */
 @RestController
 @RequiredArgsConstructor
+@Slf4j
 @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
 @Tag(name = "Admin Restaurant Payouts", description = "Store payout directory and settlement - ADMIN or SUPER_ADMIN only")
 public class AdminRestaurantPayoutController {
@@ -44,6 +46,7 @@ public class AdminRestaurantPayoutController {
     @PatchMapping("/api/v1/admin/restaurant-payouts/{id}/status")
     @Operation(summary = "Update a payout's status (e.g. mark paid or rejected)")
     public ApiResponse<AdminRestaurantPayoutResponse> updateStatus(@PathVariable Long id, @Valid @RequestBody UpdatePayoutStatusRequest request) {
+        log.info("Updating payout {} status to {}", id, request.status());
         return ApiResponse.success("Payout updated", restaurantPayoutService.updateStatus(id, request.status()));
     }
 }

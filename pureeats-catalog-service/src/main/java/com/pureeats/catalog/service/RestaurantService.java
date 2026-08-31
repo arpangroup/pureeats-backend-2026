@@ -14,6 +14,7 @@ import com.pureeats.media.service.MediaAssetService;
 import com.pureeats.media.storage.MediaUrlResolver;
 import com.pureeats.user.service.RoleService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class RestaurantService {
@@ -86,6 +88,7 @@ public class RestaurantService {
 
     @Transactional
     public RestaurantDetailResponse create(Long ownerUserId, RestaurantCreateRequest request) {
+        log.info("Owner {} registering restaurant '{}' (pending acceptance)", ownerUserId, request.name());
         Restaurant restaurant = restaurantRepository.save(buildRestaurant(request, false));
 
         RestaurantUser link = new RestaurantUser();
@@ -97,13 +100,17 @@ public class RestaurantService {
 
         roleService.assignRole(ownerUserId, Role.STORE_OWNER);
 
+        log.info("Restaurant {} registered by owner {}, awaiting admin acceptance", restaurant.getId(), ownerUserId);
         return toDetail(restaurant);
     }
 
     /** Admin-created restaurants have no self-onboarding owner to link and are accepted immediately, unlike store-owner self-onboarding. */
     @Transactional
     public RestaurantDetailResponse createAsAdmin(RestaurantCreateRequest request) {
-        return toDetail(restaurantRepository.save(buildRestaurant(request, true)));
+        log.info("Admin creating restaurant '{}' (accepted immediately)", request.name());
+        Restaurant restaurant = restaurantRepository.save(buildRestaurant(request, true));
+        log.info("Restaurant {} created by admin", restaurant.getId());
+        return toDetail(restaurant);
     }
 
     private Restaurant buildRestaurant(RestaurantCreateRequest request, boolean isAccepted) {
@@ -144,6 +151,7 @@ public class RestaurantService {
 
     @Transactional
     public RestaurantDetailResponse update(Long ownerUserId, Long restaurantId, RestaurantUpdateRequest request) {
+        log.info("Owner {} updating restaurant {}", ownerUserId, restaurantId);
         Restaurant restaurant = assertOwnership(ownerUserId, restaurantId);
         restaurant.setName(request.name());
         restaurant.setDescription(request.description());
@@ -172,6 +180,7 @@ public class RestaurantService {
      */
     @Transactional
     public RestaurantDetailResponse patchAsAdmin(Long callerUserId, Long restaurantId, RestaurantPatchRequest request, Role callerRole) {
+        log.info("User {} (role {}) patching restaurant {}", callerUserId, callerRole, restaurantId);
         Restaurant restaurant = findOrThrow(restaurantId);
         boolean isPrivileged = callerRole == Role.ADMIN || callerRole == Role.SUPER_ADMIN;
 
@@ -222,6 +231,7 @@ public class RestaurantService {
             return;
         }
         if (ADMIN_ONLY_FIELDS.contains(fieldName) && !isPrivileged) {
+            log.warn("User {} attempted to update admin-only field '{}' on restaurant {} without privilege", callerUserId, fieldName, restaurantId);
             throw new ForbiddenException("Only ADMIN or SUPER_ADMIN can update '" + fieldName + "'");
         }
         setter.accept(newValue);
@@ -230,12 +240,14 @@ public class RestaurantService {
 
     @Transactional
     public void deleteAsAdmin(Long restaurantId) {
+        log.info("Admin deleting restaurant {}", restaurantId);
         restaurantRepository.delete(findOrThrow(restaurantId));
     }
 
     /** Replaces the restaurant's single main/cover image (distinct from the gallery - separate owner type, no 5-image cap). */
     @Transactional
     public RestaurantImageResponse uploadCoverImage(Long restaurantId, MultipartFile file, Long uploadedBy) {
+        log.info("Uploading cover image for restaurant {} by user {}", restaurantId, uploadedBy);
         Restaurant restaurant = findOrThrow(restaurantId);
         String oldImage = restaurant.getImage();
         var uploaded = mediaAssetService.upload(file, COVER_IMAGE_OWNER_TYPE, restaurantId, uploadedBy, MAX_IMAGE_BYTES);
@@ -248,8 +260,11 @@ public class RestaurantService {
 
     @Transactional
     public RestaurantImageResponse uploadImage(Long restaurantId, MultipartFile file, Long uploadedBy) {
+        log.info("Uploading gallery image for restaurant {} by user {}", restaurantId, uploadedBy);
         findOrThrow(restaurantId);
-        if (mediaAssetService.countForOwner(IMAGE_OWNER_TYPE, restaurantId) >= MAX_IMAGES) {
+        long existingCount = mediaAssetService.countForOwner(IMAGE_OWNER_TYPE, restaurantId);
+        if (existingCount >= MAX_IMAGES) {
+            log.warn("Restaurant {} rejected gallery upload - already has {} images (max {})", restaurantId, existingCount, MAX_IMAGES);
             throw new BadRequestException("A store can have at most " + MAX_IMAGES + " images");
         }
         var uploaded = mediaAssetService.upload(file, IMAGE_OWNER_TYPE, restaurantId, uploadedBy, MAX_IMAGE_BYTES);
@@ -265,6 +280,7 @@ public class RestaurantService {
 
     @Transactional
     public void deleteImage(Long restaurantId, Long mediaId) {
+        log.info("Deleting gallery image {} from restaurant {}", mediaId, restaurantId);
         mediaAssetService.delete(IMAGE_OWNER_TYPE, restaurantId, mediaId);
     }
 
@@ -274,6 +290,7 @@ public class RestaurantService {
         restaurant.setIsActive(enabled);
         restaurant.setUpdatedAt(LocalDateTime.now());
         restaurantRepository.save(restaurant);
+        log.info("Restaurant {} {} by owner {}", restaurantId, enabled ? "enabled" : "disabled", ownerUserId);
     }
 
     @Transactional(readOnly = true)
@@ -284,19 +301,26 @@ public class RestaurantService {
                 Double.parseDouble(latitude), Double.parseDouble(longitude));
         boolean isOperational = restaurant.getIsActive() && restaurant.getIsAccepted()
                 && distanceKm <= restaurant.getDeliveryRadius().doubleValue();
+        log.debug("Delivery area check for restaurant {}: distance {} km, operational {}", restaurantId, distanceKm, isOperational);
         return new DeliveryAreaCheckResponse(isOperational, distanceKm);
     }
 
     /** Restaurant ownership is many-to-many via {@code restaurant_user} - an owner may run several restaurants. */
     public Restaurant assertOwnership(Long ownerUserId, Long restaurantId) {
         restaurantUserRepository.findByUserIdAndRestaurantId(ownerUserId, restaurantId)
-                .orElseThrow(() -> new ForbiddenException("This restaurant does not belong to you"));
+                .orElseThrow(() -> {
+                    log.warn("Owner {} attempted to access restaurant {} they do not own", ownerUserId, restaurantId);
+                    return new ForbiddenException("This restaurant does not belong to you");
+                });
         return findOrThrow(restaurantId);
     }
 
     private Restaurant findOrThrow(Long id) {
         return restaurantRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Restaurant not found: " + id));
+                .orElseThrow(() -> {
+                    log.warn("Restaurant {} not found", id);
+                    return new ResourceNotFoundException("Restaurant not found: " + id);
+                });
     }
 
     @Transactional(readOnly = true)

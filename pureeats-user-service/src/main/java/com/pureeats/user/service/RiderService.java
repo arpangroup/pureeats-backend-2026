@@ -9,6 +9,7 @@ import com.pureeats.user.dto.RiderProfileResponse;
 import com.pureeats.user.repository.DeliveryGuyDetailRepository;
 import com.pureeats.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +17,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /** Self-serve rider onboarding: creates the {@code DeliveryGuyDetail} profile and grants the DELIVERY role. */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class RiderService {
@@ -30,8 +32,10 @@ public class RiderService {
 
     @Transactional
     public RiderProfileResponse registerAsRider(Long userId, RiderProfileRequest request) {
+        log.info("Registering user {} as a delivery rider", userId);
         User user = userService.findUserOrThrow(userId);
         if (user.getDeliveryGuyDetailId() != null) {
+            log.warn("Rider registration rejected for user {} - profile already exists", userId);
             throw new ConflictException("A rider profile already exists for this account");
         }
 
@@ -55,6 +59,7 @@ public class RiderService {
         userRepository.save(user);
 
         roleService.assignRole(userId, Role.DELIVERY);
+        log.info("Rider profile {} created for user {}", detail.getId(), userId);
 
         return toResponse(detail);
     }
@@ -63,10 +68,14 @@ public class RiderService {
     public RiderProfileResponse getProfile(Long userId) {
         User user = userService.findUserOrThrow(userId);
         if (user.getDeliveryGuyDetailId() == null) {
+            log.warn("Rider profile lookup failed for user {} - no rider profile", userId);
             throw new com.pureeats.domain.common.exception.ResourceNotFoundException("No rider profile for this account");
         }
         DeliveryGuyDetail detail = deliveryGuyDetailRepository.findById(user.getDeliveryGuyDetailId().longValue())
-                .orElseThrow(() -> new com.pureeats.domain.common.exception.ResourceNotFoundException("Rider profile not found"));
+                .orElseThrow(() -> {
+                    log.warn("Rider profile {} referenced by user {} not found", user.getDeliveryGuyDetailId(), userId);
+                    return new com.pureeats.domain.common.exception.ResourceNotFoundException("Rider profile not found");
+                });
         return toResponse(detail);
     }
 

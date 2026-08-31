@@ -7,10 +7,12 @@ import com.pureeats.domain.common.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/restaurant-categories")
 @RequiredArgsConstructor
@@ -28,6 +30,7 @@ public class RestaurantCategoryController {
     @GetMapping("/{id}/restaurants")
     @Operation(summary = "List restaurants belonging to a category")
     public ApiResponse<List<RestaurantSummaryResponse>> restaurants(@PathVariable Long id) {
+        log.debug("Listing restaurants in category {}", id);
         return ApiResponse.success(restaurantCategoryService.restaurantsInCategory(id));
     }
 }

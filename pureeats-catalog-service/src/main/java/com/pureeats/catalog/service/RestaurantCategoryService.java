@@ -12,6 +12,7 @@ import com.pureeats.domain.entity.Restaurant;
 import com.pureeats.domain.entity.RestaurantCategory;
 import com.pureeats.domain.entity.RestaurantCategoryRestaurant;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class RestaurantCategoryService {
@@ -44,16 +46,20 @@ public class RestaurantCategoryService {
 
     @Transactional
     public RestaurantCategoryResponse create(RestaurantCategoryRequest request) {
+        log.info("Creating restaurant category '{}'", request.name());
         RestaurantCategory category = new RestaurantCategory();
         category.setName(request.name());
         category.setIsActive(request.isActive() == null || request.isActive());
         category.setCreatedAt(LocalDateTime.now());
         category.setUpdatedAt(LocalDateTime.now());
-        return toResponse(restaurantCategoryRepository.save(category));
+        RestaurantCategoryResponse response = toResponse(restaurantCategoryRepository.save(category));
+        log.info("Restaurant category {} created", response.id());
+        return response;
     }
 
     @Transactional
     public RestaurantCategoryResponse update(Long id, RestaurantCategoryRequest request) {
+        log.info("Updating restaurant category {}", id);
         RestaurantCategory category = findOrThrow(id);
         category.setName(request.name());
         if (request.isActive() != null) {
@@ -65,12 +71,16 @@ public class RestaurantCategoryService {
 
     @Transactional
     public void delete(Long id) {
+        log.info("Deleting restaurant category {}", id);
         restaurantCategoryRepository.delete(findOrThrow(id));
     }
 
     private RestaurantCategory findOrThrow(Long id) {
         return restaurantCategoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Restaurant category not found: " + id));
+                .orElseThrow(() -> {
+                    log.warn("Restaurant category {} not found", id);
+                    return new ResourceNotFoundException("Restaurant category not found: " + id);
+                });
     }
 
     private RestaurantCategoryResponse toResponse(RestaurantCategory c) {
@@ -79,6 +89,7 @@ public class RestaurantCategoryService {
 
     @Transactional(readOnly = true)
     public List<RestaurantSummaryResponse> restaurantsInCategory(Long categoryId) {
+        log.debug("Listing restaurants in category {}", categoryId);
         List<Long> restaurantIds = restaurantCategoryRestaurantRepository.findByRestaurantCategoryId(categoryId)
                 .stream().map(RestaurantCategoryRestaurant::getRestaurantId).toList();
         return restaurantRepository.findAllById(restaurantIds).stream()

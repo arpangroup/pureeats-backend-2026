@@ -10,6 +10,7 @@ import com.pureeats.order.repository.DeliveryCollectionLogRepository;
 import com.pureeats.order.repository.DeliveryCollectionRepository;
 import com.pureeats.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,7 @@ import java.util.List;
 /** Cash-in-hand held by each delivery partner, and the credit/debit log behind each balance. */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class DeliveryCollectionService {
 
     private final DeliveryCollectionRepository deliveryCollectionRepository;
@@ -28,6 +30,7 @@ public class DeliveryCollectionService {
 
     @Transactional(readOnly = true)
     public PageResponse<AdminDeliveryCollectionResponse> listPaged(Pageable pageable) {
+        log.debug("Admin listing delivery collections, page {}", pageable.getPageNumber());
         Page<DeliveryCollection> page = deliveryCollectionRepository.findAll(pageable);
         List<AdminDeliveryCollectionResponse> content = page.getContent().stream().map(this::toResponse).toList();
         return PageResponse.of(content, page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
@@ -35,6 +38,7 @@ public class DeliveryCollectionService {
 
     @Transactional(readOnly = true)
     public List<DeliveryCollectionLogResponse> logs(Long collectionId) {
+        log.debug("Fetching delivery collection logs for collection {}", collectionId);
         return deliveryCollectionLogRepository.findByDeliveryCollectionIdOrderByCreatedAtDesc(collectionId.intValue()).stream()
                 .map(this::toLogResponse).toList();
     }

@@ -2,6 +2,7 @@ package com.pureeats.order.service;
 
 import com.pureeats.domain.entity.Restaurant;
 import com.pureeats.order.dto.DeliveryChargeResult;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -10,6 +11,7 @@ import java.math.RoundingMode;
 
 /** Centralizes the tax/restaurant-charge/delivery-charge math that Laravel had copy-pasted per-controller. */
 @Service
+@Slf4j
 public class OrderPricingService {
 
     private static final double EARTH_RADIUS_KM = 6371.0;
@@ -55,6 +57,7 @@ public class OrderPricingService {
                 int extraUnits = (int) Math.ceil(extraKm / extraDistanceStep);
                 charge = charge.add(restaurant.getExtraDeliveryCharge().multiply(BigDecimal.valueOf(extraUnits)));
             }
+            log.debug("Computed dynamic delivery charge {} for restaurant {} at distance {}km", charge, restaurant.getId(), distanceKm);
             return new DeliveryChargeResult(charge, distanceKm, "DYNAMIC");
         }
         BigDecimal flat = restaurant.getDeliveryCharges() != null ? restaurant.getDeliveryCharges() : BigDecimal.ZERO;
@@ -67,6 +70,7 @@ public class OrderPricingService {
                     Double.parseDouble(lat2), Double.parseDouble(lng2));
             return BigDecimal.valueOf(distance).setScale(2, RoundingMode.HALF_UP);
         } catch (NumberFormatException | NullPointerException e) {
+            log.warn("Could not compute distance from ({}, {}) to ({}, {}), defaulting to zero", lat1, lng1, lat2, lng2, e);
             return BigDecimal.ZERO;
         }
     }

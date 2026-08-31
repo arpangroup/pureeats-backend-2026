@@ -18,6 +18,7 @@ import com.pureeats.domain.entity.Slide;
 import com.pureeats.media.service.MediaAssetService;
 import com.pureeats.media.storage.MediaUrlResolver;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -30,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 
 /** Admin CRUD over promo sliders, store-category sliders, and the slides inside each. */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AdminSliderService {
@@ -61,15 +63,19 @@ public class AdminSliderService {
 
     @Transactional
     public AdminPromoSliderResponse createPromoSlider(AdminPromoSliderRequest request) {
+        log.info("Creating promo slider '{}'", request.name());
         PromoSlider slider = new PromoSlider();
         applyPromoSlider(slider, request);
         slider.setCreatedAt(LocalDateTime.now());
         slider.setUpdatedAt(LocalDateTime.now());
-        return toResponse(promoSliderRepository.save(slider));
+        AdminPromoSliderResponse response = toResponse(promoSliderRepository.save(slider));
+        log.info("Promo slider {} created", response.id());
+        return response;
     }
 
     @Transactional
     public AdminPromoSliderResponse updatePromoSlider(Long id, AdminPromoSliderRequest request) {
+        log.info("Updating promo slider {}", id);
         PromoSlider slider = findPromoSliderOrThrow(id);
         applyPromoSlider(slider, request);
         slider.setUpdatedAt(LocalDateTime.now());
@@ -78,6 +84,7 @@ public class AdminSliderService {
 
     @Transactional
     public void deletePromoSlider(Long id) {
+        log.info("Deleting promo slider {}", id);
         promoSliderRepository.delete(findPromoSliderOrThrow(id));
     }
 
@@ -91,7 +98,10 @@ public class AdminSliderService {
 
     private PromoSlider findPromoSliderOrThrow(Long id) {
         return promoSliderRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Promo slider not found: " + id));
+                .orElseThrow(() -> {
+                    log.warn("Promo slider {} not found", id);
+                    return new ResourceNotFoundException("Promo slider not found: " + id);
+                });
     }
 
     private AdminPromoSliderResponse toResponse(PromoSlider s) {
@@ -116,17 +126,21 @@ public class AdminSliderService {
 
     @Transactional
     public AdminRestaurantCategorySliderResponse createCategorySlider(AdminRestaurantCategorySliderRequest request) {
+        log.info("Creating restaurant-category slider '{}'", request.name());
         RestaurantCategorySlider slider = new RestaurantCategorySlider();
         slider.setName(request.name());
         slider.setIsActive(request.isActive() == null || request.isActive());
         slider.setCategoriesIds("");
         slider.setCreatedAt(LocalDateTime.now());
         slider.setUpdatedAt(LocalDateTime.now());
-        return toResponse(restaurantCategorySliderRepository.save(slider));
+        AdminRestaurantCategorySliderResponse response = toResponse(restaurantCategorySliderRepository.save(slider));
+        log.info("Restaurant-category slider {} created", response.id());
+        return response;
     }
 
     @Transactional
     public AdminRestaurantCategorySliderResponse updateCategorySlider(Long id, AdminRestaurantCategorySliderRequest request) {
+        log.info("Updating restaurant-category slider {}", id);
         RestaurantCategorySlider slider = findCategorySliderOrThrow(id);
         slider.setName(request.name());
         slider.setIsActive(request.isActive() == null || request.isActive());
@@ -136,12 +150,16 @@ public class AdminSliderService {
 
     @Transactional
     public void deleteCategorySlider(Long id) {
+        log.info("Deleting restaurant-category slider {}", id);
         restaurantCategorySliderRepository.delete(findCategorySliderOrThrow(id));
     }
 
     private RestaurantCategorySlider findCategorySliderOrThrow(Long id) {
         return restaurantCategorySliderRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Category slider not found: " + id));
+                .orElseThrow(() -> {
+                    log.warn("Restaurant-category slider {} not found", id);
+                    return new ResourceNotFoundException("Category slider not found: " + id);
+                });
     }
 
     private AdminRestaurantCategorySliderResponse toResponse(RestaurantCategorySlider s) {
@@ -176,15 +194,19 @@ public class AdminSliderService {
 
     @Transactional
     public AdminSlideResponse createSlide(AdminSlideRequest request) {
+        log.info("Creating slide '{}' for {} slider {}", request.name(), request.sliderType(), request.sliderId());
         Slide slide = new Slide();
         applySlide(slide, request);
         slide.setCreatedAt(LocalDateTime.now());
         slide.setUpdatedAt(LocalDateTime.now());
-        return toResponse(slideRepository.save(slide));
+        AdminSlideResponse response = toResponse(slideRepository.save(slide));
+        log.info("Slide {} created", response.id());
+        return response;
     }
 
     @Transactional
     public AdminSlideResponse updateSlide(Long id, AdminSlideRequest request) {
+        log.info("Updating slide {}", id);
         Slide slide = findSlideOrThrow(id);
         applySlide(slide, request);
         slide.setUpdatedAt(LocalDateTime.now());
@@ -193,11 +215,13 @@ public class AdminSliderService {
 
     @Transactional
     public void deleteSlide(Long id) {
+        log.info("Deleting slide {}", id);
         slideRepository.delete(findSlideOrThrow(id));
     }
 
     @Transactional
     public SlideImageResponse uploadSlideImage(Long slideId, MultipartFile file, Long uploadedBy) {
+        log.info("Uploading image for slide {} by user {}", slideId, uploadedBy);
         Slide slide = findSlideOrThrow(slideId);
         String storageKey = mediaAssetService.upload(file, SLIDE_IMAGE_OWNER_TYPE, slideId, uploadedBy).storageKey();
         slide.setImage(storageKey);
@@ -208,7 +232,10 @@ public class AdminSliderService {
 
     private Slide findSlideOrThrow(Long id) {
         return slideRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Slide not found: " + id));
+                .orElseThrow(() -> {
+                    log.warn("Slide {} not found", id);
+                    return new ResourceNotFoundException("Slide not found: " + id);
+                });
     }
 
     private void applySlide(Slide slide, AdminSlideRequest request) {

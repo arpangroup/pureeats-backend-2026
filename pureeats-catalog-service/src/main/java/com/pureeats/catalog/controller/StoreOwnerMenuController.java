@@ -9,12 +9,14 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/store-owner")
 @RequiredArgsConstructor
@@ -35,12 +37,14 @@ public class StoreOwnerMenuController {
     @Operation(summary = "Create an item category")
     public ApiResponse<ItemCategoryResponse> createCategory(@AuthenticationPrincipal AuthenticatedUser principal,
                                                               @Valid @RequestBody ItemCategoryRequest request) {
+        log.debug("Owner {}: create item category '{}'", principal.userId(), request.name());
         return ApiResponse.success("Category created", menuService.createCategory(principal.userId(), request));
     }
 
     @PatchMapping("/item-categories/{id}/enable")
     @Operation(summary = "Enable an item category")
     public ApiResponse<Void> enableCategory(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long id) {
+        log.debug("Owner {}: enable item category {}", principal.userId(), id);
         menuService.setCategoryEnabled(principal.userId(), id, true);
         return ApiResponse.success("Category enabled", null);
     }
@@ -48,6 +52,7 @@ public class StoreOwnerMenuController {
     @PatchMapping("/item-categories/{id}/disable")
     @Operation(summary = "Disable an item category")
     public ApiResponse<Void> disableCategory(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long id) {
+        log.debug("Owner {}: disable item category {}", principal.userId(), id);
         menuService.setCategoryEnabled(principal.userId(), id, false);
         return ApiResponse.success("Category disabled", null);
     }
@@ -58,6 +63,7 @@ public class StoreOwnerMenuController {
     public ApiResponse<ItemResponse> createItem(@AuthenticationPrincipal AuthenticatedUser principal,
                                                  @PathVariable Long restaurantId,
                                                  @Valid @RequestBody ItemRequest request) {
+        log.debug("Owner {}: create item '{}' for restaurant {}", principal.userId(), request.name(), restaurantId);
         return ApiResponse.success("Item created", menuService.createItem(principal.userId(), restaurantId, request));
     }
 
@@ -66,12 +72,14 @@ public class StoreOwnerMenuController {
     public ApiResponse<ItemResponse> updateItem(@AuthenticationPrincipal AuthenticatedUser principal,
                                                  @PathVariable Long itemId,
                                                  @Valid @RequestBody ItemRequest request) {
+        log.debug("Owner {}: update item {}", principal.userId(), itemId);
         return ApiResponse.success("Item updated", menuService.updateItem(principal.userId(), itemId, request));
     }
 
     @PatchMapping("/items/{itemId}/enable")
     @Operation(summary = "Enable a menu item")
     public ApiResponse<Void> enableItem(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long itemId) {
+        log.debug("Owner {}: enable item {}", principal.userId(), itemId);
         menuService.setItemEnabled(principal.userId(), itemId, true);
         return ApiResponse.success("Item enabled", null);
     }
@@ -79,6 +87,7 @@ public class StoreOwnerMenuController {
     @PatchMapping("/items/{itemId}/disable")
     @Operation(summary = "Disable a menu item")
     public ApiResponse<Void> disableItem(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long itemId) {
+        log.debug("Owner {}: disable item {}", principal.userId(), itemId);
         menuService.setItemEnabled(principal.userId(), itemId, false);
         return ApiResponse.success("Item disabled", null);
     }

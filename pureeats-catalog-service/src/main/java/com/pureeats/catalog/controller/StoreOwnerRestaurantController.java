@@ -12,12 +12,14 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/store-owner/restaurants")
 @RequiredArgsConstructor
@@ -38,6 +40,7 @@ public class StoreOwnerRestaurantController {
     @Operation(summary = "Register a new restaurant (pending admin acceptance)")
     public ApiResponse<RestaurantDetailResponse> create(@AuthenticationPrincipal AuthenticatedUser principal,
                                                          @Valid @RequestBody RestaurantCreateRequest request) {
+        log.debug("Owner {}: register restaurant '{}'", principal.userId(), request.name());
         return ApiResponse.success("Restaurant created (awaiting admin approval) - log in again to receive a STORE_OWNER-role token",
                 restaurantService.create(principal.userId(), request));
     }
@@ -47,12 +50,14 @@ public class StoreOwnerRestaurantController {
     public ApiResponse<RestaurantDetailResponse> update(@AuthenticationPrincipal AuthenticatedUser principal,
                                                          @PathVariable Long id,
                                                          @Valid @RequestBody RestaurantUpdateRequest request) {
+        log.debug("Owner {}: update restaurant {}", principal.userId(), id);
         return ApiResponse.success("Restaurant updated", restaurantService.update(principal.userId(), id, request));
     }
 
     @PatchMapping("/{id}/enable")
     @Operation(summary = "Re-enable a restaurant you own")
     public ApiResponse<Void> enable(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long id) {
+        log.debug("Owner {}: enable restaurant {}", principal.userId(), id);
         restaurantService.setEnabled(principal.userId(), id, true);
         return ApiResponse.success("Restaurant enabled", null);
     }
@@ -60,6 +65,7 @@ public class StoreOwnerRestaurantController {
     @PatchMapping("/{id}/disable")
     @Operation(summary = "Disable a restaurant you own")
     public ApiResponse<Void> disable(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long id) {
+        log.debug("Owner {}: disable restaurant {}", principal.userId(), id);
         restaurantService.setEnabled(principal.userId(), id, false);
         return ApiResponse.success("Restaurant disabled", null);
     }

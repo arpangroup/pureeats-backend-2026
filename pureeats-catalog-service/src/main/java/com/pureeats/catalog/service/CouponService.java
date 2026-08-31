@@ -21,6 +21,7 @@ import com.pureeats.domain.enums.DiscountType;
 import com.pureeats.user.repository.UserRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -33,6 +34,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CouponService {
@@ -51,6 +53,7 @@ public class CouponService {
     void indexCalculators() {
         calculatorsByType = new EnumMap<>(DiscountType.class);
         discountCalculators.forEach(c -> calculatorsByType.put(c.type(), c));
+        log.info("Indexed {} discount calculators: {}", calculatorsByType.size(), calculatorsByType.keySet());
     }
 
     @Transactional(readOnly = true)
@@ -84,11 +87,16 @@ public class CouponService {
     @Transactional(readOnly = true)
     public CouponResponse getById(Long id) {
         return toResponse(couponRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Coupon not found: " + id)));
+                .orElseThrow(() -> {
+                    log.warn("Coupon {} not found", id);
+                    return new ResourceNotFoundException("Coupon not found: " + id);
+                }));
     }
 
     @Transactional
     public CouponResponse create(CouponCreateRequest request, Long createdBy) {
+        log.info("Creating coupon '{}' (code {}) for restaurant {} by user {}", request.name(), request.code(),
+                request.restaurantId(), createdBy);
         Coupon coupon = new Coupon();
         coupon.setName(request.name());
         coupon.setDescription(request.description());
@@ -107,14 +115,20 @@ public class CouponService {
         coupon.setCreatedBy(createdBy);
         coupon.setCreatedAt(LocalDateTime.now());
         coupon.setUpdatedAt(LocalDateTime.now());
-        return toResponse(couponRepository.save(coupon));
+        Coupon saved = couponRepository.save(coupon);
+        log.info("Coupon {} (code {}) created", saved.getId(), saved.getCode());
+        return toResponse(saved);
     }
 
     /** Admin-facing full update - not ownership-scoped (an admin may edit anyone's coupon), and lets the caller set {@code maxCount}/{@code isActive} directly. */
     @Transactional
     public CouponResponse update(Long id, CouponUpdateRequest request) {
+        log.info("Admin updating coupon {}", id);
         Coupon coupon = couponRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Coupon not found: " + id));
+                .orElseThrow(() -> {
+                    log.warn("Admin update failed - coupon {} not found", id);
+                    return new ResourceNotFoundException("Coupon not found: " + id);
+                });
         applyUpdate(coupon, request);
         return toResponse(couponRepository.save(coupon));
     }
@@ -122,6 +136,7 @@ public class CouponService {
     /** Store-owner update - only the coupon's creator may edit it. */
     @Transactional
     public CouponResponse updateAsOwner(Long ownerUserId, Long id, CouponUpdateRequest request) {
+        log.info("Owner {} updating coupon {}", ownerUserId, id);
         Coupon coupon = findOwnedOrThrow(ownerUserId, id);
         applyUpdate(coupon, request);
         return toResponse(couponRepository.save(coupon));
@@ -157,21 +172,30 @@ public class CouponService {
     /** Admin-only delete - the caller already had to hold ADMIN/SUPER_ADMIN to reach this (enforced at the URL/controller layer). */
     @Transactional
     public void delete(Long id) {
+        log.info("Admin deleting coupon {}", id);
         Coupon coupon = couponRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Coupon not found: " + id));
+                .orElseThrow(() -> {
+                    log.warn("Admin delete failed - coupon {} not found", id);
+                    return new ResourceNotFoundException("Coupon not found: " + id);
+                });
         couponRepository.delete(coupon);
     }
 
     /** Store-owner delete - only the coupon's creator may delete it. */
     @Transactional
     public void deleteAsOwner(Long ownerUserId, Long id) {
+        log.info("Owner {} deleting coupon {}", ownerUserId, id);
         couponRepository.delete(findOwnedOrThrow(ownerUserId, id));
     }
 
     private Coupon findOwnedOrThrow(Long ownerUserId, Long id) {
         Coupon coupon = couponRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Coupon not found: " + id));
+                .orElseThrow(() -> {
+                    log.warn("Coupon {} not found", id);
+                    return new ResourceNotFoundException("Coupon not found: " + id);
+                });
         if (coupon.getCreatedBy() == null || !coupon.getCreatedBy().equals(ownerUserId)) {
+            log.warn("Owner {} attempted to manage coupon {} created by {}", ownerUserId, id, coupon.getCreatedBy());
             throw new ForbiddenException("You can only manage coupons you created");
         }
         return coupon;
@@ -185,6 +209,7 @@ public class CouponService {
      */
     @Transactional(readOnly = true)
     public CouponApplyResponse preview(CouponApplyRequest request) {
+        log.debug("Previewing coupon '{}' for restaurant {} order amount {}", request.code(), request.restaurantId(), request.orderAmount());
         Coupon coupon = validate(request.code(), request.restaurantId(), request.orderAmount(), true);
         BigDecimal discount = calculatorFor(coupon).calculateDiscount(coupon, request.orderAmount());
         return new CouponApplyResponse(coupon.getId(), coupon.getCode(), discount,
@@ -198,6 +223,7 @@ public class CouponService {
      */
     @Transactional
     public CouponRedemptionResult recordUsage(String code, Integer restaurantId, BigDecimal orderAmount, Integer userId, boolean isFirstOrder) {
+        log.info("Recording coupon usage: code '{}' restaurant {} user {} orderAmount {}", code, restaurantId, userId, orderAmount);
         Coupon coupon = validate(code, restaurantId, orderAmount, isFirstOrder);
         DiscountCalculator calculator = calculatorFor(coupon);
         BigDecimal discount = calculator.calculateDiscount(coupon, orderAmount);
@@ -215,27 +241,39 @@ public class CouponService {
         usage.setUpdatedAt(LocalDateTime.now());
         couponUsageRepository.save(usage);
 
+        log.info("Coupon {} (code '{}') redeemed by user {}: discount {}", coupon.getId(), coupon.getCode(), userId, discount);
         return new CouponRedemptionResult(coupon.getId(), coupon.getCode(), coupon.getName(), discount, calculator.waivesDeliveryCharge());
     }
 
     private Coupon validate(String code, Integer restaurantId, BigDecimal orderAmount, boolean isFirstOrder) {
         Coupon coupon = couponRepository.findByCodeIgnoreCaseAndIsActiveTrue(code)
-                .orElseThrow(() -> new BadRequestException("Invalid or inactive coupon code"));
+                .orElseThrow(() -> {
+                    log.warn("Coupon validation failed: code '{}' is invalid or inactive", code);
+                    return new BadRequestException("Invalid or inactive coupon code");
+                });
 
         if (coupon.getExpiryDate() != null && coupon.getExpiryDate().isBefore(LocalDateTime.now())) {
+            log.warn("Coupon {} (code '{}') rejected - expired at {}", coupon.getId(), code, coupon.getExpiryDate());
             throw new BadRequestException("This coupon has expired");
         }
         boolean isGlobal = coupon.getRestaurantId() == null || coupon.getRestaurantId() == GLOBAL_RESTAURANT_ID;
         if (!isGlobal && !coupon.getRestaurantId().equals(restaurantId)) {
+            log.warn("Coupon {} (code '{}') rejected - not valid for restaurant {} (scoped to {})",
+                    coupon.getId(), code, restaurantId, coupon.getRestaurantId());
             throw new BadRequestException("This coupon is not valid for this restaurant");
         }
         if (coupon.getCount() != null && coupon.getTotalCoupon() != null && coupon.getCount() >= coupon.getTotalCoupon()) {
+            log.warn("Coupon {} (code '{}') rejected - usage limit reached ({}/{})",
+                    coupon.getId(), code, coupon.getCount(), coupon.getTotalCoupon());
             throw new BadRequestException("This coupon has reached its usage limit");
         }
         if (orderAmount.compareTo(coupon.getMinOrderAmount()) < 0) {
+            log.warn("Coupon {} (code '{}') rejected - order amount {} below minimum {}",
+                    coupon.getId(), code, orderAmount, coupon.getMinOrderAmount());
             throw new BadRequestException("Minimum order amount for this coupon is " + coupon.getMinOrderAmount());
         }
         if (Boolean.TRUE.equals(coupon.getFirstOrderOnly()) && !isFirstOrder) {
+            log.warn("Coupon {} (code '{}') rejected - first-order-only, caller is not on their first order", coupon.getId(), code);
             throw new BadRequestException("This coupon is only valid on your first order");
         }
         return coupon;
@@ -245,6 +283,7 @@ public class CouponService {
         DiscountType type = DiscountType.valueOf(coupon.getDiscountType());
         DiscountCalculator calculator = calculatorsByType.get(type);
         if (calculator == null) {
+            log.warn("No discount calculator registered for type {} (coupon {})", type, coupon.getId());
             throw new BadRequestException("Unsupported discount type: " + type);
         }
         return calculator;
@@ -269,6 +308,7 @@ public class CouponService {
         if ("flat".equalsIgnoreCase(wireValue) || "amount".equalsIgnoreCase(wireValue)) {
             return DiscountType.AMOUNT;
         }
+        log.warn("Unknown discount type requested: '{}'", wireValue);
         throw new BadRequestException("Unknown discount type: " + wireValue);
     }
 

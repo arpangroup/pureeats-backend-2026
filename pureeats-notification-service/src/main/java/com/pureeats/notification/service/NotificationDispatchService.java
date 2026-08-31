@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * The one bean every other module (order-service, rating-service, ...) calls to notify a user.
@@ -27,6 +28,7 @@ public class NotificationDispatchService {
 
     @Transactional
     public void notifyUser(Long userId, String title, String body) {
+        log.info("Notifying user {}: {}", userId, title);
         Alert alert = new Alert();
         alert.setUserId(userId);
         alert.setData("{\"title\":\"" + escape(title) + "\",\"body\":\"" + escape(body) + "\"}");
@@ -35,7 +37,9 @@ public class NotificationDispatchService {
         alert.setUpdatedAt(LocalDateTime.now());
         alertRepository.save(alert);
 
-        for (PushToken token : pushTokenRepository.findByUserIdAndIsActiveTrue(userId.intValue())) {
+        List<PushToken> tokens = pushTokenRepository.findByUserIdAndIsActiveTrue(userId.intValue());
+        log.debug("Found {} active push token(s) for user {}", tokens.size(), userId);
+        for (PushToken token : tokens) {
             log.info("[push-stub] would send to token={} title='{}' body='{}'", token.getToken(), title, body);
         }
     }

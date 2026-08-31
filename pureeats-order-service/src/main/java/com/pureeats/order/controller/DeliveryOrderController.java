@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,6 +18,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/delivery")
 @RequiredArgsConstructor
+@Slf4j
 @Tag(name = "Delivery rider", description = "Rider order workflow: accept, pickup, deliver, GPS tracking")
 @SecurityRequirement(name = "bearerAuth")
 public class DeliveryOrderController {
@@ -32,12 +34,14 @@ public class DeliveryOrderController {
     @PostMapping("/orders/{orderId}/accept")
     @Operation(summary = "Accept an order for delivery")
     public ApiResponse<OrderResponse> accept(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long orderId) {
+        log.info("Rider {} accepting order {} for delivery", principal.userId(), orderId);
         return ApiResponse.success("Order accepted for delivery", deliveryOrderService.acceptToDeliver(principal.userId(), orderId));
     }
 
     @PostMapping("/orders/{orderId}/pickup")
     @Operation(summary = "Mark an order as picked up from the restaurant")
     public ApiResponse<OrderResponse> pickup(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long orderId) {
+        log.info("Rider {} marking order {} as picked up", principal.userId(), orderId);
         return ApiResponse.success("Order marked as picked up", deliveryOrderService.pickedUp(principal.userId(), orderId));
     }
 
@@ -45,12 +49,14 @@ public class DeliveryOrderController {
     @Operation(summary = "Complete delivery by verifying the customer's delivery PIN")
     public ApiResponse<OrderResponse> deliver(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long orderId,
                                                @Valid @RequestBody DeliverOrderRequest request) {
+        log.info("Rider {} completing delivery for order {}", principal.userId(), orderId);
         return ApiResponse.success("Order delivered", deliveryOrderService.deliver(principal.userId(), orderId, request.deliveryPin()));
     }
 
     @PostMapping("/gps")
     @Operation(summary = "Report the rider's current GPS location for an order")
     public ApiResponse<Void> pingGps(@Valid @RequestBody GpsPingRequest request) {
+        log.debug("GPS ping received for order {}", request.orderId());
         deliveryOrderService.recordGpsPing(request);
         return ApiResponse.success("Location updated", null);
     }

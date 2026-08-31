@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -19,6 +20,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/support")
 @RequiredArgsConstructor
+@Slf4j
 @Tag(name = "Support", description = "Customer support tickets")
 @SecurityRequirement(name = "bearerAuth")
 public class SupportController {
@@ -30,6 +32,7 @@ public class SupportController {
     @Operation(summary = "Raise a support ticket")
     public ApiResponse<SupportResponse> create(@AuthenticationPrincipal AuthenticatedUser principal,
                                                 @Valid @RequestBody SupportRequest request) {
+        log.info("User {} raising support ticket for order {}", principal.userId(), request.orderId());
         return ApiResponse.success("Support ticket created", supportService.create(principal.userId(), request));
     }
 

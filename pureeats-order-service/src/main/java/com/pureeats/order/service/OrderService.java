@@ -63,15 +63,18 @@ public class OrderService {
 
     @Transactional
     public OrderResponse placeOrder(Long userId, PlaceOrderRequest request) {
+        log.info("Placing order for user {} at restaurant {}", userId, request.restaurantId());
         Restaurant restaurant = restaurantRepository.findById(request.restaurantId())
                 .orElseThrow(() -> new ResourceNotFoundException("Restaurant not found: " + request.restaurantId()));
         if (!Boolean.TRUE.equals(restaurant.getIsActive()) || !Boolean.TRUE.equals(restaurant.getIsAccepted())) {
+            log.warn("Rejected order for user {}: restaurant {} is not accepting orders", userId, restaurant.getId());
             throw new BadRequestException("This restaurant is not currently accepting orders");
         }
 
         Address address = addressRepository.findById(request.addressId())
                 .orElseThrow(() -> new ResourceNotFoundException("Address not found: " + request.addressId()));
         if (!address.getUserId().equals(userId.intValue())) {
+            log.warn("Rejected order for user {}: address {} does not belong to them", userId, request.addressId());
             throw new ForbiddenException("This address does not belong to you");
         }
 
@@ -97,6 +100,7 @@ public class OrderService {
             Item item = itemRepository.findById(itemRequest.itemId())
                     .orElseThrow(() -> new ResourceNotFoundException("Item not found: " + itemRequest.itemId()));
             if (!item.getRestaurantId().equals(restaurant.getId().intValue()) || !Boolean.TRUE.equals(item.getIsActive())) {
+                log.warn("Rejected order for user {}: item {} is not available at restaurant {}", userId, item.getId(), restaurant.getId());
                 throw new BadRequestException("Item " + item.getName() + " is not available at this restaurant");
             }
             List<Addon> addons = itemRequest.selectedAddonIds() == null ? List.of()
@@ -122,6 +126,8 @@ public class OrderService {
             freeDelivery = redemption.freeDelivery();
             order.setCouponCode(redemption.code());
             order.setCouponName(redemption.name());
+            log.debug("Applied coupon {} to order for user {}: discount={} freeDelivery={}",
+                    redemption.code(), userId, discount, freeDelivery);
         }
 
         BigDecimal amountAfterDiscount = itemTotal.subtract(discount);
@@ -149,6 +155,9 @@ public class OrderService {
         order.setOrderstatusId(orderStatusService.idFor(autoAccept ? OrderStatusCode.RESTAURANT_ACCEPTED : OrderStatusCode.PLACED));
 
         order = orderRepository.save(order);
+        log.info("Order {} (uniqueOrderId={}) created for user {} at restaurant {}, initial status {}, payable {}",
+                order.getId(), order.getUniqueOrderId(), userId, restaurant.getId(),
+                autoAccept ? OrderStatusCode.RESTAURANT_ACCEPTED : OrderStatusCode.PLACED, payable);
         orderStatusLogService.record(order.getId(), null,
                 autoAccept ? OrderStatusCode.RESTAURANT_ACCEPTED : OrderStatusCode.PLACED, "CUSTOMER", userId, "Order placed");
 
@@ -194,6 +203,7 @@ public class OrderService {
     public OrderResponse getOrder(Long userId, Long orderId) {
         Order order = findOrThrow(orderId);
         if (!order.getUserId().equals(userId.intValue())) {
+            log.warn("User {} attempted to access order {} which does not belong to them", userId, orderId);
             throw new ForbiddenException("This order does not belong to you");
         }
         return toResponse(order);
@@ -201,12 +211,15 @@ public class OrderService {
 
     @Transactional
     public void cancelOrder(Long userId, Long orderId) {
+        log.info("User {} requesting cancellation of order {}", userId, orderId);
         Order order = findOrThrow(orderId);
         if (!order.getUserId().equals(userId.intValue())) {
+            log.warn("User {} attempted to cancel order {} which does not belong to them", userId, orderId);
             throw new ForbiddenException("This order does not belong to you");
         }
         OrderStatusCode current = orderStatusService.codeFor(order.getOrderstatusId());
         if (current == OrderStatusCode.DELIVERED || current == OrderStatusCode.CANCELLED) {
+            log.warn("Rejected cancellation of order {}: already in terminal state {}", orderId, current);
             throw new BadRequestException("This order can no longer be cancelled");
         }
 
@@ -218,14 +231,17 @@ public class OrderService {
             walletService.credit(userId, order.getPayable(), "Refund for cancelled order #" + order.getUniqueOrderId());
         }
         orderStatusLogService.record(order.getId(), current, OrderStatusCode.CANCELLED, "CUSTOMER", userId, "Cancelled by customer");
+        log.info("Order {} transitioned {} -> CANCELLED by customer {}", orderId, current, userId);
     }
 
     /** Admin override - the only path that can jump straight to any status legal from the current one, not just the next role-specific step. */
     @Transactional
     public OrderResponse adminUpdateStatus(Long adminUserId, Long orderId, OrderStatusCode toStatus) {
+        log.info("Admin {} overriding status of order {} to {}", adminUserId, orderId, toStatus);
         Order order = findOrThrow(orderId);
         OrderStatusCode from = orderStatusService.codeFor(order.getOrderstatusId());
         if (!OrderStatusTransitions.isLegal(from, toStatus)) {
+            log.warn("Rejected admin status override for order {}: illegal transition {} -> {}", orderId, from, toStatus);
             throw new BadRequestException("Cannot change order status from "
                     + (from != null ? from.name() : "UNKNOWN") + " to " + toStatus.name());
         }
@@ -242,12 +258,16 @@ public class OrderService {
         orderStatusLogService.record(order.getId(), from, toStatus, "ADMIN", adminUserId, "Updated by admin");
         notificationDispatchService.notifyUser(order.getUserId().longValue(), "Order status updated",
                 "Your order #" + order.getUniqueOrderId() + " is now " + toStatus.name());
+        log.info("Order {} transitioned {} -> {} by admin {}", orderId, from, toStatus, adminUserId);
         return toResponse(order);
     }
 
     Order findOrThrow(Long orderId) {
         return orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
+                .orElseThrow(() -> {
+                    log.warn("Order not found: {}", orderId);
+                    return new ResourceNotFoundException("Order not found: " + orderId);
+                });
     }
 
     /** Admin listing - every order, optionally filtered by restaurant/status/uniqueOrderId search. */

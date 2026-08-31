@@ -9,6 +9,7 @@ import com.pureeats.domain.common.response.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -28,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 
 /** Admin CRUD for delivery partners - ADMIN or SUPER_ADMIN only. */
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
@@ -40,6 +42,7 @@ public class AdminDeliveryGuyController {
     public ApiResponse<PageResponse<AdminDeliveryGuyResponse>> list(
             @RequestParam(required = false) String search,
             @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+        log.debug("Listing delivery partners, search={}, page={}", search, pageable);
         return ApiResponse.success(deliveryGuyService.listPaged(search, pageable));
     }
 
@@ -52,16 +55,19 @@ public class AdminDeliveryGuyController {
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Create a delivery partner - provisions a login-capable user account and grants the DELIVERY role")
     public ApiResponse<AdminDeliveryGuyResponse> create(@RequestBody AdminDeliveryGuyRequest request) {
+        log.info("Admin request to create a delivery partner: {}", request.name());
         return ApiResponse.success("Delivery partner created", deliveryGuyService.create(request));
     }
 
     @PutMapping("/api/v1/admin/delivery-guys/{id}")
     public ApiResponse<AdminDeliveryGuyResponse> update(@PathVariable Long id, @RequestBody AdminDeliveryGuyRequest request) {
+        log.info("Admin request to update delivery partner {}", id);
         return ApiResponse.success("Delivery partner updated", deliveryGuyService.update(id, request));
     }
 
     @DeleteMapping("/api/v1/admin/delivery-guys/{id}")
     public ApiResponse<Void> delete(@PathVariable Long id) {
+        log.info("Admin request to delete delivery partner {}", id);
         deliveryGuyService.delete(id);
         return ApiResponse.success("Delivery partner removed", null);
     }

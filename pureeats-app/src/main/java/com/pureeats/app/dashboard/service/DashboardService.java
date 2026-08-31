@@ -19,6 +19,7 @@ import com.pureeats.rating.repository.RatingRepository;
 import com.pureeats.rating.service.RatingService;
 import com.pureeats.user.service.AdminUserService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -40,6 +41,7 @@ import java.util.stream.Collectors;
  * depends on every other module - a dashboard service anywhere else would need a dependency it
  * doesn't otherwise have.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -58,6 +60,7 @@ public class DashboardService {
     private final RatingService ratingService;
 
     public AdminDashboardResponse adminDashboard() {
+        log.debug("Computing admin dashboard stats");
         long totalOrders = orderRepository.count();
         BigDecimal totalRevenue = orderRepository.sumTotal();
         long activeRestaurants = restaurantRepository.countByIsActiveTrueAndIsAcceptedTrue();
@@ -81,6 +84,7 @@ public class DashboardService {
     }
 
     public OwnerDashboardResponse ownerDashboard(Long restaurantId) {
+        log.debug("Computing owner dashboard stats for restaurant {}", restaurantId);
         Integer restaurantIdInt = restaurantId.intValue();
         long totalOrders = orderRepository.countByRestaurantId(restaurantIdInt);
         BigDecimal totalRevenue = orderRepository.sumTotalForRestaurant(restaurantIdInt);

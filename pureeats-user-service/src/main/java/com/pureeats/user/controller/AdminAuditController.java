@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Read-only security/audit observability for admins - the seven tables backing the OTP-challenge
@@ -35,6 +36,7 @@ import lombok.RequiredArgsConstructor;
  * {@code pureeats-app}'s {@code SecurityConfig}). Neither layer depends on the other - removing
  * one still leaves the endpoints protected by the other.
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/admin")
 @RequiredArgsConstructor
@@ -49,6 +51,7 @@ public class AdminAuditController {
     public ApiResponse<PageResponse<AuditLogResponse>> listAuditLogs(
             @RequestParam(required = false) Long userId,
             @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+        log.debug("Admin listing audit logs, userId={}", userId);
         return ApiResponse.success(adminAuditService.listAuditLogs(userId, pageable));
     }
 
@@ -57,6 +60,7 @@ public class AdminAuditController {
     public ApiResponse<PageResponse<LoginHistoryResponse>> listLoginHistory(
             @RequestParam(required = false) Long userId,
             @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+        log.debug("Admin listing login history, userId={}", userId);
         return ApiResponse.success(adminAuditService.listLoginHistory(userId, pageable));
     }
 
@@ -65,6 +69,7 @@ public class AdminAuditController {
     public ApiResponse<PageResponse<OtpChallengeResponse>> listOtpChallenges(
             @RequestParam(required = false) Long userId,
             @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+        log.debug("Admin listing OTP challenges, userId={}", userId);
         return ApiResponse.success(adminAuditService.listOtpChallenges(userId, pageable));
     }
 
@@ -72,6 +77,7 @@ public class AdminAuditController {
     @Operation(summary = "List rate-limit counter buckets")
     public ApiResponse<PageResponse<RateLimitBucketResponse>> listRateLimitBuckets(
             @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+        log.debug("Admin listing rate-limit buckets");
         return ApiResponse.success(adminAuditService.listRateLimitBuckets(pageable));
     }
 
@@ -80,6 +86,7 @@ public class AdminAuditController {
     public ApiResponse<PageResponse<SecurityBlockEntryResponse>> listSecurityBlockEntries(
             @RequestParam(required = false) BlockType blockType,
             @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+        log.debug("Admin listing security blocklist entries, blockType={}", blockType);
         return ApiResponse.success(adminAuditService.listSecurityBlockEntries(blockType, pageable));
     }
 
@@ -88,6 +95,7 @@ public class AdminAuditController {
     public ApiResponse<PageResponse<UserDeviceResponse>> listUserDevices(
             @RequestParam(required = false) Long userId,
             @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+        log.debug("Admin listing user devices, userId={}", userId);
         return ApiResponse.success(adminAuditService.listUserDevices(userId, pageable));
     }
 
@@ -96,6 +104,7 @@ public class AdminAuditController {
     public ApiResponse<PageResponse<UserSessionResponse>> listUserSessions(
             @RequestParam(required = false) Long userId,
             @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+        log.debug("Admin listing user sessions, userId={}", userId);
         return ApiResponse.success(adminAuditService.listUserSessions(userId, pageable));
     }
 }

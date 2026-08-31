@@ -9,12 +9,14 @@ import com.pureeats.user.dto.AddressResponse;
 import com.pureeats.user.repository.AddressRepository;
 import com.pureeats.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AddressService {
@@ -25,9 +27,11 @@ public class AddressService {
     @Transactional(readOnly = true)
     public List<AddressResponse> list(Long userId) {
         User user = findUser(userId);
-        return addressRepository.findByUserId(userId.intValue()).stream()
+        List<AddressResponse> addresses = addressRepository.findByUserId(userId.intValue()).stream()
                 .map(a -> toResponse(a, user))
                 .toList();
+        log.debug("Found {} addresses for user {}", addresses.size(), userId);
+        return addresses;
     }
 
     @Transactional
@@ -51,6 +55,7 @@ public class AddressService {
             user.setDefaultAddressId(address.getId().intValue());
             userRepository.save(user);
         }
+        log.info("Address {} saved for user {} (default={})", address.getId(), userId, isFirstAddress || request.makeDefault());
         return toResponse(address, user);
     }
 
@@ -71,6 +76,7 @@ public class AddressService {
             user.setDefaultAddressId(address.getId().intValue());
             userRepository.save(user);
         }
+        log.info("Address {} updated for user {}", addressId, userId);
         return toResponse(address, user);
     }
 
@@ -84,6 +90,7 @@ public class AddressService {
             user.setDefaultAddressId(null);
             userRepository.save(user);
         }
+        log.info("Address {} deleted for user {}", addressId, userId);
     }
 
     @Transactional
@@ -92,12 +99,17 @@ public class AddressService {
         User user = findUser(userId);
         user.setDefaultAddressId(address.getId().intValue());
         userRepository.save(user);
+        log.info("Default address for user {} set to {}", userId, addressId);
     }
 
     private Address findOwnedAddress(Long userId, Long addressId) {
         Address address = addressRepository.findById(addressId)
-                .orElseThrow(() -> new ResourceNotFoundException("Address not found: " + addressId));
+                .orElseThrow(() -> {
+                    log.warn("Address {} not found for user {}", addressId, userId);
+                    return new ResourceNotFoundException("Address not found: " + addressId);
+                });
         if (!address.getUserId().equals(userId.intValue())) {
+            log.warn("User {} attempted to access address {} owned by another user", userId, addressId);
             throw new ForbiddenException("This address does not belong to you");
         }
         return address;
@@ -105,7 +117,10 @@ public class AddressService {
 
     private User findUser(Long userId) {
         return userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userId));
+                .orElseThrow(() -> {
+                    log.warn("User {} not found", userId);
+                    return new ResourceNotFoundException("User not found: " + userId);
+                });
     }
 
     private AddressResponse toResponse(Address address, User user) {

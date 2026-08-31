@@ -27,12 +27,14 @@ public class GlobalExceptionHandler {
         if (ex.getAttemptsRemaining() != null) {
             data.put("attemptsRemaining", ex.getAttemptsRemaining());
         }
+        log.warn("[{}] Invalid OTP attempt: {} (attemptsRemaining={})", RequestIdContext.get(), ex.getMessage(), ex.getAttemptsRemaining());
         return ResponseEntity.status(ex.getHttpStatus())
                 .body(ApiResponse.error(ex.getMessage(), data, ex.getErrorCode(), RequestIdContext.get()));
     }
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ApiResponse<Void>> handleApiException(ApiException ex) {
+        log.warn("[{}] {} - {} ({})", RequestIdContext.get(), ex.getHttpStatus(), ex.getMessage(), ex.getErrorCode());
         return ResponseEntity.status(ex.getHttpStatus())
                 .body(ApiResponse.error(ex.getMessage(), ex.getErrorCode(), RequestIdContext.get()));
     }
@@ -41,29 +43,33 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Map<String, String>>> handleValidation(MethodArgumentNotValidException ex) {
         Map<String, String> fieldErrors = new LinkedHashMap<>();
         ex.getBindingResult().getFieldErrors().forEach(e -> fieldErrors.put(e.getField(), e.getDefaultMessage()));
+        log.warn("[{}] Validation failed: {}", RequestIdContext.get(), fieldErrors);
         return ResponseEntity.badRequest().body(ApiResponse.error("Validation failed", fieldErrors));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleConstraintViolation(ConstraintViolationException ex) {
+        log.warn("[{}] Constraint violation: {}", RequestIdContext.get(), ex.getMessage());
         return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
     }
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException ex) {
+        log.warn("[{}] Access denied: {}", RequestIdContext.get(), ex.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiResponse.error("Access denied", "FORBIDDEN", RequestIdContext.get()));
     }
 
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ApiResponse<Void>> handleAuthentication(AuthenticationException ex) {
+        log.warn("[{}] Authentication required: {}", RequestIdContext.get(), ex.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(ApiResponse.error("Authentication required", "UNAUTHORIZED", RequestIdContext.get()));
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnexpected(Exception ex) {
-        log.error("Unhandled exception", ex);
+        log.error("[{}] Unhandled exception", RequestIdContext.get(), ex);
         return ResponseEntity.internalServerError()
                 .body(ApiResponse.error("An unexpected error occurred", "INTERNAL_ERROR", RequestIdContext.get()));
     }

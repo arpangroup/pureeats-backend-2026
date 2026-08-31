@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,6 +18,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/store-owner/restaurants/{restaurantId}/orders")
 @RequiredArgsConstructor
+@Slf4j
 @Tag(name = "Store owner - Orders", description = "Order workflow for a restaurant owner")
 @SecurityRequirement(name = "bearerAuth")
 public class StoreOwnerOrderController {
@@ -41,6 +43,7 @@ public class StoreOwnerOrderController {
     @Operation(summary = "Accept a newly placed order")
     public ApiResponse<OrderResponse> accept(@AuthenticationPrincipal AuthenticatedUser principal,
                                               @PathVariable Long restaurantId, @PathVariable Long orderId) {
+        log.info("Store owner {} accepting order {} for restaurant {}", principal.userId(), orderId, restaurantId);
         return ApiResponse.success("Order accepted", storeOwnerOrderService.accept(principal.userId(), orderId));
     }
 
@@ -48,6 +51,7 @@ public class StoreOwnerOrderController {
     @Operation(summary = "Mark an order ready for pickup")
     public ApiResponse<OrderResponse> ready(@AuthenticationPrincipal AuthenticatedUser principal,
                                              @PathVariable Long restaurantId, @PathVariable Long orderId) {
+        log.info("Store owner {} marking order {} ready for pickup", principal.userId(), orderId);
         return ApiResponse.success("Order marked ready", storeOwnerOrderService.markReady(principal.userId(), orderId));
     }
 
@@ -55,6 +59,7 @@ public class StoreOwnerOrderController {
     @Operation(summary = "Mark a self-pickup order as completed")
     public ApiResponse<OrderResponse> selfPickupComplete(@AuthenticationPrincipal AuthenticatedUser principal,
                                                           @PathVariable Long restaurantId, @PathVariable Long orderId) {
+        log.info("Store owner {} marking order {} self-pickup completed", principal.userId(), orderId);
         return ApiResponse.success("Order marked as picked up", storeOwnerOrderService.markSelfPickupCompleted(principal.userId(), orderId));
     }
 
@@ -62,6 +67,7 @@ public class StoreOwnerOrderController {
     @Operation(summary = "Cancel an order")
     public ApiResponse<OrderResponse> cancel(@AuthenticationPrincipal AuthenticatedUser principal,
                                               @PathVariable Long restaurantId, @PathVariable Long orderId) {
+        log.info("Store owner {} cancelling order {}", principal.userId(), orderId);
         return ApiResponse.success("Order cancelled", storeOwnerOrderService.cancel(principal.userId(), orderId));
     }
 }

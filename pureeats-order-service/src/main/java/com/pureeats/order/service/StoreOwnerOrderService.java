@@ -9,6 +9,7 @@ import com.pureeats.order.dto.OrderResponse;
 import com.pureeats.order.dto.OrderSummaryResponse;
 import com.pureeats.order.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +19,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class StoreOwnerOrderService {
 
     private static final int DEFAULT_PREPARE_TIME_MINUTES = 20;
@@ -52,6 +54,7 @@ public class StoreOwnerOrderService {
 
     @Transactional
     public OrderResponse accept(Long ownerUserId, Long orderId) {
+        log.info("Store owner {} accepting order {}", ownerUserId, orderId);
         Order order = ownedOrder(ownerUserId, orderId);
         requireStatus(order, OrderStatusCode.PLACED);
 
@@ -60,6 +63,7 @@ public class StoreOwnerOrderService {
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
         orderStatusLogService.record(order.getId(), OrderStatusCode.PLACED, OrderStatusCode.RESTAURANT_ACCEPTED, "STORE_OWNER", ownerUserId, null);
+        log.info("Order {} transitioned PLACED -> RESTAURANT_ACCEPTED by store owner {}", orderId, ownerUserId);
 
         notificationDispatchService.notifyUser(order.getUserId().longValue(), "Order accepted",
                 "Your order #" + order.getUniqueOrderId() + " has been accepted by the restaurant");
@@ -68,6 +72,7 @@ public class StoreOwnerOrderService {
 
     @Transactional
     public OrderResponse markReady(Long ownerUserId, Long orderId) {
+        log.info("Store owner {} marking order {} ready for pickup", ownerUserId, orderId);
         Order order = ownedOrder(ownerUserId, orderId);
         requireStatus(order, OrderStatusCode.RESTAURANT_ACCEPTED);
 
@@ -75,11 +80,13 @@ public class StoreOwnerOrderService {
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
         orderStatusLogService.record(order.getId(), OrderStatusCode.RESTAURANT_ACCEPTED, OrderStatusCode.READY_FOR_PICKUP, "STORE_OWNER", ownerUserId, null);
+        log.info("Order {} transitioned RESTAURANT_ACCEPTED -> READY_FOR_PICKUP by store owner {}", orderId, ownerUserId);
         return orderService.toResponse(order);
     }
 
     @Transactional
     public OrderResponse markSelfPickupCompleted(Long ownerUserId, Long orderId) {
+        log.info("Store owner {} marking order {} self-pickup completed", ownerUserId, orderId);
         Order order = ownedOrder(ownerUserId, orderId);
         requireStatus(order, OrderStatusCode.READY_FOR_PICKUP);
 
@@ -87,6 +94,7 @@ public class StoreOwnerOrderService {
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
         orderStatusLogService.record(order.getId(), OrderStatusCode.READY_FOR_PICKUP, OrderStatusCode.SELF_PICKUP_COMPLETED, "STORE_OWNER", ownerUserId, null);
+        log.info("Order {} transitioned READY_FOR_PICKUP -> SELF_PICKUP_COMPLETED by store owner {}", orderId, ownerUserId);
 
         BigDecimal restaurantEarning = order.getTotal().subtract(order.getRestaurantCharge());
         restaurantPayoutService.recordEarning(order.getRestaurantId(), restaurantEarning);
@@ -95,10 +103,12 @@ public class StoreOwnerOrderService {
 
     @Transactional
     public OrderResponse cancel(Long ownerUserId, Long orderId) {
+        log.info("Store owner {} cancelling order {}", ownerUserId, orderId);
         Order order = ownedOrder(ownerUserId, orderId);
         OrderStatusCode current = orderStatusService.codeFor(order.getOrderstatusId());
         if (current == OrderStatusCode.DELIVERED || current == OrderStatusCode.CANCELLED
                 || current == OrderStatusCode.SELF_PICKUP_COMPLETED) {
+            log.warn("Rejected cancellation of order {} by store owner {}: already in terminal state {}", orderId, ownerUserId, current);
             throw new BadRequestException("This order can no longer be cancelled");
         }
 
@@ -111,6 +121,7 @@ public class StoreOwnerOrderService {
                     "Refund for cancelled order #" + order.getUniqueOrderId());
         }
         orderStatusLogService.record(order.getId(), current, OrderStatusCode.CANCELLED, "STORE_OWNER", ownerUserId, null);
+        log.info("Order {} transitioned {} -> CANCELLED by store owner {}", orderId, current, ownerUserId);
         notificationDispatchService.notifyUser(order.getUserId().longValue(), "Order cancelled",
                 "Your order #" + order.getUniqueOrderId() + " was cancelled by the restaurant");
         return orderService.toResponse(order);
@@ -135,7 +146,9 @@ public class StoreOwnerOrderService {
     }
 
     private void requireStatus(Order order, OrderStatusCode expected) {
-        if (orderStatusService.codeFor(order.getOrderstatusId()) != expected) {
+        OrderStatusCode actual = orderStatusService.codeFor(order.getOrderstatusId());
+        if (actual != expected) {
+            log.warn("Rejected action on order {}: expected status {} but found {}", order.getId(), expected, actual);
             throw new BadRequestException("Order is not in the expected state for this action");
         }
     }

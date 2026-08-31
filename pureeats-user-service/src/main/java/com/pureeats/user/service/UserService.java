@@ -8,12 +8,14 @@ import com.pureeats.user.dto.UpdateUserRequest;
 import com.pureeats.user.dto.UserResponse;
 import com.pureeats.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -40,6 +42,7 @@ public class UserService {
         }
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
+        log.info("Profile updated for user {}", userId);
         return UserMapper.toResponse(user, roleService.resolveRole(userId), mediaUrlResolver.resolve(user.getPhoto()));
     }
 
@@ -50,11 +53,15 @@ public class UserService {
         user.setPhoto(storageKey);
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
+        log.info("Profile photo updated for user {}", userId);
         return UserMapper.toResponse(user, roleService.resolveRole(userId), mediaUrlResolver.resolve(storageKey));
     }
 
     User findUserOrThrow(Long userId) {
         return userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userId));
+                .orElseThrow(() -> {
+                    log.warn("User {} not found", userId);
+                    return new ResourceNotFoundException("User not found: " + userId);
+                });
     }
 }

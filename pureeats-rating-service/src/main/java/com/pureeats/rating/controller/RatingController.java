@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -18,6 +19,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/ratings")
 @RequiredArgsConstructor
+@Slf4j
 @Tag(name = "Ratings", description = "Order, restaurant and driver ratings")
 public class RatingController {
 
@@ -27,6 +29,7 @@ public class RatingController {
     @SecurityRequirement(name = "bearerAuth")
     @Operation(summary = "List the signed-in user's delivered orders that are still unrated")
     public ApiResponse<List<RatableOrderResponse>> ratableOrders(@AuthenticationPrincipal AuthenticatedUser principal) {
+        log.debug("Listing ratable orders for user {}", principal.userId());
         return ApiResponse.success(ratingService.ratableOrders(principal.userId()));
     }
 
@@ -36,12 +39,16 @@ public class RatingController {
     @Operation(summary = "Submit a rating for a restaurant or driver on a delivered order")
     public ApiResponse<RatingResponse> submit(@AuthenticationPrincipal AuthenticatedUser principal,
                                                @Valid @RequestBody SubmitRatingRequest request) {
-        return ApiResponse.success("Rating submitted", ratingService.submit(principal.userId(), request));
+        log.info("User {} submitting {} rating for order {}", principal.userId(), request.rateableType(), request.orderId());
+        RatingResponse response = ratingService.submit(principal.userId(), request);
+        log.info("Rating {} submitted by user {} for order {}", response.id(), principal.userId(), request.orderId());
+        return ApiResponse.success("Rating submitted", response);
     }
 
     @GetMapping("/restaurants/{restaurantId}")
     @Operation(summary = "List a restaurant's ratings")
     public ApiResponse<List<RatingResponse>> restaurantRatings(@PathVariable Long restaurantId) {
+        log.debug("Listing ratings for restaurant {}", restaurantId);
         return ApiResponse.success(ratingService.restaurantRatings(restaurantId));
     }
 
@@ -54,6 +61,7 @@ public class RatingController {
     @GetMapping("/drivers/{deliveryGuyDetailId}")
     @Operation(summary = "List a driver's ratings")
     public ApiResponse<List<RatingResponse>> driverRatings(@PathVariable Long deliveryGuyDetailId) {
+        log.debug("Listing ratings for driver {}", deliveryGuyDetailId);
         return ApiResponse.success(ratingService.driverRatings(deliveryGuyDetailId));
     }
 

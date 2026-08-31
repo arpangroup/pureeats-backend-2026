@@ -18,6 +18,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -36,6 +37,7 @@ import java.util.List;
 /** Admin-panel order directory - every order across every customer/restaurant, not just the caller's own. */
 @RestController
 @RequiredArgsConstructor
+@Slf4j
 @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
 @Tag(name = "Admin Orders", description = "Order directory + status override - ADMIN or SUPER_ADMIN only")
 public class AdminOrderController {
@@ -71,6 +73,7 @@ public class AdminOrderController {
     @Operation(summary = "Override an order's status (validated against the same transition graph the UI uses to grey out illegal choices)")
     public ApiResponse<OrderResponse> updateStatus(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long id,
                                                     @Valid @RequestBody UpdateOrderStatusRequest request) {
+        log.info("Admin {} overriding status of order {} to {}", principal.userId(), id, request.toStatus());
         return ApiResponse.success("Order status updated", orderService.adminUpdateStatus(principal.userId(), id, request.toStatus()));
     }
 
@@ -90,6 +93,7 @@ public class AdminOrderController {
     @Operation(summary = "Assign a specific delivery partner to this order directly")
     public ApiResponse<OrderResponse> assignDriver(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long id,
                                                     @Valid @RequestBody AssignDriverRequest request) {
+        log.info("Admin {} assigning rider {} to order {}", principal.userId(), request.riderUserId(), id);
         return ApiResponse.success("Driver assigned", deliveryOrderService.assignDriverAsAdmin(principal.userId(), id, request.riderUserId()));
     }
 }

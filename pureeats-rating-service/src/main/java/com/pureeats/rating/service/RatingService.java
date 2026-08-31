@@ -11,6 +11,7 @@ import com.pureeats.rating.dto.*;
 import com.pureeats.rating.repository.RatingRepository;
 import com.pureeats.user.repository.DeliveryGuyDetailRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +22,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class RatingService {
 
     private final RatingRepository ratingRepository;
@@ -31,21 +33,28 @@ public class RatingService {
     @Transactional(readOnly = true)
     public List<RatableOrderResponse> ratableOrders(Long userId) {
         Integer deliveredStatusId = orderStatusService.idFor(OrderStatusCode.DELIVERED);
-        return orderRepository.findByUserIdOrderByCreatedAtDesc(userId.intValue()).stream()
+        List<RatableOrderResponse> results = orderRepository.findByUserIdOrderByCreatedAtDesc(userId.intValue()).stream()
                 .filter(o -> o.getOrderstatusId().equals(deliveredStatusId))
                 .filter(o -> ratingRepository.findByOrderId(o.getId().intValue()).isEmpty())
                 .map(o -> new RatableOrderResponse(o.getId(), o.getUniqueOrderId(), o.getRestaurantId().longValue()))
                 .toList();
+        log.debug("Found {} ratable order(s) for user {}", results.size(), userId);
+        return results;
     }
 
     @Transactional
     public RatingResponse submit(Long userId, SubmitRatingRequest request) {
         Order order = orderRepository.findById(request.orderId())
-                .orElseThrow(() -> new BadRequestException("Order not found: " + request.orderId()));
+                .orElseThrow(() -> {
+                    log.warn("Rating submission failed: order {} not found", request.orderId());
+                    return new BadRequestException("Order not found: " + request.orderId());
+                });
         if (!order.getUserId().equals(userId.intValue())) {
+            log.warn("User {} attempted to rate order {} which does not belong to them", userId, request.orderId());
             throw new ForbiddenException("This order does not belong to you");
         }
         if (orderStatusService.codeFor(order.getOrderstatusId()) != OrderStatusCode.DELIVERED) {
+            log.warn("User {} attempted to rate order {} which is not yet delivered", userId, request.orderId());
             throw new BadRequestException("You can only rate delivered orders");
         }
 
@@ -53,6 +62,7 @@ public class RatingService {
         boolean alreadyRated = ratingRepository.findByOrderId(order.getId().intValue()).stream()
                 .anyMatch(r -> r.getRateableType().equals(morphType));
         if (alreadyRated) {
+            log.warn("User {} attempted to re-rate {} on order {}", userId, request.rateableType(), request.orderId());
             throw new BadRequestException("You have already rated this " + request.rateableType().name().toLowerCase());
         }
 
@@ -67,6 +77,8 @@ public class RatingService {
         rating.setCreatedAt(LocalDateTime.now());
         rating.setUpdatedAt(LocalDateTime.now());
         rating = ratingRepository.save(rating);
+        log.info("Rating {} submitted for order {} ({}={}, score={})", rating.getId(), order.getId(),
+                request.rateableType(), request.rateableId(), request.rating());
 
         if (request.rateableType() == RateableType.DRIVER) {
             recalculateDriverRating(request.rateableId());
@@ -105,10 +117,11 @@ public class RatingService {
 
     private void recalculateDriverRating(Long deliveryGuyDetailId) {
         AverageRatingResponse avg = average(RateableType.DRIVER, deliveryGuyDetailId);
-        deliveryGuyDetailRepository.findById(deliveryGuyDetailId).ifPresent(detail -> {
+        deliveryGuyDetailRepository.findById(deliveryGuyDetailId).ifPresentOrElse(detail -> {
             detail.setRating(BigDecimal.valueOf(avg.average()).setScale(2, RoundingMode.HALF_UP));
             deliveryGuyDetailRepository.save(detail);
-        });
+            log.debug("Recalculated driver {} rating to {} (from {} ratings)", deliveryGuyDetailId, detail.getRating(), avg.count());
+        }, () -> log.warn("Cannot recalculate rating: delivery guy detail {} not found", deliveryGuyDetailId));
     }
 
     private RatingResponse toResponse(Rating r) {

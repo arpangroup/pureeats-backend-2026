@@ -13,6 +13,7 @@ import com.pureeats.order.dto.WalletTransactionResponse;
 import com.pureeats.order.repository.TransactionRepository;
 import com.pureeats.order.repository.WalletRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -33,6 +34,7 @@ import java.util.UUID;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class WalletService {
 
     private static final String USER_HOLDER_TYPE = "App\\User";
@@ -64,6 +66,7 @@ public class WalletService {
         wallet.setUpdatedAt(LocalDateTime.now());
         walletRepository.save(wallet);
         recordTransaction(wallet, TX_TYPE_DEPOSIT, amount, meta);
+        log.info("Wallet {} credited {} for user {} ({})", wallet.getId(), amount, userId, meta);
     }
 
     @Transactional
@@ -73,6 +76,7 @@ public class WalletService {
         wallet.setUpdatedAt(LocalDateTime.now());
         walletRepository.save(wallet);
         recordTransaction(wallet, TX_TYPE_WITHDRAW, amount, meta);
+        log.info("Wallet {} debited {} for user {} ({})", wallet.getId(), amount, userId, meta);
     }
 
     /** Admin-facing lookup (or lazy-create) of any user's wallet - unlike {@link #getBalance}, returns the full record. */
@@ -90,8 +94,12 @@ public class WalletService {
     /** Admin-initiated credit/debit against a wallet the admin is viewing (identified by walletId, not userId). */
     @Transactional
     public AdminWalletResponse adjust(Long walletId, WalletAdjustRequest request) {
+        log.info("Admin adjusting wallet {}: type={} amount={}", walletId, request.type(), request.amount());
         Wallet wallet = walletRepository.findById(walletId)
-                .orElseThrow(() -> new ResourceNotFoundException("Wallet not found: " + walletId));
+                .orElseThrow(() -> {
+                    log.warn("Wallet not found: {}", walletId);
+                    return new ResourceNotFoundException("Wallet not found: " + walletId);
+                });
         if ("debit".equalsIgnoreCase(request.type())) {
             debit(wallet.getHolderId(), request.amount(), request.message());
         } else {
@@ -136,6 +144,7 @@ public class WalletService {
     private Wallet getOrCreateWallet(Long userId) {
         return walletRepository.findByHolderTypeAndHolderId(USER_HOLDER_TYPE, userId)
                 .orElseGet(() -> {
+                    log.info("Creating new wallet for user {}", userId);
                     Wallet wallet = new Wallet();
                     wallet.setHolderType(USER_HOLDER_TYPE);
                     wallet.setHolderId(userId);

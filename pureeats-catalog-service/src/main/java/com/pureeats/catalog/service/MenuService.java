@@ -18,6 +18,7 @@ import com.pureeats.domain.entity.ItemCategory;
 import com.pureeats.media.service.MediaAssetService;
 import com.pureeats.media.storage.MediaUrlResolver;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class MenuService {
@@ -61,6 +63,7 @@ public class MenuService {
     /** Admin listing - every item, optionally scoped to one restaurant and/or a name search. */
     @Transactional(readOnly = true)
     public PageResponse<ItemResponse> listItemsPaged(Long restaurantId, String search, Pageable pageable) {
+        log.debug("Admin listing items, restaurant {} search '{}' page {}", restaurantId, search, pageable.getPageNumber());
         Page<Item> page = itemRepository.findPage(restaurantId != null ? restaurantId.intValue() : null, search, pageable);
         return PageResponse.of(page.getContent().stream().map(this::toItemResponse).toList(),
                 page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
@@ -91,13 +94,18 @@ public class MenuService {
         category.setIsEnabled(enabled);
         category.setUpdatedAt(LocalDateTime.now());
         itemCategoryRepository.save(category);
+        log.info("Item category {} {} by owner {}", categoryId, enabled ? "enabled" : "disabled", ownerUserId);
     }
 
     /** Admin update - no ownership check, unlike the store-owner-scoped methods above. */
     @Transactional
     public ItemCategoryResponse updateCategoryAsAdmin(Long categoryId, ItemCategoryRequest request) {
+        log.info("Admin updating item category {}", categoryId);
         ItemCategory category = itemCategoryRepository.findById(categoryId)
-                .orElseThrow(() -> new ResourceNotFoundException("Item category not found: " + categoryId));
+                .orElseThrow(() -> {
+                    log.warn("Admin update failed - item category {} not found", categoryId);
+                    return new ResourceNotFoundException("Item category not found: " + categoryId);
+                });
         category.setName(request.name());
         category.setUpdatedAt(LocalDateTime.now());
         return toCategoryResponse(itemCategoryRepository.save(category));
@@ -105,13 +113,18 @@ public class MenuService {
 
     @Transactional
     public void deleteCategoryAsAdmin(Long categoryId) {
+        log.info("Admin deleting item category {}", categoryId);
         ItemCategory category = itemCategoryRepository.findById(categoryId)
-                .orElseThrow(() -> new ResourceNotFoundException("Item category not found: " + categoryId));
+                .orElseThrow(() -> {
+                    log.warn("Admin delete failed - item category {} not found", categoryId);
+                    return new ResourceNotFoundException("Item category not found: " + categoryId);
+                });
         itemCategoryRepository.delete(category);
     }
 
     @Transactional
     public ItemResponse createItem(Long ownerUserId, Long restaurantId, ItemRequest request) {
+        log.info("Creating item '{}' for restaurant {} by owner {}", request.name(), restaurantId, ownerUserId);
         restaurantService.assertOwnership(ownerUserId, restaurantId);
 
         Item item = new Item();
@@ -129,14 +142,20 @@ public class MenuService {
         item.setIsActive(true);
         item.setCreatedAt(LocalDateTime.now());
         item.setUpdatedAt(LocalDateTime.now());
-        return toItemResponse(itemRepository.save(item));
+        ItemResponse response = toItemResponse(itemRepository.save(item));
+        log.info("Item {} created for restaurant {}", response.id(), restaurantId);
+        return response;
     }
 
     @Transactional
     public ItemResponse updateItem(Long ownerUserId, Long itemId, ItemRequest request) {
+        log.info("Owner {} updating item {}", ownerUserId, itemId);
         Item item = findItemOrThrow(itemId);
         restaurantService.assertOwnership(ownerUserId, item.getRestaurantId().longValue());
 
+        if (request.price() != null && item.getPrice() != null && request.price().compareTo(item.getPrice()) != 0) {
+            log.info("Item {} price updated from {} to {}", itemId, item.getPrice(), request.price());
+        }
         item.setItemCategoryId(request.itemCategoryId().intValue());
         item.setName(request.name());
         item.setPrice(request.price());
@@ -159,11 +178,13 @@ public class MenuService {
         item.setIsActive(enabled);
         item.setUpdatedAt(LocalDateTime.now());
         itemRepository.save(item);
+        log.info("Item {} {} by owner {}", itemId, enabled ? "enabled" : "disabled", ownerUserId);
     }
 
     /** Admin create - no ownership check, restaurantId comes from the request itself. */
     @Transactional
     public ItemResponse createItemAsAdmin(AdminItemCreateRequest request) {
+        log.info("Admin creating item '{}' for restaurant {}", request.name(), request.restaurantId());
         validateRestaurantAndCategory(request.restaurantId(), request.itemCategoryId());
 
         Item item = new Item();
@@ -187,6 +208,7 @@ public class MenuService {
     /** Admin partial update - only non-null fields are applied, no ownership check. */
     @Transactional
     public ItemResponse patchItemAsAdmin(Long itemId, ItemPatchRequest request) {
+        log.info("Admin patching item {}", itemId);
         Item item = findItemOrThrow(itemId);
         if (request.itemCategoryId() != null) item.setItemCategoryId(request.itemCategoryId().intValue());
         if (request.name() != null) item.setName(request.name());
@@ -204,12 +226,14 @@ public class MenuService {
 
     @Transactional
     public void deleteItemAsAdmin(Long itemId) {
+        log.info("Admin deleting item {}", itemId);
         itemRepository.delete(findItemOrThrow(itemId));
     }
 
     /** Verifies each row's restaurantId/itemCategoryId before saving it; a bad row is skipped, not fatal to the batch. */
     @Transactional
     public ItemBulkUploadResponse bulkCreateItems(List<AdminItemCreateRequest> rows) {
+        log.info("Bulk-creating {} items", rows.size());
         List<ItemBulkRowResult> results = new ArrayList<>();
         int successCount = 0;
         for (int i = 0; i < rows.size(); i++) {
@@ -218,14 +242,17 @@ public class MenuService {
                 results.add(new ItemBulkRowResult(i, true, "Created", created.id()));
                 successCount++;
             } catch (Exception e) {
+                log.warn("Bulk-create row {} failed: {}", i, e.getMessage());
                 results.add(new ItemBulkRowResult(i, false, e.getMessage(), null));
             }
         }
+        log.info("Bulk-create finished: {}/{} rows succeeded", successCount, rows.size());
         return new ItemBulkUploadResponse(rows.size(), successCount, rows.size() - successCount, results);
     }
 
     @Transactional
     public ItemImageResponse uploadItemImage(Long itemId, MultipartFile file, Long uploadedBy) {
+        log.info("Uploading image for item {} by user {}", itemId, uploadedBy);
         Item item = findItemOrThrow(itemId);
         String storageKey = mediaAssetService.upload(file, ITEM_IMAGE_OWNER_TYPE, itemId, uploadedBy).storageKey();
         item.setImage(storageKey);
@@ -236,17 +263,23 @@ public class MenuService {
 
     private void validateRestaurantAndCategory(Long restaurantId, Long itemCategoryId) {
         if (!restaurantService.exists(restaurantId)) {
+            log.warn("Restaurant {} not found while validating item creation", restaurantId);
             throw new ResourceNotFoundException("Restaurant not found: " + restaurantId);
         }
         if (itemCategoryId == null || !itemCategoryRepository.existsById(itemCategoryId)) {
+            log.warn("Item category {} not found while validating item creation", itemCategoryId);
             throw new ResourceNotFoundException("Item category not found: " + itemCategoryId);
         }
     }
 
     private ItemCategory assertCategoryOwnership(Long ownerUserId, Long categoryId) {
         ItemCategory category = itemCategoryRepository.findById(categoryId)
-                .orElseThrow(() -> new ResourceNotFoundException("Item category not found: " + categoryId));
+                .orElseThrow(() -> {
+                    log.warn("Item category {} not found while checking ownership for owner {}", categoryId, ownerUserId);
+                    return new ResourceNotFoundException("Item category not found: " + categoryId);
+                });
         if (!category.getUserId().equals(ownerUserId.intValue())) {
+            log.warn("Owner {} attempted to use item category {} owned by user {}", ownerUserId, categoryId, category.getUserId());
             throw new com.pureeats.domain.common.exception.ForbiddenException("This category does not belong to you");
         }
         return category;
@@ -254,7 +287,10 @@ public class MenuService {
 
     Item findItemOrThrow(Long itemId) {
         return itemRepository.findById(itemId)
-                .orElseThrow(() -> new ResourceNotFoundException("Item not found: " + itemId));
+                .orElseThrow(() -> {
+                    log.warn("Item {} not found", itemId);
+                    return new ResourceNotFoundException("Item not found: " + itemId);
+                });
     }
 
     private ItemCategoryResponse toCategoryResponse(ItemCategory c) {

@@ -12,12 +12,14 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/store-owner")
 @RequiredArgsConstructor
@@ -38,6 +40,7 @@ public class StoreOwnerAddonController {
     @Operation(summary = "Create an addon category")
     public ApiResponse<AddonCategoryResponse> createCategory(@AuthenticationPrincipal AuthenticatedUser principal,
                                                                @Valid @RequestBody AddonCategoryRequest request) {
+        log.debug("Owner {}: create addon category '{}'", principal.userId(), request.name());
         return ApiResponse.success("Addon category created", addonService.createCategory(principal.userId(), request));
     }
 
@@ -52,12 +55,14 @@ public class StoreOwnerAddonController {
     @Operation(summary = "Create an addon")
     public ApiResponse<AddonResponse> createAddon(@AuthenticationPrincipal AuthenticatedUser principal,
                                                    @Valid @RequestBody AddonRequest request) {
+        log.debug("Owner {}: create addon '{}'", principal.userId(), request.name());
         return ApiResponse.success("Addon created", addonService.createAddon(principal.userId(), request));
     }
 
     @PatchMapping("/addons/{addonId}/enable")
     @Operation(summary = "Enable an addon")
     public ApiResponse<Void> enable(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long addonId) {
+        log.debug("Owner {}: enable addon {}", principal.userId(), addonId);
         addonService.setAddonEnabled(principal.userId(), addonId, true);
         return ApiResponse.success("Addon enabled", null);
     }
@@ -65,6 +70,7 @@ public class StoreOwnerAddonController {
     @PatchMapping("/addons/{addonId}/disable")
     @Operation(summary = "Disable an addon")
     public ApiResponse<Void> disable(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long addonId) {
+        log.debug("Owner {}: disable addon {}", principal.userId(), addonId);
         addonService.setAddonEnabled(principal.userId(), addonId, false);
         return ApiResponse.success("Addon disabled", null);
     }
