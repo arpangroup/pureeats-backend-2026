@@ -7,7 +7,7 @@ name: Deploy backend API
 # user, and pureeats-api systemd service were provisioned.
 on:
   push:
-    branches: [feature/26.08.30-initial-dev-3]
+    branches: [main]
   workflow_dispatch: {}
 
 concurrency:
@@ -19,7 +19,7 @@ env:
   APP_DIR: /home/pureeats-deploy/apps/pureeats-backend-2026
   # Must match the branch above (and the clone in setup-server.sh) - update
   # both together if the deploy branch changes (e.g. once this merges to main).
-  BRANCH: feature/26.08.30-initial-dev-3
+  BRANCH: main
   # Non-secret runtime settings, passed through as VM arguments to the app
   # (see setup-server.sh's ExecStart: --spring.profiles.active / --logging.file.name /
   # --pureeats.media.local.base-dir). Written below to a file the deploy user
