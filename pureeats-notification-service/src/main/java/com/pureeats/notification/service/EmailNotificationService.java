@@ -11,6 +11,7 @@ import com.pureeats.notification.repository.NotificationLogRepository;
 import com.pureeats.notification.template.NotificationTemplateResolver;
 import com.pureeats.notification.template.TemplateRenderer;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +19,7 @@ import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class EmailNotificationService implements ChannelNotificationSender {
 
     private final EmailProvider emailProvider;
@@ -33,11 +35,20 @@ public class EmailNotificationService implements ChannelNotificationSender {
     @Override
     @Transactional
     public NotificationResult send(NotificationRequest request) {
+        // Never log `html`/`text` here - the rendered body may contain an OTP or other secret.
+        String maskedDestination = PiiMaskUtil.maskEmail(request.destination());
+        log.info("Sending {} email notification to {}", request.type(), maskedDestination);
         String subject = templateResolver.resolveSubject(request.type());
         String html = templateRenderer.render(templateResolver.resolveBody(NotificationChannel.EMAIL, request.type(), "html"), request.params());
         String text = templateRenderer.render(templateResolver.resolveBody(NotificationChannel.EMAIL, request.type(), "txt"), request.params());
 
         NotificationResult result = emailProvider.send(request.destination(), subject, html, text);
+        if (result.success()) {
+            log.info("Email notification {} sent to {} via {}", request.type(), maskedDestination, emailProvider.getClass().getSimpleName());
+        } else {
+            log.warn("Email notification {} to {} failed via {}: {}", request.type(), maskedDestination,
+                    emailProvider.getClass().getSimpleName(), result.failureReason());
+        }
         logAttempt(request, result);
         return result;
     }

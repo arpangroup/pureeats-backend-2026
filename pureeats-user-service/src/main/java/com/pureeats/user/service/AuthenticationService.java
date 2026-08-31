@@ -38,6 +38,7 @@ import com.pureeats.user.security.metadata.RequestMetadata;
 import com.pureeats.user.security.ratelimit.RateLimiter;
 import com.pureeats.user.security.session.SessionService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,6 +55,7 @@ import java.util.Optional;
  * Deliberately thin - every piece of actual logic (OTP rules, notification delivery, blocklists,
  * rate limits, device/session bookkeeping) lives in its own single-responsibility collaborator.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthenticationService {
@@ -74,6 +76,7 @@ public class AuthenticationService {
 
     @Transactional
     public LoginChallengeResponse signup(SignupRequest request, RequestMetadata metadata) {
+        log.info("Processing signup for {}", PiiMaskUtil.maskEmail(request.email()));
         roleService.assertCallerNotPrivileged();
         assertNotBlocked(BlockType.IP, metadata.ipAddress());
         assertNotBlocked(BlockType.EMAIL, request.email());
@@ -81,10 +84,12 @@ public class AuthenticationService {
         enforceOtpRequestRateLimits("signup", request.email(), metadata);
 
         if (userRepository.existsByEmail(request.email())) {
+            log.warn("Signup rejected - {} is already registered", PiiMaskUtil.maskEmail(request.email()));
             throw new ConflictException("EMAIL_ALREADY_REGISTERED", "Email ID already registered.");
         }
 
         User user = userProvisioningService.provisionViaEmail(request.email(), request.fullName());
+        log.info("Provisioned new user {} via signup", user.getId());
         securityEventPublisher.publish(baseEvent(SecurityEventType.SIGNUP_INITIATED, user.getId(), metadata).build());
 
         return issueOtpChallenge(AuthenticationMethod.EMAIL, request.email(), NotificationType.SIGNUP_OTP,
@@ -94,6 +99,7 @@ public class AuthenticationService {
     @Transactional
     public LoginChallengeResponse initiateLogin(LoginChallengeRequest request, RequestMetadata metadata) {
         String destination = validateAndExtractDestination(request);
+        log.info("Processing login challenge via {} for {}", request.method(), PiiMaskUtil.maskDestination(destination));
         BlockType destinationBlockType = request.method() == AuthenticationMethod.PHONE ? BlockType.PHONE : BlockType.EMAIL;
 
         assertNotBlocked(BlockType.IP, metadata.ipAddress());
@@ -114,6 +120,7 @@ public class AuthenticationService {
 
         Long userId = existing.map(User::getId).orElse(null);
         String userName = existing.map(User::getName).orElse(null);
+        log.debug("Login challenge for {} account (userId={})", existing.isPresent() ? "existing" : "new", userId);
 
         securityEventPublisher.publish(baseEvent(SecurityEventType.LOGIN_INITIATED, userId, metadata)
                 .metadata("method", request.method().name())
@@ -136,6 +143,7 @@ public class AuthenticationService {
                 : null;
         NotificationResult result = sendOtpNotification(challenge, generated.plainOtp(), userName);
         if (!result.success()) {
+            log.error("Failed to deliver resent OTP notification for challenge {}", challengeId);
             throw new ApiException(502, "NOTIFICATION_DELIVERY_FAILED", "Unable to send the verification code right now. Please try again.");
         }
 
@@ -169,6 +177,7 @@ public class AuthenticationService {
         securityEventPublisher.publish(baseEvent(SecurityEventType.LOGIN_SUCCESS, user.getId(), metadata)
                 .metadata("method", loginMethod.name())
                 .build());
+        log.info("User {} logged in successfully via {}", user.getId(), loginMethod);
 
         return AuthTokenResponse.of(accessToken, session.rawRefreshToken(), accessTokenExpirySeconds());
     }
@@ -184,6 +193,7 @@ public class AuthenticationService {
         String accessToken = generateAccessToken(user, role);
 
         securityEventPublisher.publish(baseEvent(SecurityEventType.TOKEN_REFRESHED, user.getId(), metadata).build());
+        log.info("Access token refreshed for user {}", user.getId());
         return AuthTokenResponse.of(accessToken, rotated.rawRefreshToken(), accessTokenExpirySeconds());
     }
 
@@ -195,6 +205,7 @@ public class AuthenticationService {
 
     @Transactional
     public void logoutAll(Long userId, RequestMetadata metadata) {
+        log.info("Logging out all sessions for user {}", userId);
         sessionService.revokeAllForUser(userId);
         securityEventPublisher.publish(baseEvent(SecurityEventType.LOGOUT_ALL, userId, metadata).build());
     }
@@ -206,6 +217,7 @@ public class AuthenticationService {
         OtpChallengeService.GeneratedOtp generated = otpChallengeService.createChallenge(method, destination, purpose, userId, metadata);
         NotificationResult result = sendOtpNotification(generated.challenge(), generated.plainOtp(), userName);
         if (!result.success()) {
+            log.error("Failed to deliver OTP notification for challenge {} (purpose={})", generated.challenge().getChallengeId(), purpose);
             throw new ApiException(502, "NOTIFICATION_DELIVERY_FAILED", "Unable to send the verification code right now. Please try again.");
         }
 
@@ -269,6 +281,7 @@ public class AuthenticationService {
 
     private void assertNotBlocked(BlockType type, String value) {
         if (value != null && blocklistService.isBlocked(type, value)) {
+            log.warn("Request rejected - {} is blocklisted", type);
             throw new ForbiddenException("BLOCKED", "This request cannot be completed. Please contact support if you believe this is an error.");
         }
     }
@@ -287,13 +300,21 @@ public class AuthenticationService {
         }
         AccountStatus status = user.getAccountStatus() != null ? user.getAccountStatus() : AccountStatus.ACTIVE;
         switch (status) {
-            case BLOCKED -> throw new ForbiddenException("ACCOUNT_BLOCKED",
-                    user.getLockReason() != null ? user.getLockReason() : "This account has been blocked.");
-            case DISABLED -> throw new ForbiddenException("ACCOUNT_DISABLED", "This account has been disabled.");
+            case BLOCKED -> {
+                log.warn("Account usability check failed for user {} - account BLOCKED", user.getId());
+                throw new ForbiddenException("ACCOUNT_BLOCKED",
+                        user.getLockReason() != null ? user.getLockReason() : "This account has been blocked.");
+            }
+            case DISABLED -> {
+                log.warn("Account usability check failed for user {} - account DISABLED", user.getId());
+                throw new ForbiddenException("ACCOUNT_DISABLED", "This account has been disabled.");
+            }
             case TEMPORARILY_LOCKED -> {
                 if (user.getLockedUntil() != null && user.getLockedUntil().isAfter(LocalDateTime.now())) {
+                    log.warn("Account usability check failed for user {} - temporarily locked until {}", user.getId(), user.getLockedUntil());
                     throw new ForbiddenException("ACCOUNT_LOCKED", "This account is temporarily locked. Please try again later.");
                 }
+                log.info("Lock on user {} has expired - reactivating account", user.getId());
                 user.setAccountStatus(AccountStatus.ACTIVE);
                 user.setLockedAt(null);
                 user.setLockedUntil(null);

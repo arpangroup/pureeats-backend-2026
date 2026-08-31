@@ -5,6 +5,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.NonNull;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -17,6 +18,7 @@ import java.util.UUID;
  * {@code GlobalExceptionHandler} and the auth audit/notification logging) and echoes it back on
  * the response so client-side logs and server-side logs can be joined on the same value.
  */
+@Slf4j
 public class CorrelationIdFilter extends OncePerRequestFilter {
 
     public static final String HEADER = "X-Request-ID";
@@ -32,7 +34,9 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
         try {
             RequestIdContext.set(requestId);
             response.setHeader(HEADER, requestId);
+            log.debug("[{}] --> {} {}", requestId, request.getMethod(), request.getRequestURI());
             filterChain.doFilter(request, response);
+            log.debug("[{}] <-- {} {} status={}", requestId, request.getMethod(), request.getRequestURI(), response.getStatus());
         } finally {
             RequestIdContext.clear();
         }

@@ -11,6 +11,7 @@ import com.pureeats.notification.repository.NotificationLogRepository;
 import com.pureeats.notification.template.NotificationTemplateResolver;
 import com.pureeats.notification.template.TemplateRenderer;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +19,7 @@ import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class SmsNotificationService implements ChannelNotificationSender {
 
     private final SmsProvider smsProvider;
@@ -33,9 +35,18 @@ public class SmsNotificationService implements ChannelNotificationSender {
     @Override
     @Transactional
     public NotificationResult send(NotificationRequest request) {
+        // Never log `message` here - the rendered SMS body may contain an OTP.
+        String maskedDestination = PiiMaskUtil.maskPhone(request.destination());
+        log.info("Sending {} SMS notification to {}", request.type(), maskedDestination);
         String message = templateRenderer.render(templateResolver.resolveBody(NotificationChannel.SMS, request.type(), "txt"), request.params());
 
         NotificationResult result = smsProvider.send(request.destination(), message);
+        if (result.success()) {
+            log.info("SMS notification {} sent to {} via {}", request.type(), maskedDestination, smsProvider.getClass().getSimpleName());
+        } else {
+            log.warn("SMS notification {} to {} failed via {}: {}", request.type(), maskedDestination,
+                    smsProvider.getClass().getSimpleName(), result.failureReason());
+        }
         logAttempt(request, result);
         return result;
     }

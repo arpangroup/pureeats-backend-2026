@@ -7,10 +7,12 @@ import com.pureeats.domain.common.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/locations")
 @RequiredArgsConstructor
@@ -22,6 +24,7 @@ public class LocationController {
     @GetMapping("/search")
     @Operation(summary = "Search locations by name")
     public ApiResponse<List<LocationResponse>> search(@RequestParam("q") String query) {
+        log.debug("Searching locations for '{}'", query);
         return ApiResponse.success(locationService.search(query));
     }
 

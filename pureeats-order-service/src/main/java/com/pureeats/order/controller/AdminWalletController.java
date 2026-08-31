@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -27,6 +28,7 @@ import java.util.List;
 /** Admin view/adjustment of any user's wallet - ADMIN or SUPER_ADMIN only. */
 @RestController
 @RequiredArgsConstructor
+@Slf4j
 @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
 @Tag(name = "Admin Wallet", description = "View and adjust any user's wallet - ADMIN or SUPER_ADMIN only")
 public class AdminWalletController {
@@ -36,6 +38,7 @@ public class AdminWalletController {
     @GetMapping("/api/v1/admin/wallet")
     @Operation(summary = "Get (or lazily create) a holder's wallet")
     public ApiResponse<AdminWalletResponse> getWallet(@RequestParam String holderType, @RequestParam Long holderId) {
+        log.debug("Admin fetching wallet for holderType={} holderId={}", holderType, holderId);
         return ApiResponse.success(walletService.getWalletForHolder(holderId));
     }
 
@@ -55,6 +58,7 @@ public class AdminWalletController {
     @PostMapping("/api/v1/admin/wallet/{walletId}/adjust")
     @Operation(summary = "Credit or debit a wallet")
     public ApiResponse<AdminWalletResponse> adjust(@PathVariable Long walletId, @Valid @RequestBody WalletAdjustRequest request) {
+        log.info("Admin adjusting wallet {}: type={} amount={}", walletId, request.type(), request.amount());
         return ApiResponse.success("Wallet adjusted", walletService.adjust(walletId, request));
     }
 }

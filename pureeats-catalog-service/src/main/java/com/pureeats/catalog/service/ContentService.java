@@ -5,6 +5,7 @@ import com.pureeats.catalog.repository.*;
 import com.pureeats.domain.common.exception.ResourceNotFoundException;
 import com.pureeats.domain.entity.Slide;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -12,6 +13,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ContentService {
@@ -31,8 +33,12 @@ public class ContentService {
 
     @Transactional(readOnly = true)
     public PageResponse getPage(String slug) {
+        log.debug("Fetching CMS page '{}'", slug);
         var page = pageRepository.findBySlug(slug)
-                .orElseThrow(() -> new ResourceNotFoundException("Page not found: " + slug));
+                .orElseThrow(() -> {
+                    log.warn("CMS page '{}' not found", slug);
+                    return new ResourceNotFoundException("Page not found: " + slug);
+                });
         return new PageResponse(page.getId(), page.getName(), page.getSlug(), page.getBody());
     }
 

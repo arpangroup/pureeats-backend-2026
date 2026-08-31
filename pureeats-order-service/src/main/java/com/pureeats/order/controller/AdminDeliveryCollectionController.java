@@ -8,6 +8,7 @@ import com.pureeats.order.service.DeliveryCollectionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -21,6 +22,7 @@ import java.util.List;
 /** Admin view of cash-on-delivery held by each delivery partner - ADMIN or SUPER_ADMIN only. */
 @RestController
 @RequiredArgsConstructor
+@Slf4j
 @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
 @Tag(name = "Admin Delivery Collections", description = "Cash-in-hand directory - ADMIN or SUPER_ADMIN only")
 public class AdminDeliveryCollectionController {
@@ -30,11 +32,13 @@ public class AdminDeliveryCollectionController {
     @GetMapping("/api/v1/admin/delivery-collections")
     public ApiResponse<PageResponse<AdminDeliveryCollectionResponse>> list(
             @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+        log.debug("Admin listing delivery collections, page {}", pageable.getPageNumber());
         return ApiResponse.success(deliveryCollectionService.listPaged(pageable));
     }
 
     @GetMapping("/api/v1/admin/delivery-collections/{id}/logs")
     public ApiResponse<List<DeliveryCollectionLogResponse>> logs(@PathVariable Long id) {
+        log.debug("Admin fetching delivery collection logs for collection {}", id);
         return ApiResponse.success(deliveryCollectionService.logs(id));
     }
 }

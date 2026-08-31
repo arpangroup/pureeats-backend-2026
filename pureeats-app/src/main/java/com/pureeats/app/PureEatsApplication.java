@@ -1,5 +1,6 @@
 package com.pureeats.app;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.persistence.autoconfigure.EntityScan;
@@ -18,9 +19,12 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @SpringBootApplication(scanBasePackages = "com.pureeats", exclude = UserDetailsServiceAutoConfiguration.class)
 @EntityScan(basePackages = {"com.pureeats.domain.entity", "com.pureeats.user.entity", "com.pureeats.notification.entity", "com.pureeats.media.entity", "com.pureeats.order.entity", "com.pureeats.catalog.entity"})
 @EnableJpaRepositories(basePackages = "com.pureeats")
+@Slf4j
 public class PureEatsApplication {
 
     public static void main(String[] args) {
+        log.info("Starting PureEatsApplication...");
         SpringApplication.run(PureEatsApplication.class, args);
+        log.info("PureEatsApplication started successfully");
     }
 }

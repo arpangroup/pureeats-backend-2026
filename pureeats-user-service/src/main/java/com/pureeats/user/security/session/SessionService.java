@@ -56,6 +56,7 @@ public class SessionService {
         session.setIpAddress(metadata.ipAddress());
         session.setUserAgent(metadata.userAgent());
         userSessionRepository.save(session);
+        log.debug("Created session {} for user {}", session.getSessionId(), userId);
         return new IssuedSession(session.getSessionId(), rawToken, session.getExpiresAt());
     }
 
@@ -77,6 +78,7 @@ public class SessionService {
             throw new UnauthorizedException("REFRESH_TOKEN_REUSE_DETECTED", "This session has been revoked for your security. Please log in again.");
         }
         if (session.getExpiresAt().isBefore(LocalDateTime.now())) {
+            log.warn("Refresh attempted with expired session {} for userId={}", session.getSessionId(), session.getUserId());
             throw new UnauthorizedException("REFRESH_TOKEN_EXPIRED", "Your session has expired. Please log in again.");
         }
 
@@ -85,20 +87,23 @@ public class SessionService {
         userSessionRepository.save(session);
 
         IssuedSession next = createSession(session.getUserId(), metadata);
+        log.info("Rotated session for userId={}: {} -> {}", session.getUserId(), session.getSessionId(), next.sessionId());
         return new RotatedSession(session.getUserId(), next.sessionId(), next.rawRefreshToken(), next.expiresAt());
     }
 
     @Transactional
     public void revoke(String rawRefreshToken) {
         userSessionRepository.findByRefreshTokenHash(hash(rawRefreshToken))
-                .ifPresent(session -> {
+                .ifPresentOrElse(session -> {
                     session.setRevokedAt(LocalDateTime.now());
                     userSessionRepository.save(session);
-                });
+                    log.info("Revoked session {} for userId={}", session.getSessionId(), session.getUserId());
+                }, () -> log.warn("Logout requested for a refresh token that matches no session"));
     }
 
     @Transactional
     public void revokeAllForUser(Long userId) {
+        log.info("Revoking all sessions for userId={}", userId);
         userSessionRepository.revokeAllForUser(userId, LocalDateTime.now());
     }
 

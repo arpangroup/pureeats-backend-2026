@@ -40,15 +40,18 @@ public class HttpIpGeolocationService implements IpGeolocationService {
     @Override
     public Optional<GeoLocation> resolve(String ipAddress) {
         if (!properties.getGeolocation().isEnabled() || isPrivateOrLoopback(ipAddress)) {
+            log.debug("Skipping IP geolocation lookup (disabled or private/loopback address)");
             return Optional.empty();
         }
 
         CacheEntry cached = cache.get(ipAddress);
         if (cached != null && cached.isFresh(properties.getGeolocation().getCacheTtlMinutes())) {
+            log.debug("IP geolocation cache hit");
             return cached.value();
         }
 
         Optional<GeoLocation> resolved = fetch(ipAddress);
+        log.debug("IP geolocation lookup resolved={}", resolved.isPresent());
         cache.put(ipAddress, new CacheEntry(resolved, Instant.now()));
         return resolved;
     }

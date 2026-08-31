@@ -9,12 +9,14 @@ import com.pureeats.user.security.AuthenticatedUser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 @Tag(name = "Dashboard", description = "Aggregate dashboard stats for admins and store owners")
@@ -27,6 +29,7 @@ public class DashboardController {
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Platform-wide dashboard stats")
     public ApiResponse<AdminDashboardResponse> admin() {
+        log.debug("Fetching admin dashboard stats");
         return ApiResponse.success(dashboardService.adminDashboard());
     }
 
@@ -34,6 +37,7 @@ public class DashboardController {
     @PreAuthorize("hasRole('STORE_OWNER')")
     @Operation(summary = "Dashboard stats for one of the caller's own restaurants")
     public ApiResponse<OwnerDashboardResponse> owner(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long restaurantId) {
+        log.debug("Fetching owner dashboard stats for restaurant {} (requested by user {})", restaurantId, principal.userId());
         restaurantService.assertOwnership(principal.userId(), restaurantId);
         return ApiResponse.success(dashboardService.ownerDashboard(restaurantId));
     }

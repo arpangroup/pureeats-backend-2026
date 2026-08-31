@@ -25,6 +25,7 @@ import com.pureeats.user.repository.SecurityBlockEntryRepository;
 import com.pureeats.user.repository.UserDeviceRepository;
 import com.pureeats.user.repository.UserSessionRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -36,6 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
  * hand-written rather than exposing an entity - see each {@code *Response} DTO's Javadoc for what
  * is intentionally left out (OTP hashes, refresh-token hashes).
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -53,6 +55,7 @@ public class AdminAuditService {
         Page<AuditLog> page = userId != null
                 ? auditLogRepository.findByUserId(userId, pageable)
                 : auditLogRepository.findAll(pageable);
+        log.debug("Returning {} audit log entries (userId={})", page.getNumberOfElements(), userId);
         return toPageResponse(page, AdminAuditService::toResponse);
     }
 
@@ -60,6 +63,7 @@ public class AdminAuditService {
         Page<LoginHistory> page = userId != null
                 ? loginHistoryRepository.findByUserId(userId, pageable)
                 : loginHistoryRepository.findAll(pageable);
+        log.debug("Returning {} login history entries (userId={})", page.getNumberOfElements(), userId);
         return toPageResponse(page, AdminAuditService::toResponse);
     }
 
@@ -67,17 +71,21 @@ public class AdminAuditService {
         Page<OtpChallenge> page = userId != null
                 ? otpChallengeRepository.findByUserId(userId, pageable)
                 : otpChallengeRepository.findAll(pageable);
+        log.debug("Returning {} OTP challenge entries (userId={})", page.getNumberOfElements(), userId);
         return toPageResponse(page, AdminAuditService::toResponse);
     }
 
     public PageResponse<RateLimitBucketResponse> listRateLimitBuckets(Pageable pageable) {
-        return toPageResponse(rateLimitBucketRepository.findAll(pageable), AdminAuditService::toResponse);
+        Page<RateLimitBucket> page = rateLimitBucketRepository.findAll(pageable);
+        log.debug("Returning {} rate-limit bucket entries", page.getNumberOfElements());
+        return toPageResponse(page, AdminAuditService::toResponse);
     }
 
     public PageResponse<SecurityBlockEntryResponse> listSecurityBlockEntries(BlockType blockType, Pageable pageable) {
         Page<SecurityBlockEntry> page = blockType != null
                 ? securityBlockEntryRepository.findByBlockType(blockType, pageable)
                 : securityBlockEntryRepository.findAll(pageable);
+        log.debug("Returning {} security blocklist entries (blockType={})", page.getNumberOfElements(), blockType);
         return toPageResponse(page, AdminAuditService::toResponse);
     }
 
@@ -85,6 +93,7 @@ public class AdminAuditService {
         Page<UserDevice> page = userId != null
                 ? userDeviceRepository.findByUserId(userId, pageable)
                 : userDeviceRepository.findAll(pageable);
+        log.debug("Returning {} user device entries (userId={})", page.getNumberOfElements(), userId);
         return toPageResponse(page, AdminAuditService::toResponse);
     }
 
@@ -92,6 +101,7 @@ public class AdminAuditService {
         Page<UserSession> page = userId != null
                 ? userSessionRepository.findByUserId(userId, pageable)
                 : userSessionRepository.findAll(pageable);
+        log.debug("Returning {} user session entries (userId={})", page.getNumberOfElements(), userId);
         return toPageResponse(page, AdminAuditService::toResponse);
     }
 

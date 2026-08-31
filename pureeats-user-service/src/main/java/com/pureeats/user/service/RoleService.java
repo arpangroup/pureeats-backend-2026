@@ -7,6 +7,7 @@ import com.pureeats.domain.entity.Role;
 import com.pureeats.user.repository.ModelHasRoleRepository;
 import com.pureeats.user.repository.RoleRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +19,7 @@ import java.util.List;
  * ({@code roles} + {@code model_has_roles}, morph type {@code App\User}) so
  * pre-existing seeded role data keeps working unchanged.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class RoleService {
@@ -63,6 +65,9 @@ public class RoleService {
                 .anyMatch(a -> a.getRoleId().equals(roleEntity.getId()));
         if (!alreadyAssigned) {
             modelHasRoleRepository.save(new ModelHasRole(roleEntity.getId(), USER_MORPH_TYPE, userId));
+            log.info("Assigned role {} to user {}", role, userId);
+        } else {
+            log.debug("User {} already holds role {} - skipping assignment", userId, role);
         }
     }
 
@@ -88,6 +93,7 @@ public class RoleService {
             return;
         }
         if (resolveRole(callerId).isPrivileged()) {
+            log.warn("Blocked self-registration attempt from privileged caller {}", callerId);
             throw new ForbiddenException("REGISTRATION_BLOCKED_FOR_PRIVILEGED_ROLE",
                     "Admin and Super Admin accounts cannot use the self-registration flow.");
         }

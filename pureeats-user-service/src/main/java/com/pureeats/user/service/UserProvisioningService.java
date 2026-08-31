@@ -5,6 +5,7 @@ import com.pureeats.domain.enums.AccountStatus;
 import com.pureeats.domain.enums.Role;
 import com.pureeats.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +17,7 @@ import java.time.LocalDateTime;
  * challenge-based login/signup, so "what does a fresh OTP-provisioned account look like" is
  * defined exactly once.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserProvisioningService {
@@ -31,14 +33,18 @@ public class UserProvisioningService {
         User user = blankUser(name);
         user.setEmail(phone + OTP_PLACEHOLDER_EMAIL_DOMAIN);
         user.setPhone(phone);
-        return save(user);
+        User saved = save(user);
+        log.info("Provisioned new user {} via phone OTP", saved.getId());
+        return saved;
     }
 
     @Transactional
     public User provisionViaEmail(String email, String name) {
         User user = blankUser(name);
         user.setEmail(email);
-        return save(user);
+        User saved = save(user);
+        log.info("Provisioned new user {} via email", saved.getId());
+        return saved;
     }
 
     private User blankUser(String name) {

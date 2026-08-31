@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+    <!-- Same file + size-based rollover + gzip-on-rollover behavior as before,
+         still driven by LOG_FILE / LOG_MAX_FILE_SIZE / LOG_MAX_HISTORY /
+         LOG_TOTAL_SIZE_CAP (see application.yml) - unchanged by this file. -->
+    <include resource="org/springframework/boot/logging/logback/file-appender.xml"/>
+
+    <!-- Relaxed binding maps these env vars automatically (SPLUNK_HEC_URL ->
+         splunk.hec.url), no application.yml entry needed. -->
+    <springProperty scope="context" name="SPLUNK_HEC_URL" source="splunk.hec.url" defaultValue=""/>
+    <springProperty scope="context" name="SPLUNK_HEC_TOKEN" source="splunk.hec.token" defaultValue=""/>
+    <springProperty scope="context" name="SPLUNK_INDEX" source="splunk.index" defaultValue=""/>
+    <springProperty scope="context" name="SPLUNK_SOURCETYPE" source="splunk.sourcetype" defaultValue="pureeats_app"/>
+    <springProperty scope="context" name="SPLUNK_SOURCE" source="spring.application.name" defaultValue="pureeats-app"/>
+    <springProperty scope="context" name="SPLUNK_HOST" source="HOSTNAME" defaultValue=""/>
+    <springProperty scope="context" name="SPLUNK_HEC_INSECURE_TLS" source="splunk.hec.insecure-tls" defaultValue="false"/>
+
+    <!-- Self-disables (no-op) when url/token are blank - see SplunkHecAppender.start().
+         Every environment that hasn't configured Splunk keeps working exactly as
+         before, with just CONSOLE + FILE. -->
+    <appender name="SPLUNK" class="com.pureeats.app.logging.SplunkHecAppender">
+        <url>${SPLUNK_HEC_URL}</url>
+        <token>${SPLUNK_HEC_TOKEN}</token>
+        <index>${SPLUNK_INDEX}</index>
+        <sourcetype>${SPLUNK_SOURCETYPE}</sourcetype>
+        <source>${SPLUNK_SOURCE}</source>
+        <host>${SPLUNK_HOST}</host>
+        <insecureTls>${SPLUNK_HEC_INSECURE_TLS}</insecureTls>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+        <appender-ref ref="SPLUNK"/>
+    </root>
+</configuration>

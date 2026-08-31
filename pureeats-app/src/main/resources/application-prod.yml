@@ -1,0 +1,45 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/pureeats
+    username: pureeats_app
+    password: ChangeMe_TempPass123
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+
+security:
+  otp:
+    length: ${OTP_LENGTH:6}
+    expiry-minutes: ${OTP_EXPIRY_MINUTES:10}
+    max-attempts: ${OTP_MAX_ATTEMPTS:5}
+    resend-cooldown-seconds: ${OTP_RESEND_COOLDOWN_SECONDS:30}
+    max-resends: ${OTP_MAX_RESENDS:3}
+    max-requests-per-destination-per-hour: ${OTP_MAX_REQUESTS_PER_DESTINATION_PER_HOUR:10}
+    max-requests-per-ip-per-hour: ${OTP_MAX_REQUESTS_PER_IP_PER_HOUR:20}
+  session:
+    access-token-expiry-minutes: ${ACCESS_TOKEN_EXPIRY_MINUTES:4200} # 3days
+    refresh-token-expiry-days: ${REFRESH_TOKEN_EXPIRY_DAYS:30}
+  rate-limit:
+    login-ip:
+      limit: ${RATE_LIMIT_LOGIN_IP_LIMIT:10}
+      window-seconds: ${RATE_LIMIT_LOGIN_IP_WINDOW_SECONDS:60}
+    login-destination:
+      limit: ${RATE_LIMIT_LOGIN_DESTINATION_LIMIT:5}
+      window-seconds: ${RATE_LIMIT_LOGIN_DESTINATION_WINDOW_SECONDS:60}
+    verify-ip:
+      limit: ${RATE_LIMIT_VERIFY_IP_LIMIT:20}
+      window-seconds: ${RATE_LIMIT_VERIFY_IP_WINDOW_SECONDS:60}
+    resend-ip:
+      limit: ${RATE_LIMIT_RESEND_IP_LIMIT:10}
+      window-seconds: ${RATE_LIMIT_RESEND_IP_WINDOW_SECONDS:60}
+  geolocation:
+    enabled: ${GEOLOCATION_ENABLED:true}
+    provider: ${GEOLOCATION_PROVIDER:ip-api}
+    timeout-ms: ${GEOLOCATION_TIMEOUT_MS:2000}
+    cache-ttl-minutes: ${GEOLOCATION_CACHE_TTL_MINUTES:60}

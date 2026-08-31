@@ -5,6 +5,7 @@ import com.pureeats.domain.enums.OrderStatusCode;
 import com.pureeats.order.dto.OrderStatusResponse;
 import com.pureeats.order.repository.OrderStatusRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /** Maps the clean {@link OrderStatusCode} enum onto the legacy {@code order_statuses} lookup table, seeding rows on demand. */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class OrderStatusService {
 
     private final OrderStatusRepository orderStatusRepository;
@@ -30,6 +32,7 @@ public class OrderStatusService {
         }
         OrderStatus status = orderStatusRepository.findByName(code.name())
                 .orElseGet(() -> {
+                    log.info("Seeding new order-status lookup row for {}", code);
                     OrderStatus s = new OrderStatus();
                     s.setName(code.name());
                     return orderStatusRepository.save(s);
@@ -52,8 +55,12 @@ public class OrderStatusService {
         if (cached != null) {
             return cached;
         }
-        return orderStatusRepository.findById(id.longValue())
+        OrderStatusCode resolved = orderStatusRepository.findById(id.longValue())
                 .map(s -> OrderStatusCode.valueOf(s.getName()))
                 .orElse(null);
+        if (resolved == null) {
+            log.warn("No order status found for lookup id {}", id);
+        }
+        return resolved;
     }
 }

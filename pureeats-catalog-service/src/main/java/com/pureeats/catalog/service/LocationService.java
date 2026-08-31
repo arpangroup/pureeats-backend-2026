@@ -5,11 +5,13 @@ import com.pureeats.catalog.dto.PopularGeoPlaceResponse;
 import com.pureeats.catalog.repository.LocationRepository;
 import com.pureeats.catalog.repository.PopularGeoPlaceRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class LocationService {
@@ -19,6 +21,7 @@ public class LocationService {
 
     @Transactional(readOnly = true)
     public List<LocationResponse> search(String query) {
+        log.debug("Searching locations matching '{}'", query);
         return locationRepository.findByIsActiveTrueAndNameContainingIgnoreCase(query).stream()
                 .map(l -> new LocationResponse(l.getId(), l.getName(), l.getDescription(), Boolean.TRUE.equals(l.getIsPopular())))
                 .toList();

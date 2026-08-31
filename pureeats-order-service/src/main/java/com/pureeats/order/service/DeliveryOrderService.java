@@ -12,6 +12,7 @@ import com.pureeats.order.repository.*;
 import com.pureeats.user.repository.DeliveryGuyDetailRepository;
 import com.pureeats.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +24,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class DeliveryOrderService {
 
     private final OrderRepository orderRepository;
@@ -59,13 +61,17 @@ public class DeliveryOrderService {
 
     @Transactional
     public OrderResponse acceptToDeliver(Long riderUserId, Long orderId) {
+        log.info("Rider {} accepting order {} for delivery", riderUserId, orderId);
         DeliveryGuyDetail rider = riderProfile(riderUserId);
         Order order = orderService.findOrThrow(orderId);
         if (acceptDeliveryRepository.findByOrderId(order.getId().intValue()).isPresent()) {
+            log.warn("Rejected delivery acceptance for order {}: already assigned to a rider", orderId);
             throw new BadRequestException("This order has already been assigned to a rider");
         }
         long activeCount = acceptDeliveryRepository.findByUserIdAndIsCompleteFalse(riderUserId.intValue()).size();
         if (activeCount >= rider.getMaxAcceptDeliveryLimit()) {
+            log.warn("Rejected delivery acceptance for rider {}: at concurrent delivery limit ({}/{})",
+                    riderUserId, activeCount, rider.getMaxAcceptDeliveryLimit());
             throw new BadRequestException("You have reached your maximum concurrent delivery limit");
         }
 
@@ -81,6 +87,7 @@ public class DeliveryOrderService {
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
         orderStatusLogService.record(order.getId(), from, OrderStatusCode.RIDER_ASSIGNED, "DELIVERY", riderUserId, null);
+        log.info("Order {} transitioned {} -> RIDER_ASSIGNED (rider {} self-accepted)", orderId, from, riderUserId);
 
         notificationDispatchService.notifyUser(order.getUserId().longValue(), "Rider assigned",
                 "A delivery partner has been assigned to order #" + order.getUniqueOrderId());
@@ -90,9 +97,11 @@ public class DeliveryOrderService {
     /** Admin override - assigns a specific rider to a specific order directly, skipping the rider's own concurrent-delivery-limit check (an explicit admin decision, not a rider self-service action). */
     @Transactional
     public OrderResponse assignDriverAsAdmin(Long adminUserId, Long orderId, Long riderUserId) {
+        log.info("Admin {} assigning rider {} to order {}", adminUserId, riderUserId, orderId);
         riderProfile(riderUserId);
         Order order = orderService.findOrThrow(orderId);
         if (acceptDeliveryRepository.findByOrderId(order.getId().intValue()).isPresent()) {
+            log.warn("Rejected admin driver assignment for order {}: already assigned to a rider", orderId);
             throw new BadRequestException("This order has already been assigned to a rider");
         }
 
@@ -108,6 +117,7 @@ public class DeliveryOrderService {
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
         orderStatusLogService.record(order.getId(), from, OrderStatusCode.RIDER_ASSIGNED, "ADMIN", adminUserId, "Driver assigned by admin");
+        log.info("Order {} transitioned {} -> RIDER_ASSIGNED (rider {} assigned by admin {})", orderId, from, riderUserId, adminUserId);
 
         notificationDispatchService.notifyUser(order.getUserId().longValue(), "Rider assigned",
                 "A delivery partner has been assigned to order #" + order.getUniqueOrderId());
@@ -118,17 +128,20 @@ public class DeliveryOrderService {
 
     @Transactional
     public OrderResponse pickedUp(Long riderUserId, Long orderId) {
+        log.info("Rider {} marking order {} as picked up", riderUserId, orderId);
         Order order = ownedByRider(riderUserId, orderId);
         OrderStatusCode from = orderStatusService.codeFor(order.getOrderstatusId());
         order.setOrderstatusId(orderStatusService.idFor(OrderStatusCode.PICKED_UP));
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
         orderStatusLogService.record(order.getId(), from, OrderStatusCode.PICKED_UP, "DELIVERY", riderUserId, null);
+        log.info("Order {} transitioned {} -> PICKED_UP by rider {}", orderId, from, riderUserId);
         return orderService.toResponse(order);
     }
 
     @Transactional
     public OrderResponse deliver(Long riderUserId, Long orderId, String deliveryPin) {
+        log.info("Rider {} attempting to complete delivery for order {}", riderUserId, orderId);
         Order order = ownedByRider(riderUserId, orderId);
         return completeDelivery(order, deliveryPin, "DELIVERY", riderUserId, "Verified by delivery PIN");
     }
@@ -136,8 +149,10 @@ public class DeliveryOrderService {
     /** The customer confirms delivery themself by reading out the same PIN - e.g. handed to the rider in person. */
     @Transactional
     public OrderResponse customerConfirmDelivery(Long customerUserId, Long orderId, String deliveryPin) {
+        log.info("Customer {} attempting to self-confirm delivery for order {}", customerUserId, orderId);
         Order order = orderService.findOrThrow(orderId);
         if (!order.getUserId().equals(customerUserId.intValue())) {
+            log.warn("User {} attempted to confirm delivery of order {} which does not belong to them", customerUserId, orderId);
             throw new ForbiddenException("This order does not belong to you");
         }
         return completeDelivery(order, deliveryPin, "CUSTOMER", customerUserId, "Confirmed by customer via delivery PIN");
@@ -149,6 +164,7 @@ public class DeliveryOrderService {
      */
     private OrderResponse completeDelivery(Order order, String deliveryPin, String actorType, Long actorUserId, String note) {
         if (!order.getDeliveryPin().equalsIgnoreCase(deliveryPin)) {
+            log.warn("Rejected delivery completion for order {} by {} {}: incorrect delivery PIN", order.getId(), actorType, actorUserId);
             throw new BadRequestException("Incorrect delivery PIN");
         }
 
@@ -157,12 +173,15 @@ public class DeliveryOrderService {
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
         orderStatusLogService.record(order.getId(), from, OrderStatusCode.DELIVERED, actorType, actorUserId, note);
+        log.info("Order {} transitioned {} -> DELIVERED ({} {})", order.getId(), from, actorType, actorUserId);
 
         AcceptDelivery assignment = acceptDeliveryRepository.findByOrderId(order.getId().intValue()).orElse(null);
         if (assignment != null) {
             assignment.setIsComplete(true);
             acceptDeliveryRepository.save(assignment);
             creditRiderAndSettle(order, assignment.getUserId().longValue());
+        } else {
+            log.debug("Order {} delivered with no rider assignment on record (likely self-pickup)", order.getId());
         }
 
         notificationDispatchService.notifyUser(order.getUserId().longValue(), "Order delivered",
@@ -177,6 +196,7 @@ public class DeliveryOrderService {
         BigDecimal riderEarning = commissionBase.multiply(rider.getCommissionRate())
                 .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
         walletService.credit(riderUserId, riderEarning, "Delivery earning for order #" + order.getUniqueOrderId());
+        log.debug("Credited rider {} earning {} for order {}", riderUserId, riderEarning, order.getId());
 
         BigDecimal restaurantEarning = order.getTotal().subtract(order.getRestaurantCharge());
         restaurantPayoutService.recordEarning(order.getRestaurantId(), restaurantEarning);
@@ -185,6 +205,7 @@ public class DeliveryOrderService {
         if ("COD".equals(order.getPaymentMode())) {
             cashCollected = order.getPayable();
             recordCashCollection(riderUserId, cashCollected, order.getUniqueOrderId());
+            log.debug("Recorded COD cash collection of {} for rider {} on order {}", cashCollected, riderUserId, order.getId());
         }
 
         TripDetail trip = new TripDetail();
@@ -206,6 +227,7 @@ public class DeliveryOrderService {
 
     @Transactional
     public void recordGpsPing(GpsPingRequest request) {
+        log.debug("Recording GPS ping for order {}", request.orderId());
         GpsTable gps = new GpsTable();
         gps.setOrderId(request.orderId().intValue());
         gps.setDeliveryLat(request.deliveryLat());
@@ -220,7 +242,10 @@ public class DeliveryOrderService {
     @Transactional(readOnly = true)
     public GpsLocationResponse getGpsLocation(Long orderId) {
         GpsTable gps = gpsTableRepository.findFirstByOrderIdOrderByUpdatedAtDesc(orderId.intValue())
-                .orElseThrow(() -> new ResourceNotFoundException("No GPS ping recorded for this order yet"));
+                .orElseThrow(() -> {
+                    log.warn("No GPS ping recorded for order {}", orderId);
+                    return new ResourceNotFoundException("No GPS ping recorded for this order yet");
+                });
         return new GpsLocationResponse(gps.getDeliveryLat(), gps.getDeliveryLong(), gps.getHeading(), gps.getBearing());
     }
 
@@ -237,21 +262,25 @@ public class DeliveryOrderService {
         collection.setUpdatedAt(LocalDateTime.now());
         collection = deliveryCollectionRepository.save(collection);
 
-        DeliveryCollectionLog log = new DeliveryCollectionLog();
-        log.setDeliveryCollectionId(collection.getId().intValue());
-        log.setAmount(amount);
-        log.setType("COD");
-        log.setMessage("Cash collected for order #" + uniqueOrderId);
-        log.setCreatedAt(LocalDateTime.now());
-        log.setUpdatedAt(LocalDateTime.now());
-        deliveryCollectionLogRepository.save(log);
+        DeliveryCollectionLog collectionLog = new DeliveryCollectionLog();
+        collectionLog.setDeliveryCollectionId(collection.getId().intValue());
+        collectionLog.setAmount(amount);
+        collectionLog.setType("COD");
+        collectionLog.setMessage("Cash collected for order #" + uniqueOrderId);
+        collectionLog.setCreatedAt(LocalDateTime.now());
+        collectionLog.setUpdatedAt(LocalDateTime.now());
+        deliveryCollectionLogRepository.save(collectionLog);
     }
 
     private Order ownedByRider(Long riderUserId, Long orderId) {
         Order order = orderService.findOrThrow(orderId);
         AcceptDelivery accept = acceptDeliveryRepository.findByOrderId(order.getId().intValue())
-                .orElseThrow(() -> new ForbiddenException("This order has not been assigned to a rider"));
+                .orElseThrow(() -> {
+                    log.warn("Rejected rider action on order {}: not yet assigned to any rider", orderId);
+                    return new ForbiddenException("This order has not been assigned to a rider");
+                });
         if (!accept.getUserId().equals(riderUserId.intValue())) {
+            log.warn("Rider {} attempted an action on order {} which is assigned to a different rider", riderUserId, orderId);
             throw new ForbiddenException("This order is not assigned to you");
         }
         return order;
@@ -261,6 +290,7 @@ public class DeliveryOrderService {
         User user = userRepository.findById(riderUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + riderUserId));
         if (user.getDeliveryGuyDetailId() == null) {
+            log.warn("User {} attempted a rider action without a rider profile", riderUserId);
             throw new ForbiddenException("You do not have a rider profile");
         }
         return deliveryGuyDetailRepository.findById(user.getDeliveryGuyDetailId().longValue())

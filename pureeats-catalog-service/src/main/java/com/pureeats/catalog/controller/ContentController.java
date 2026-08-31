@@ -9,11 +9,13 @@ import com.pureeats.domain.common.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 @Tag(name = "Content", description = "CMS pages, app settings, promo sliders, languages and payment gateways")
@@ -24,12 +26,14 @@ public class ContentController {
     @GetMapping("/api/v1/pages")
     @Operation(summary = "List CMS pages")
     public ApiResponse<List<PageResponse>> pages() {
+        log.debug("Listing CMS pages");
         return ApiResponse.success(contentService.listPages());
     }
 
     @GetMapping("/api/v1/pages/{slug}")
     @Operation(summary = "Get a single CMS page by slug")
     public ApiResponse<PageResponse> page(@PathVariable String slug) {
+        log.debug("Fetching CMS page '{}'", slug);
         return ApiResponse.success(contentService.getPage(slug));
     }
 

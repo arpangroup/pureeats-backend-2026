@@ -70,6 +70,7 @@ public class OtpChallengeService {
         challenge.setRequestId(metadata.requestId());
 
         otpChallengeRepository.save(challenge);
+        log.info("Created {} challenge {} for purpose={} userId={}", method, challenge.getChallengeId(), purpose, userId);
         return new GeneratedOtp(challenge, plainOtp);
     }
 
@@ -99,6 +100,7 @@ public class OtpChallengeService {
         challenge.setUpdatedAt(now);
 
         otpChallengeRepository.save(challenge);
+        log.info("Resent OTP for challenge {} (resendCount={})", challengeId, challenge.getResendCount());
         return new GeneratedOtp(challenge, plainOtp);
     }
 
@@ -108,9 +110,18 @@ public class OtpChallengeService {
         LocalDateTime now = LocalDateTime.now();
 
         switch (challenge.getStatus()) {
-            case VERIFIED -> throw new BadRequestException("ALREADY_VERIFIED", "This code has already been used.");
-            case CANCELLED -> throw new BadRequestException("CHALLENGE_CANCELLED", "This verification request is no longer valid. Please start again.");
-            case LOCKED -> throw new BadRequestException("OTP_ATTEMPTS_EXCEEDED", "Too many incorrect attempts. Please request a new OTP.");
+            case VERIFIED -> {
+                log.warn("Verify attempted on already-verified challenge {}", challengeId);
+                throw new BadRequestException("ALREADY_VERIFIED", "This code has already been used.");
+            }
+            case CANCELLED -> {
+                log.warn("Verify attempted on cancelled challenge {}", challengeId);
+                throw new BadRequestException("CHALLENGE_CANCELLED", "This verification request is no longer valid. Please start again.");
+            }
+            case LOCKED -> {
+                log.warn("Verify attempted on locked challenge {}", challengeId);
+                throw new BadRequestException("OTP_ATTEMPTS_EXCEEDED", "Too many incorrect attempts. Please request a new OTP.");
+            }
             default -> { /* PENDING/EXPIRED fall through to the expiry check below */ }
         }
 
@@ -120,6 +131,7 @@ public class OtpChallengeService {
             otpChallengeRepository.save(challenge);
         }
         if (challenge.getStatus() == OtpChallengeStatus.EXPIRED) {
+            log.warn("Verify attempted on expired challenge {}", challengeId);
             throw new BadRequestException("OTP_EXPIRED", "The OTP has expired. Please request a new OTP.");
         }
 
@@ -128,6 +140,7 @@ public class OtpChallengeService {
             challenge.setVerifiedAt(now);
             challenge.setUpdatedAt(now);
             otpChallengeRepository.save(challenge);
+            log.info("Challenge {} verified successfully (userId={})", challengeId, challenge.getUserId());
             return challenge;
         }
 
@@ -137,9 +150,11 @@ public class OtpChallengeService {
         if (remaining <= 0) {
             challenge.setStatus(OtpChallengeStatus.LOCKED);
             otpChallengeRepository.save(challenge);
+            log.warn("Challenge {} locked after exceeding max attempts", challengeId);
             throw new BadRequestException("OTP_ATTEMPTS_EXCEEDED", "Too many incorrect attempts. Please request a new OTP.");
         }
         otpChallengeRepository.save(challenge);
+        log.warn("Incorrect OTP for challenge {} ({} attempt(s) remaining)", challengeId, remaining);
         throw new InvalidOtpException("The OTP entered is invalid or incorrect.", remaining);
     }
 
@@ -157,9 +172,11 @@ public class OtpChallengeService {
         }
         LocalDateTime cooldownEnd = challenge.getLastSentAt().plusSeconds(properties.getOtp().getResendCooldownSeconds());
         if (cooldownEnd.isAfter(LocalDateTime.now())) {
+            log.warn("Resend rejected for challenge {} - still in cooldown", challenge.getChallengeId());
             throw new TooManyRequestsException("RESEND_COOLDOWN", "Please wait before requesting another OTP.");
         }
         if (challenge.getResendCount() >= challenge.getMaxResendCount()) {
+            log.warn("Resend rejected for challenge {} - max resends ({}) reached", challenge.getChallengeId(), challenge.getMaxResendCount());
             throw new TooManyRequestsException("MAX_RESENDS_EXCEEDED", "You have reached the maximum number of OTP resend attempts.");
         }
     }

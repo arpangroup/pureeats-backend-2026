@@ -4,8 +4,6 @@ application:
 spring:
   application:
     name: pureeats-app
-  profiles:
-    active: dev
 
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:pureeats}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
@@ -30,8 +28,8 @@ spring:
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:}
-    password: ${MAIL_PASSWORD:}
+    username: ${MAIL_USERNAME:cloud.arpan@gmail.com}
+    password: ${MAIL_PASSWORD:bvux gwxo ltaj vuzk}
     properties:
       mail:
         smtp:
@@ -99,8 +97,8 @@ security:
     cache-ttl-minutes: ${GEOLOCATION_CACHE_TTL_MINUTES:60}
 
 notification:
-  email-provider: ${NOTIFICATION_EMAIL_PROVIDER:console}
-  sms-provider: ${NOTIFICATION_SMS_PROVIDER:console}
+  email-provider: ${NOTIFICATION_EMAIL_PROVIDER:smtp} # console,smtp
+  sms-provider: ${NOTIFICATION_SMS_PROVIDER:console}  # console, smtp
   from-address: ${NOTIFICATION_FROM_ADDRESS:no-reply@pureeats.local}
   from-name: ${NOTIFICATION_FROM_NAME:PureEats}
 
@@ -117,9 +115,23 @@ management:
     web:
       exposure:
         include: health,info
+  health:
+    # spring.mail.host being set (below) is enough for Boot to auto-configure a JavaMailSender
+    # bean and register a MailHealthIndicator that SMTP-connects on every health check - even
+    # though this app only actually sends mail when notification.email-provider=smtp. Don't let
+    # an idle/misconfigured mail config take the whole /actuator/health endpoint DOWN.
+    mail:
+      enabled: false
 
 logging:
   level:
     com.pureeats: INFO
+  file:
+    name: ${LOG_FILE:./logs/pureeats-app.log}
+  logback:
+    rollingpolicy:
+      max-file-size: ${LOG_MAX_FILE_SIZE:10MB}
+      max-history: ${LOG_MAX_HISTORY:14}
+      total-size-cap: ${LOG_TOTAL_SIZE_CAP:500MB}
 server:
   port: ${SERVER_PORT:8081}

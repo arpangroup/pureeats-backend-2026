@@ -10,10 +10,12 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/users/me")
 @RequiredArgsConstructor
@@ -26,6 +28,7 @@ public class UserController {
     @GetMapping
     @Operation(summary = "Get the signed-in user's profile")
     public ApiResponse<UserResponse> getProfile(@AuthenticationPrincipal AuthenticatedUser principal) {
+        log.debug("Fetching profile for user {}", principal.userId());
         return ApiResponse.success(userService.getProfile(principal.userId()));
     }
 
@@ -33,6 +36,7 @@ public class UserController {
     @Operation(summary = "Update the signed-in user's profile")
     public ApiResponse<UserResponse> updateProfile(@AuthenticationPrincipal AuthenticatedUser principal,
                                                      @Valid @RequestBody UpdateUserRequest request) {
+        log.info("Updating profile for user {}", principal.userId());
         return ApiResponse.success("Profile updated", userService.updateProfile(principal.userId(), request));
     }
 
@@ -40,6 +44,7 @@ public class UserController {
     @Operation(summary = "Upload/replace the signed-in user's profile photo")
     public ApiResponse<UserResponse> uploadPhoto(@AuthenticationPrincipal AuthenticatedUser principal,
                                                   @RequestParam("file") MultipartFile file) {
+        log.info("Uploading profile photo for user {}", principal.userId());
         return ApiResponse.success("Photo updated", userService.updatePhoto(principal.userId(), file));
     }
 }

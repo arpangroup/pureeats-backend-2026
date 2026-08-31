@@ -16,6 +16,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -34,6 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 /** Admin-panel menu-item directory - across every restaurant, not just one owner's. */
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
@@ -48,12 +50,14 @@ public class AdminItemController {
             @RequestParam(required = false) Long restaurantId,
             @RequestParam(required = false) String search,
             @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+        log.debug("Admin: list items, restaurant {} search '{}' page {}", restaurantId, search, pageable.getPageNumber());
         return ApiResponse.success(menuService.listItemsPaged(restaurantId, search, pageable));
     }
 
     @GetMapping("/api/v1/admin/items/{id}")
     @Operation(summary = "Get an item's detail")
     public ApiResponse<ItemResponse> getById(@PathVariable Long id) {
+        log.debug("Admin: get item {}", id);
         return ApiResponse.success(menuService.getItem(id));
     }
 
@@ -61,18 +65,21 @@ public class AdminItemController {
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Create an item for any restaurant")
     public ApiResponse<ItemResponse> create(@Valid @RequestBody AdminItemCreateRequest request) {
+        log.debug("Admin: create item '{}' for restaurant {}", request.name(), request.restaurantId());
         return ApiResponse.success("Item created", menuService.createItemAsAdmin(request));
     }
 
     @PutMapping("/api/v1/admin/items/{id}")
     @Operation(summary = "Partially update an item - only non-null fields are applied")
     public ApiResponse<ItemResponse> update(@PathVariable Long id, @RequestBody ItemPatchRequest request) {
+        log.debug("Admin: patch item {}", id);
         return ApiResponse.success("Item updated", menuService.patchItemAsAdmin(id, request));
     }
 
     @DeleteMapping("/api/v1/admin/items/{id}")
     @Operation(summary = "Delete an item")
     public ApiResponse<Void> delete(@PathVariable Long id) {
+        log.debug("Admin: delete item {}", id);
         menuService.deleteItemAsAdmin(id);
         return ApiResponse.success("Item deleted", null);
     }
@@ -80,6 +87,7 @@ public class AdminItemController {
     @PostMapping("/api/v1/admin/items/bulk")
     @Operation(summary = "Create many items at once, verifying each row's restaurant and category first")
     public ApiResponse<ItemBulkUploadResponse> bulkCreate(@Valid @RequestBody ItemBulkRequest request) {
+        log.debug("Admin: bulk-create {} items", request.items().size());
         return ApiResponse.success(menuService.bulkCreateItems(request.items()));
     }
 
@@ -88,6 +96,7 @@ public class AdminItemController {
     public ApiResponse<ItemImageResponse> uploadImage(@AuthenticationPrincipal AuthenticatedUser principal,
                                                         @PathVariable Long id,
                                                         @RequestParam("file") MultipartFile file) {
+        log.debug("Admin {}: upload image for item {}", principal.userId(), id);
         return ApiResponse.success("Image uploaded", menuService.uploadItemImage(id, file, principal.userId()));
     }
 
@@ -95,6 +104,7 @@ public class AdminItemController {
     @Operation(summary = "List every item category, enabled or not")
     public ApiResponse<PageResponse<ItemCategoryResponse>> listCategories(
             @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+        log.debug("Admin: list item categories, page {}", pageable.getPageNumber());
         return ApiResponse.success(menuService.listCategoriesPaged(pageable));
     }
 
@@ -103,18 +113,21 @@ public class AdminItemController {
     @Operation(summary = "Create an item category")
     public ApiResponse<ItemCategoryResponse> createCategory(@AuthenticationPrincipal AuthenticatedUser principal,
                                                               @Valid @RequestBody ItemCategoryRequest request) {
+        log.debug("Admin {}: create item category '{}'", principal.userId(), request.name());
         return ApiResponse.success("Category created", menuService.createCategory(principal.userId(), request));
     }
 
     @PutMapping("/api/v1/admin/item-categories/{id}")
     @Operation(summary = "Update an item category")
     public ApiResponse<ItemCategoryResponse> updateCategory(@PathVariable Long id, @Valid @RequestBody ItemCategoryRequest request) {
+        log.debug("Admin: update item category {}", id);
         return ApiResponse.success("Category updated", menuService.updateCategoryAsAdmin(id, request));
     }
 
     @DeleteMapping("/api/v1/admin/item-categories/{id}")
     @Operation(summary = "Delete an item category")
     public ApiResponse<Void> deleteCategory(@PathVariable Long id) {
+        log.debug("Admin: delete item category {}", id);
         menuService.deleteCategoryAsAdmin(id);
         return ApiResponse.success("Category deleted", null);
     }

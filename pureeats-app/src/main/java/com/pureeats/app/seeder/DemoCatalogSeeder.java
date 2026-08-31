@@ -196,7 +196,8 @@ public class DemoCatalogSeeder implements ApplicationRunner {
     }
 
     private List<RestaurantCategory> seedRestaurantCategories() {
-        return List.of("North Indian", "Chinese").stream().map(name ->
+        return List.of("North Indian", "South Indian", "Pizza", "Chinese", "Biryani", "Desserts", "Healthy", "Fast Food", "Juice")
+                .stream().map(name ->
                 restaurantCategoryRepository.findAll().stream().filter(c -> name.equals(c.getName())).findFirst()
                         .orElseGet(() -> {
                             RestaurantCategory category = new RestaurantCategory();

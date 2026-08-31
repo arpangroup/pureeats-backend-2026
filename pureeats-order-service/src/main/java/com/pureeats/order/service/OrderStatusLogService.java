@@ -8,6 +8,7 @@ import com.pureeats.order.entity.OrderStatusLog;
 import com.pureeats.order.repository.OrderStatusLogRepository;
 import com.pureeats.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +19,7 @@ import java.util.Map;
 /** Records and lists an order's status-transition history - the "journey" the order detail page shows. */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class OrderStatusLogService {
 
     private final OrderStatusLogRepository orderStatusLogRepository;
@@ -25,22 +27,23 @@ public class OrderStatusLogService {
 
     @Transactional
     public void record(Long orderId, OrderStatusCode from, OrderStatusCode to, String actorType, Long actorUserId, String note) {
-        OrderStatusLog log = new OrderStatusLog();
-        log.setOrderId(orderId);
-        log.setFromStatus(from != null ? from.name() : null);
-        log.setToStatus(to.name());
-        log.setActorType(actorType);
-        log.setActorUserId(actorUserId);
-        log.setNote(note);
-        log.setCreatedAt(LocalDateTime.now());
-        orderStatusLogRepository.save(log);
+        log.debug("Recording status log for order {}: {} -> {} by {} {}", orderId, from, to, actorType, actorUserId);
+        OrderStatusLog entry = new OrderStatusLog();
+        entry.setOrderId(orderId);
+        entry.setFromStatus(from != null ? from.name() : null);
+        entry.setToStatus(to.name());
+        entry.setActorType(actorType);
+        entry.setActorUserId(actorUserId);
+        entry.setNote(note);
+        entry.setCreatedAt(LocalDateTime.now());
+        orderStatusLogRepository.save(entry);
     }
 
     @Transactional(readOnly = true)
     public List<OrderStatusLogResponse> journey(Long orderId) {
         return orderStatusLogRepository.findByOrderIdOrderByCreatedAtAsc(orderId).stream()
-                .map(log -> new OrderStatusLogResponse(log.getId(), log.getFromStatus(), log.getToStatus(),
-                        log.getActorType(), log.getActorUserId(), actorName(log.getActorUserId()), log.getNote(), log.getCreatedAt()))
+                .map(entry -> new OrderStatusLogResponse(entry.getId(), entry.getFromStatus(), entry.getToStatus(),
+                        entry.getActorType(), entry.getActorUserId(), actorName(entry.getActorUserId()), entry.getNote(), entry.getCreatedAt()))
                 .toList();
     }
 
@@ -54,6 +57,7 @@ public class OrderStatusLogService {
     public OrderTimelineResponse timeline(Long orderId) {
         List<OrderStatusLog> entries = orderStatusLogRepository.findByOrderIdOrderByCreatedAtAsc(orderId);
         if (entries.isEmpty()) {
+            log.debug("No status log entries found for order {}, returning empty timeline", orderId);
             return new OrderTimelineResponse(null, null, null, null, null, null, null, null);
         }
         Map<String, LocalDateTime> firstSeenAt = new java.util.HashMap<>();
