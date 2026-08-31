@@ -20,11 +20,14 @@ env:
   # Must match the branch above (and the clone in setup-server.sh) - update
   # both together if the deploy branch changes (e.g. once this merges to main).
   BRANCH: feature/26.08.30-initial-dev-3
-  # Spring profile the deployed app runs with - passed through as a
-  # --spring.profiles.active VM argument (see setup-server.sh's ExecStart).
-  # Written to a file the deploy user owns (not the root-only secrets env
-  # file), so this can change per-deploy without any extra sudo grant.
+  # Non-secret runtime settings, passed through as VM arguments to the app
+  # (see setup-server.sh's ExecStart: --spring.profiles.active / --logging.file.name /
+  # --pureeats.media.local.base-dir). Written below to a file the deploy user
+  # owns - not the root-only secrets env file - so these can change per
+  # deploy with no extra sudo grant needed.
   SPRING_PROFILE: prod
+  LOG_FILE: /var/log/pureeats/pureeats-api.log
+  MEDIA_LOCAL_BASE_DIR: /var/lib/pureeats/uploads
 
 jobs:
   deploy:
@@ -42,5 +45,18 @@ jobs:
 
       - name: Pull, build, and restart on the server
         run: |
-          ssh "${DEPLOY_USER}@${{ secrets.DEPLOY_HOST }}" \
-            "set -e && cd ${APP_DIR} && git fetch origin ${BRANCH} && git checkout ${BRANCH} && git reset --hard origin/${BRANCH} && mvn -q -pl pureeats-app -am package -DskipTests && echo SPRING_PROFILES_ACTIVE=${SPRING_PROFILE} > /etc/pureeats/pureeats-api-profile.env && sudo systemctl restart pureeats-api"
+          ssh "${DEPLOY_USER}@${{ secrets.DEPLOY_HOST }}" bash -s <<EOF
+            set -e
+
+            cd ${APP_DIR}
+            git fetch origin ${BRANCH}
+            git checkout ${BRANCH}
+            git reset --hard origin/${BRANCH}
+            mvn -q -pl pureeats-app -am package -DskipTests
+
+            echo "SPRING_PROFILES_ACTIVE=${SPRING_PROFILE}" > /etc/pureeats/pureeats-api-runtime.env
+            echo "LOG_FILE=${LOG_FILE}" >> /etc/pureeats/pureeats-api-runtime.env
+            echo "MEDIA_LOCAL_BASE_DIR=${MEDIA_LOCAL_BASE_DIR}" >> /etc/pureeats/pureeats-api-runtime.env
+
+            sudo systemctl restart pureeats-api
+          EOF
