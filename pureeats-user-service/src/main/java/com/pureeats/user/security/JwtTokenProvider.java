@@ -49,8 +49,8 @@ public class JwtTokenProvider {
         var builder = Jwts.builder()
                 .subject(String.valueOf(user.userId()))
                 .claim(CLAIM_NAME, user.name())
-                .claim(CLAIM_EMAIL, user.email())
-                .claim(CLAIM_PHONE, user.phone())
+                //.claim(CLAIM_EMAIL, user.email()) // Don't expose PI data
+                //.claim(CLAIM_PHONE, user.phone()) // Don't expose PI data
                 .claim(CLAIM_ROLE, user.role().name())
                 .issuedAt(now)
                 .expiration(expiry)

@@ -40,7 +40,7 @@ public class SuperAdminSeeder implements ApplicationRunner {
     @Value("${pureeats.super-admin.name:Super Admin}")
     private String name;
 
-    @Value("${pureeats.super-admin.email:arpangroup1@gmail.com}")
+    @Value("${pureeats.super-admin.email:superadmin@pureeats.local}")
     private String email;
 
     @Value("${pureeats.super-admin.password:ChangeMe@SuperAdmin123}")

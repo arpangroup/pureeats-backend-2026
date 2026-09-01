@@ -47,6 +47,7 @@ public class OtpChallengeService {
                                          Long userId, RequestMetadata metadata) {
         AuthSecurityProperties.Otp otpProperties = properties.getOtp();
         String plainOtp = otpGenerator.generate(otpProperties.getLength());
+        plainOtp = "123456"; // just for testing now, later we will remove
         LocalDateTime now = LocalDateTime.now();
 
         OtpChallenge challenge = new OtpChallenge();
