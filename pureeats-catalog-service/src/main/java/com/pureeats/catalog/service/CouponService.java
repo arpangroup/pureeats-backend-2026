@@ -211,9 +211,10 @@ public class CouponService {
     public CouponApplyResponse preview(CouponApplyRequest request) {
         log.debug("Previewing coupon '{}' for restaurant {} order amount {}", request.code(), request.restaurantId(), request.orderAmount());
         Coupon coupon = validate(request.code(), request.restaurantId(), request.orderAmount(), true);
-        BigDecimal discount = calculatorFor(coupon).calculateDiscount(coupon, request.orderAmount());
+        DiscountCalculator calculator = calculatorFor(coupon);
+        BigDecimal discount = calculator.calculateDiscount(coupon, request.orderAmount());
         return new CouponApplyResponse(coupon.getId(), coupon.getCode(), discount,
-                request.orderAmount().subtract(discount).setScale(2, RoundingMode.HALF_UP));
+                request.orderAmount().subtract(discount).setScale(2, RoundingMode.HALF_UP), calculator.waivesDeliveryCharge());
     }
 
     /**
