@@ -34,6 +34,8 @@ public record OrderResponse(
         PricingBreakdown pricingBreakdown,
         /** Null until a rider has been assigned (via the delivery flow or admin override). */
         Long deliveryGuyId,
-        String deliveryGuyName
+        String deliveryGuyName,
+        /** Richer version of deliveryGuyId/deliveryGuyName above (kept for backward compat) — null until assigned. */
+        OrderDeliveryPartnerSummary deliveryPartner
 ) {
 }

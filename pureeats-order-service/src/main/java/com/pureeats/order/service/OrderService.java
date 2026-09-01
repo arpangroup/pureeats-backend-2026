@@ -15,12 +15,15 @@ import com.pureeats.domain.common.response.PageResponse;
 import com.pureeats.domain.enums.DeliveryType;
 import com.pureeats.domain.enums.OrderStatusCode;
 import com.pureeats.notification.service.NotificationDispatchService;
+import com.pureeats.media.storage.MediaUrlResolver;
 import com.pureeats.order.dto.*;
+import com.pureeats.order.service.cartvalidation.CartValidationService;
 import com.pureeats.order.repository.AcceptDeliveryRepository;
 import com.pureeats.order.repository.OrderItemAddonRepository;
 import com.pureeats.order.repository.OrderItemRepository;
 import com.pureeats.order.repository.OrderRepository;
 import com.pureeats.user.repository.AddressRepository;
+import com.pureeats.user.repository.DeliveryGuyDetailRepository;
 import com.pureeats.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -60,16 +63,19 @@ public class OrderService {
     private final OrderStatusLogService orderStatusLogService;
     private final ObjectMapper objectMapper;
     private final AcceptDeliveryRepository acceptDeliveryRepository;
+    private final DeliveryGuyDetailRepository deliveryGuyDetailRepository;
+    private final CartValidationService cartValidationService;
+    private final MediaUrlResolver mediaUrlResolver;
 
     @Transactional
     public OrderResponse placeOrder(Long userId, PlaceOrderRequest request) {
         log.info("Placing order for user {} at restaurant {}", userId, request.restaurantId());
         Restaurant restaurant = restaurantRepository.findById(request.restaurantId())
                 .orElseThrow(() -> new ResourceNotFoundException("Restaurant not found: " + request.restaurantId()));
-        if (!Boolean.TRUE.equals(restaurant.getIsActive()) || !Boolean.TRUE.equals(restaurant.getIsAccepted())) {
-            log.warn("Rejected order for user {}: restaurant {} is not accepting orders", userId, restaurant.getId());
-            throw new BadRequestException("This restaurant is not currently accepting orders");
-        }
+        // Same rule pipeline (CartValidationRule beans) that backs the Cart page's live availability
+        // check (see CartController) - throws on the first issue (restaurant closed, item
+        // unavailable, out of stock, ...) instead of duplicating those checks inline here.
+        cartValidationService.assertPlaceable(restaurant.getId(), request.items());
 
         Address address = addressRepository.findById(request.addressId())
                 .orElseThrow(() -> new ResourceNotFoundException("Address not found: " + request.addressId()));
@@ -97,12 +103,9 @@ public class OrderService {
         record Line(Item item, int quantity, List<Addon> addons) {
         }
         List<Line> lines = request.items().stream().map(itemRequest -> {
+            // Availability/stock already asserted above - this lookup only builds the order rows.
             Item item = itemRepository.findById(itemRequest.itemId())
                     .orElseThrow(() -> new ResourceNotFoundException("Item not found: " + itemRequest.itemId()));
-            if (!item.getRestaurantId().equals(restaurant.getId().intValue()) || !Boolean.TRUE.equals(item.getIsActive())) {
-                log.warn("Rejected order for user {}: item {} is not available at restaurant {}", userId, item.getId(), restaurant.getId());
-                throw new BadRequestException("Item " + item.getName() + " is not available at this restaurant");
-            }
             List<Addon> addons = itemRequest.selectedAddonIds() == null ? List.of()
                     : itemRequest.selectedAddonIds().stream()
                     .map(id -> addonRepository.findById(id)
@@ -312,8 +315,12 @@ public class OrderService {
         OrderCustomerSummary customerSummary = new OrderCustomerSummary(order.getUserId().longValue(),
                 customer != null ? customer.getName() : "Unknown", customer != null ? customer.getEmail() : null,
                 customer != null ? customer.getPhone() : null);
+        String restaurantImage = restaurant != null
+                ? mediaUrlResolver.resolve(restaurant.getImage() != null ? restaurant.getImage() : restaurant.getPlaceholderImage())
+                : null;
         OrderRestaurantSummary restaurantSummary = new OrderRestaurantSummary(order.getRestaurantId().longValue(),
-                restaurant != null ? restaurant.getName() : "Unknown", restaurant != null ? restaurant.getContactNumber() : null);
+                restaurant != null ? restaurant.getName() : "Unknown", restaurant != null ? restaurant.getContactNumber() : null,
+                restaurantImage);
         var liveCoupon = order.getCouponCode() == null ? null : couponService.findByCode(order.getCouponCode()).orElse(null);
         OrderCouponSummary couponSummary = order.getCouponCode() == null ? null : new OrderCouponSummary(
                 liveCoupon != null ? liveCoupon.id() : null, order.getCouponCode(), order.getCouponName(),
@@ -321,10 +328,19 @@ public class OrderService {
 
         Long deliveryGuyId = null;
         String deliveryGuyName = null;
+        OrderDeliveryPartnerSummary deliveryPartner = null;
         var acceptedDelivery = acceptDeliveryRepository.findByOrderId(order.getId().intValue()).orElse(null);
         if (acceptedDelivery != null) {
             deliveryGuyId = acceptedDelivery.getUserId().longValue();
-            deliveryGuyName = userRepository.findById(deliveryGuyId).map(User::getName).orElse("Unknown");
+            User rider = userRepository.findById(deliveryGuyId).orElse(null);
+            deliveryGuyName = rider != null ? rider.getName() : "Unknown";
+            DeliveryGuyDetail riderDetail = rider != null && rider.getDeliveryGuyDetailId() != null
+                    ? deliveryGuyDetailRepository.findById(rider.getDeliveryGuyDetailId().longValue()).orElse(null)
+                    : null;
+            deliveryPartner = new OrderDeliveryPartnerSummary(deliveryGuyId, deliveryGuyName,
+                    rider != null ? rider.getPhone() : null,
+                    riderDetail != null ? mediaUrlResolver.resolve(riderDetail.getPhoto()) : null,
+                    riderDetail != null ? riderDetail.getVehicleNumber() : null);
         }
 
         return new OrderResponse(order.getId(), order.getUniqueOrderId(), status != null ? status.name() : "UNKNOWN",
@@ -333,7 +349,7 @@ public class OrderService {
                 order.getDeliveryCharge(), order.getDriverTipAmount(), order.getDiscountAmount(), order.getTotal(), order.getPayable(),
                 order.getPaymentMode(), order.getDeliveryPin(), order.getOrderComment(),
                 order.getTransactionId(), order.getDeliveryType(), order.getOrderFrom(), order.getCreatedAt(),
-                legalNextStatuses, deserializeBreakdown(order.getPricingBreakdown()), deliveryGuyId, deliveryGuyName);
+                legalNextStatuses, deserializeBreakdown(order.getPricingBreakdown()), deliveryGuyId, deliveryGuyName, deliveryPartner);
     }
 
     private String serializeBreakdown(PricingBreakdown breakdown) {
@@ -359,8 +375,16 @@ public class OrderService {
 
     private OrderSummaryResponse toSummary(Order order) {
         OrderStatusCode status = orderStatusService.codeFor(order.getOrderstatusId());
+        Restaurant restaurant = restaurantRepository.findById(order.getRestaurantId().longValue()).orElse(null);
+        String restaurantImage = restaurant != null
+                ? mediaUrlResolver.resolve(restaurant.getImage() != null ? restaurant.getImage() : restaurant.getPlaceholderImage())
+                : null;
+        String deliveryGuyName = acceptDeliveryRepository.findByOrderId(order.getId().intValue())
+                .map(ad -> userRepository.findById(ad.getUserId().longValue()).map(User::getName).orElse("Unknown"))
+                .orElse(null);
         return new OrderSummaryResponse(order.getId(), order.getUniqueOrderId(), status != null ? status.name() : "UNKNOWN",
-                order.getRestaurantId().longValue(), order.getPayable(), order.getCreatedAt());
+                order.getRestaurantId().longValue(), restaurant != null ? restaurant.getName() : "Unknown", restaurantImage,
+                order.getPayable(), order.getCreatedAt(), deliveryGuyName);
     }
 
     private void notifyOwners(Long restaurantId, String uniqueOrderId) {

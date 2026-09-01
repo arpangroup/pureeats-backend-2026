@@ -23,7 +23,8 @@ public class Setting {
     @Column(name = "`key`", nullable = false)
     private String key;
 
+    /** Backtick-quoted like "key" above: "value" is also a reserved word (at least under H2's MySQL test mode) and breaks unquoted DDL/DML. */
     @Lob
-    @Column(name = "value")
+    @Column(name = "`value`")
     private String value;
 }

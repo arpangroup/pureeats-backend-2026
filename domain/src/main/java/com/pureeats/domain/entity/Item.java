@@ -68,4 +68,8 @@ public class Item {
 
     @Column(name = "is_veg")
     private Boolean isVeg;
+
+    /** Null = stock untracked (unlimited availability, the default for every item today); 0 = out of stock. No write path exists yet — this is the read-side hook a future stock-management UI would set. */
+    @Column(name = "stock_quantity")
+    private Integer stockQuantity;
 }
