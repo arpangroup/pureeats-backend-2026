@@ -8,7 +8,11 @@ public record OrderSummaryResponse(
         String uniqueOrderId,
         String status,
         Long restaurantId,
+        String restaurantName,
+        String restaurantImage,
         BigDecimal total,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        /** Null until a rider has been assigned. */
+        String deliveryGuyName
 ) {
 }

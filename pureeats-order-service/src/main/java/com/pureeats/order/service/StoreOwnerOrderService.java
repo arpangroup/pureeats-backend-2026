@@ -157,7 +157,7 @@ public class StoreOwnerOrderService {
         return orders.stream().map(o -> {
             OrderStatusCode status = orderStatusService.codeFor(o.getOrderstatusId());
             return new OrderSummaryResponse(o.getId(), o.getUniqueOrderId(), status != null ? status.name() : "UNKNOWN",
-                    o.getRestaurantId().longValue(), o.getPayable(), o.getCreatedAt());
+                    o.getRestaurantId().longValue(), null, null, o.getPayable(), o.getCreatedAt(), null);
         }).toList();
     }
 }

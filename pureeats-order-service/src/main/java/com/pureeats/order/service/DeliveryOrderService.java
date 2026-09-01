@@ -55,7 +55,7 @@ public class DeliveryOrderService {
                 .map(o -> {
                     OrderStatusCode status = orderStatusService.codeFor(o.getOrderstatusId());
                     return new OrderSummaryResponse(o.getId(), o.getUniqueOrderId(), status.name(),
-                            o.getRestaurantId().longValue(), o.getPayable(), o.getCreatedAt());
+                            o.getRestaurantId().longValue(), null, null, o.getPayable(), o.getCreatedAt(), null);
                 }).toList();
     }
 
