@@ -353,9 +353,17 @@ public class OrderService {
             DeliveryGuyDetail riderDetail = rider != null && rider.getDeliveryGuyDetailId() != null
                     ? deliveryGuyDetailRepository.findById(rider.getDeliveryGuyDetailId().longValue()).orElse(null)
                     : null;
+            // Two different `photo` columns exist for a rider: DeliveryGuyDetail.photo (a
+            // delivery-specific photo, if a store/admin ever sets one) and User.photo (the
+            // account's own profile photo, set the same way a customer's would be) - most riders
+            // only ever have the latter, so prefer the delivery-specific one but fall back to the
+            // account photo rather than showing nothing when only one of the two is set.
+            String riderPhotoKey = riderDetail != null && riderDetail.getPhoto() != null && !riderDetail.getPhoto().isBlank()
+                    ? riderDetail.getPhoto()
+                    : (rider != null ? rider.getPhoto() : null);
             deliveryPartner = new OrderDeliveryPartnerSummary(deliveryGuyId, deliveryGuyName,
                     rider != null ? rider.getPhone() : null,
-                    riderDetail != null ? mediaUrlResolver.resolve(riderDetail.getPhoto()) : null,
+                    mediaUrlResolver.resolve(riderPhotoKey),
                     riderDetail != null ? riderDetail.getVehicleNumber() : null);
         }
 
