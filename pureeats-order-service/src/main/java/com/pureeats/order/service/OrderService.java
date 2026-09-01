@@ -212,6 +212,22 @@ public class OrderService {
         return toResponse(order);
     }
 
+    /**
+     * Cheap poll target for order tracking — see {@link OrderStatusSnapshot}'s javadoc for why this
+     * exists separately from {@link #getOrder}. Same ownership check, but skips every join
+     * {@link #toResponse} does.
+     */
+    @Transactional(readOnly = true)
+    public OrderStatusSnapshot getOrderStatus(Long userId, Long orderId) {
+        Order order = findOrThrow(orderId);
+        if (!order.getUserId().equals(userId.intValue())) {
+            log.warn("User {} attempted to poll status of order {} which does not belong to them", userId, orderId);
+            throw new ForbiddenException("This order does not belong to you");
+        }
+        OrderStatusCode status = orderStatusService.codeFor(order.getOrderstatusId());
+        return new OrderStatusSnapshot(status != null ? status.name() : "UNKNOWN", order.getUpdatedAt());
+    }
+
     @Transactional
     public void cancelOrder(Long userId, Long orderId) {
         log.info("User {} requesting cancellation of order {}", userId, orderId);
