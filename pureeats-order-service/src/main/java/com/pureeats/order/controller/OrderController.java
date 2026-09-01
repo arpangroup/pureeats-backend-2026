@@ -3,6 +3,7 @@ package com.pureeats.order.controller;
 import com.pureeats.domain.common.response.ApiResponse;
 import com.pureeats.order.dto.DeliverOrderRequest;
 import com.pureeats.order.dto.OrderResponse;
+import com.pureeats.order.dto.OrderStatusSnapshot;
 import com.pureeats.order.dto.OrderSummaryResponse;
 import com.pureeats.order.dto.OrderTimelineResponse;
 import com.pureeats.order.dto.PlaceOrderRequest;
@@ -56,6 +57,12 @@ public class OrderController {
     @Operation(summary = "Get order details")
     public ApiResponse<OrderResponse> get(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long id) {
         return ApiResponse.success(orderService.getOrder(principal.userId(), id));
+    }
+
+    @GetMapping("/{id}/status")
+    @Operation(summary = "Lightweight poll target - status + last-updated only, for clients that want to poll frequently without paying for the full order-detail joins on every tick")
+    public ApiResponse<OrderStatusSnapshot> status(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long id) {
+        return ApiResponse.success(orderService.getOrderStatus(principal.userId(), id));
     }
 
     @GetMapping("/{id}/timeline")

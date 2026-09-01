@@ -29,11 +29,16 @@ import java.util.List;
 @Order(2)
 public class DemoDeliveryGuySeeder implements ApplicationRunner {
 
-    private record SeedRider(String email, String vehicleNumber, String gender, int age, boolean isOnline, double rating) {}
+    private record SeedRider(String email, String vehicleNumber, String gender, int age, boolean isOnline, double rating, String photo) {}
 
+    // Stable public placeholder-avatar service (i.pravatar.cc) - same "external dependency for demo
+    // data" pattern already used elsewhere here (OpenStreetMap tiles for the map picker). Swap for a
+    // real uploaded photo (via MediaAssetService, same as a restaurant cover image) whenever this
+    // demo account gets one - MediaUrlResolver already passes an absolute http(s) URL like this
+    // through unchanged rather than treating it as a local storage key.
     private static final List<SeedRider> SEED_RIDERS = List.of(
-            new SeedRider("demo.delivery1@pureeats.local", "KA01AB1234", "male", 27, true, 4.6),
-            new SeedRider("demo.delivery2@pureeats.local", "KA05CD5678", "female", 24, false, 4.8)
+            new SeedRider("demo.delivery1@pureeats.local", "KA01AB1234", "male", 27, true, 4.6, "https://i.pravatar.cc/300?img=12"),
+            new SeedRider("demo.delivery2@pureeats.local", "KA05CD5678", "female", 24, false, 4.8, "https://i.pravatar.cc/300?img=45")
     );
 
     private final UserRepository userRepository;
@@ -59,6 +64,7 @@ public class DemoDeliveryGuySeeder implements ApplicationRunner {
             detail.setGender(rider.gender());
             detail.setDescription("Seeded demo delivery partner");
             detail.setVehicleNumber(rider.vehicleNumber());
+            detail.setPhoto(rider.photo());
             detail.setCommissionRate(BigDecimal.valueOf(12));
             detail.setMaxAcceptDeliveryLimit(3);
             detail.setRating(BigDecimal.valueOf(rider.rating()));
