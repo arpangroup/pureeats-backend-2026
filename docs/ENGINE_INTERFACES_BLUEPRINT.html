@@ -1,0 +1,930 @@
+<title>Engine Interfaces Blueprint</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F5F6F1; --surface:#FFFFFF; --surface-2:#EBEEE5;
+    --ink:#181B15; --ink-2:#4B5245; --ink-3:#7A8172; --border:#DCE1D4;
+    --accent:#1F6F5C; --accent-ink:#0E3A30; --accent-soft:#E1F0E9;
+    --warm:#C97A2E; --warm-soft:#FBEEDD; --warm-ink:#7A4413;
+    --code-bg:#EBEEE3; --danger:#A6432A; --danger-soft:#F6E4DD;
+    --diagram-bg:#101A16; --diagram-surface:#17251F; --diagram-line:#3F8A73;
+    --diagram-ink:#EAF3EE; --diagram-ink-dim:#93A89D; --diagram-accent:#E3A05C;
+    --shadow:0 1px 2px rgba(20,30,20,.04), 0 8px 24px -12px rgba(20,30,20,.12);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0D110E; --surface:#141914; --surface-2:#1B221C;
+      --ink:#E9ECE4; --ink-2:#B7BEAF; --ink-3:#828A7B; --border:#28312A;
+      --accent:#55BFA1; --accent-ink:#C6EEDF; --accent-soft:#152922;
+      --warm:#E3A05C; --warm-soft:#2C2013; --warm-ink:#F2CB9B;
+      --code-bg:#1B221C; --danger:#E38A6E; --danger-soft:#301C15;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0D110E; --surface:#141914; --surface-2:#1B221C;
+    --ink:#E9ECE4; --ink-2:#B7BEAF; --ink-3:#828A7B; --border:#28312A;
+    --accent:#55BFA1; --accent-ink:#C6EEDF; --accent-soft:#152922;
+    --warm:#E3A05C; --warm-soft:#2C2013; --warm-ink:#F2CB9B;
+    --code-bg:#1B221C; --danger:#E38A6E; --danger-soft:#301C15;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:'IBM Plex Sans',-apple-system,'Segoe UI',Roboto,sans-serif; font-size:16px; line-height:1.6; -webkit-font-smoothing:antialiased;}
+  a{color:var(--accent);}
+  a:focus-visible,summary:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  ::selection{background:var(--accent-soft); color:var(--accent-ink);}
+  h1,h2,h3,h4{font-family:'Fraunces',Georgia,serif; font-weight:600; text-wrap:balance; color:var(--ink); margin:0;}
+  code,.mono{font-family:'IBM Plex Mono',SFMono-Regular,Consolas,monospace;}
+  code{background:var(--code-bg); padding:.12em .4em; border-radius:4px; font-size:.86em;}
+  .shell{max-width:1360px; margin:0 auto; padding:3.2rem 2rem 6rem;}
+  .layout{display:flex; gap:3.2rem; align-items:flex-start;}
+  .doc-header{max-width:760px; margin-bottom:2.6rem;}
+  .kicker{font-family:'IBM Plex Mono',monospace; font-size:.78rem; letter-spacing:.11em; text-transform:uppercase; color:var(--accent); font-weight:600; margin-bottom:.9rem; display:flex; gap:.6rem; align-items:center;}
+  .kicker::before{content:""; width:1.6rem; height:1px; background:var(--accent);}
+  h1.title{font-size:clamp(2.2rem,4.2vw,3rem); line-height:1.08; letter-spacing:-.01em;}
+  .lead{font-size:1.1rem; color:var(--ink-2); margin-top:1.1rem; max-width:66ch;}
+  .meta-row{display:flex; flex-wrap:wrap; gap:1.6rem; margin-top:1.5rem; padding-top:1.3rem; border-top:1px solid var(--border);}
+  .meta-item{font-size:.82rem;}
+  .meta-item .k{color:var(--ink-3); text-transform:uppercase; letter-spacing:.07em; font-size:.7rem; display:block; margin-bottom:.2rem;}
+  .toc{width:236px; flex:none; position:sticky; top:2.4rem; align-self:flex-start;}
+  .toc-title{font-size:.7rem; text-transform:uppercase; letter-spacing:.1em; color:var(--ink-3); margin-bottom:.9rem; font-weight:600;}
+  .toc ol{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.15rem;}
+  .toc li a{display:block; padding:.4rem .6rem; border-radius:6px; color:var(--ink-2); text-decoration:none; font-size:.86rem;}
+  .toc li a:hover{background:var(--surface-2); color:var(--ink);}
+  .toc-num{font-family:'IBM Plex Mono',monospace; color:var(--ink-3); margin-right:.5em; font-size:.8em;}
+  .content{flex:1; min-width:0; max-width:860px;}
+  section.chapter{padding-top:2.5rem; margin-top:2.5rem; border-top:1px solid var(--border);}
+  section.chapter:first-of-type{border-top:none; margin-top:0;}
+  .chapter-head{display:flex; align-items:baseline; gap:.9rem; margin-bottom:.5rem; flex-wrap:wrap;}
+  .chapter-num{font-family:'IBM Plex Mono',monospace; color:var(--ink-3); font-size:1rem;}
+  h2{font-size:1.5rem;}
+  h3{font-size:1.05rem; margin-top:1.6rem; margin-bottom:.5rem;}
+  .chapter-dek{color:var(--ink-2); font-size:1rem; margin-top:.5rem; max-width:72ch;}
+  p{margin:.8rem 0; color:var(--ink-2); max-width:72ch;}
+  p strong{color:var(--ink); font-weight:600;}
+  .status-pill{display:inline-flex; align-items:center; gap:.4em; font-family:'IBM Plex Mono',monospace; font-size:.66rem; letter-spacing:.05em; text-transform:uppercase; font-weight:600; padding:.26em .6em; border-radius:99px;}
+  .status-pill.live{background:var(--accent-soft); color:var(--accent-ink);}
+  .status-pill.proposed{background:var(--warm-soft); color:var(--warm-ink);}
+  .panel{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1.3rem 1.5rem; margin:1.2rem 0; box-shadow:var(--shadow);}
+  .panel.note{background:var(--surface-2);}
+  .diagram-panel{background:var(--diagram-bg); border-radius:12px; padding:1.4rem 1.5rem 1.1rem; margin:1.3rem 0; box-shadow:var(--shadow); overflow-x:auto;}
+  .diagram-panel svg{display:block; width:100%; height:auto; max-width:100%;}
+  figcaption{color:var(--diagram-ink-dim); font-size:.8rem; margin-top:.75rem; padding-top:.75rem; border-top:1px solid rgba(255,255,255,.08); line-height:1.55;}
+  figure{margin:0;}
+  .table-wrap{overflow-x:auto; margin:1.1rem 0;}
+  table{border-collapse:collapse; width:100%; font-size:.85rem; min-width:520px;}
+  th,td{text-align:left; padding:.55rem .75rem; border-bottom:1px solid var(--border); vertical-align:top;}
+  th{font-family:'IBM Plex Mono',monospace; font-size:.66rem; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-3); font-weight:600; background:var(--surface-2);}
+  td{color:var(--ink-2);}
+  tr:last-child td{border-bottom:none;}
+  .legend-row{display:flex; flex-wrap:wrap; gap:1.4rem; margin-top:1rem;}
+  .legend-item{display:flex; align-items:center; gap:.55rem; font-size:.82rem; color:var(--ink-2);}
+  footer{max-width:860px; margin-left:auto; margin-right:auto; padding-top:2.2rem; margin-top:2.8rem; border-top:1px solid var(--border); color:var(--ink-3); font-size:.84rem;}
+  details.toc-mobile{display:none;}
+  @media (max-width:980px){
+    .layout{flex-direction:column;} .toc{display:none;}
+    details.toc-mobile{display:block; margin-bottom:2rem; border:1px solid var(--border); border-radius:10px; background:var(--surface);}
+    details.toc-mobile summary{padding:.9rem 1.1rem; font-family:'IBM Plex Mono',monospace; font-size:.72rem; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-2); cursor:pointer;}
+    details.toc-mobile ol{list-style:none; margin:0; padding:0 1.1rem 1rem;}
+    details.toc-mobile li a{display:block; padding:.3rem 0; color:var(--ink-2); text-decoration:none; font-size:.86rem;}
+    .content{max-width:100%;}
+  }
+</style>
+
+<div class="shell">
+  <div class="doc-header">
+    <div class="kicker">PureEats Backend &middot; Companion to the Order Journey Blueprint</div>
+    <h1 class="title">Engine Interfaces Blueprint</h1>
+    <p class="lead">Class and interface diagrams for every pluggable engine behind the order pipeline — distance, pricing, coupons, delivery zones, surge, driver matching, assignment, routing and ETA — with every implementation worth having on record, even the ones not built yet. Ends with one diagram wiring them all together, cart validation through driver assignment.</p>
+    <div class="meta-row">
+      <div class="meta-item"><span class="k">Notation</span>UML-style: realization &amp; composition</div>
+      <div class="meta-item"><span class="k">Status</span>Reference catalog, not a build plan</div>
+      <div class="meta-item"><span class="k">Prepared</span>2 Sept 2026</div>
+    </div>
+  </div>
+
+  <details class="toc-mobile">
+    <summary>Contents</summary>
+    <ol>
+      <li><a href="#legend"><span class="toc-num">00</span>How to read these diagrams</a></li>
+      <li><a href="#distance"><span class="toc-num">01</span>Distance Calculator</a></li>
+      <li><a href="#delivery-charge"><span class="toc-num">02</span>Delivery Charge Strategy</a></li>
+      <li><a href="#coupon"><span class="toc-num">03</span>Coupon Validity Rule</a></li>
+      <li><a href="#polygon"><span class="toc-num">04</span>Zone Containment (Polygon) Check</a></li>
+      <li><a href="#surge"><span class="toc-num">05</span>Surge Price Engine</a></li>
+      <li><a href="#matching"><span class="toc-num">06</span>Driver Matching Engine</a></li>
+      <li><a href="#assignment"><span class="toc-num">07</span>Driver Assignment Strategy</a></li>
+      <li><a href="#routing"><span class="toc-num">08</span>Routing Engine</a></li>
+      <li><a href="#eta"><span class="toc-num">09</span>ETA Calculation</a></li>
+      <li><a href="#wiring"><span class="toc-num">10</span>End-to-end wiring</a></li>
+    </ol>
+  </details>
+
+  <div class="layout">
+    <nav class="toc">
+      <div class="toc-title">Contents</div>
+      <ol>
+        <li><a href="#legend"><span class="toc-num">00</span>Notation legend</a></li>
+        <li><a href="#distance"><span class="toc-num">01</span>Distance Calculator</a></li>
+        <li><a href="#delivery-charge"><span class="toc-num">02</span>Delivery Charge Strategy</a></li>
+        <li><a href="#coupon"><span class="toc-num">03</span>Coupon Validity Rule</a></li>
+        <li><a href="#polygon"><span class="toc-num">04</span>Zone Containment Check</a></li>
+        <li><a href="#surge"><span class="toc-num">05</span>Surge Price Engine</a></li>
+        <li><a href="#matching"><span class="toc-num">06</span>Driver Matching Engine</a></li>
+        <li><a href="#assignment"><span class="toc-num">07</span>Driver Assignment Strategy</a></li>
+        <li><a href="#routing"><span class="toc-num">08</span>Routing Engine</a></li>
+        <li><a href="#eta"><span class="toc-num">09</span>ETA Calculation</a></li>
+        <li><a href="#wiring"><span class="toc-num">10</span>End-to-end wiring</a></li>
+      </ol>
+    </nav>
+
+    <main class="content">
+
+      <section class="chapter" id="legend">
+        <div class="chapter-head"><span class="chapter-num">00</span><h2>How to read these diagrams</h2></div>
+        <p class="chapter-dek">Every family below follows the same shape: one interface at the top, its implementations grouped into labeled categories underneath, one consumer to the side. Two relationship types, drawn the standard UML way so there's no ambiguity between "this class fulfills the contract" and "this class owns a list of them."</p>
+        <div class="diagram-panel">
+          <figure>
+            <svg viewBox="0 0 820 190" role="img" aria-label="Legend: a dashed line ending in a hollow triangle means implements or realizes the interface above it; a solid line ending in a filled diamond at the consumer means the consumer holds a collection of the interface. A solid-bordered card is implemented today; a dashed amber-bordered card is proposed and not yet built.">
+              <defs>
+                <marker id="triL" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1,1 L11,6 L1,11 Z" fill="var(--diagram-bg)" stroke="var(--diagram-line)" stroke-width="1"/></marker>
+                <marker id="diaL" viewBox="0 0 12 12" refX="6" refY="6" markerWidth="8" markerHeight="8"><path d="M6,0 L12,6 L6,12 L0,6 Z" fill="var(--diagram-line)"/></marker>
+              </defs>
+              <rect x="20" y="20" width="150" height="40" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="95" y="44" text-anchor="middle" fill="var(--diagram-ink)" font-size="11">Implemented today</text>
+
+              <rect x="20" y="80" width="150" height="40" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="95" y="104" text-anchor="middle" fill="var(--diagram-ink)" font-size="11">Proposed</text>
+
+              <line x1="220" y1="40" x2="320" y2="40" stroke="var(--diagram-line)" stroke-dasharray="4 3" marker-end="url(#triL)"/>
+              <text x="270" y="30" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5">implements</text>
+              <text x="340" y="44" fill="var(--diagram-ink)" font-size="11">realizes the interface (hollow triangle points at the interface)</text>
+
+              <line x1="220" y1="100" x2="320" y2="100" stroke="var(--diagram-line)" marker-start="url(#diaL)"/>
+              <text x="270" y="90" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5">composition</text>
+              <text x="340" y="104" fill="var(--diagram-ink)" font-size="11">consumer holds List&lt;Interface&gt; (filled diamond at the owner)</text>
+
+              <text x="20" y="155" fill="var(--diagram-ink-dim)" font-size="10.5">Implementations are grouped into named categories (e.g. “straight-line” vs “road-network”) — the grouping is itself information: it tells you which implementations are interchangeable siblings.</text>
+            </svg>
+          </figure>
+        </div>
+      </section>
+
+      <section class="chapter" id="distance">
+        <div class="chapter-head"><span class="chapter-num">01</span><h2>Distance Calculator</h2></div>
+        <p class="chapter-dek">Today's only implementation is straight-line Haversine, living inside <code>OrderPricingService</code> (see the Order Journey Blueprint, §03, for why that's a Single-Responsibility problem worth fixing). Everything else below is on record for when road-distance or a caching layer becomes worth the complexity — none of it is required to ship the §03 refactor.</p>
+        <div class="diagram-panel">
+          <figure>
+            <svg viewBox="0 0 820 460" role="img" aria-label="DistanceCalculator interface with method distanceKm, realized by nine implementations grouped into three categories: straight-line (Haversine, Vincenty, Euclidean flat-plane), road-network (OSRM, Google Distance Matrix, Mapbox, GraphHopper), and decorators (cached, fallback). PricingOrchestrator holds a composition relationship to the interface.">
+              <defs>
+                <marker id="tri1" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1,1 L11,6 L1,11 Z" fill="var(--diagram-bg)" stroke="var(--diagram-line)" stroke-width="1"/></marker>
+                <marker id="dia1" viewBox="0 0 12 12" refX="6" refY="6" markerWidth="8" markerHeight="8"><path d="M6,0 L12,6 L6,12 L0,6 Z" fill="var(--diagram-line)"/></marker>
+              </defs>
+              <rect x="310" y="14" width="200" height="42" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)" stroke-width="1.4"/>
+              <text x="410" y="30" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9" letter-spacing="1">&#171;interface&#187;</text>
+              <text x="410" y="46" text-anchor="middle" fill="var(--diagram-ink)" font-size="13" font-style="italic" font-weight="600">DistanceCalculator</text>
+              <rect x="280" y="56" width="260" height="30" rx="8" fill="var(--diagram-bg)" stroke="var(--diagram-line)"/>
+              <text x="410" y="75" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5" font-family="'IBM Plex Mono',monospace">distanceKm(origin, dest): BigDecimal</text>
+
+              <rect x="592" y="8" width="210" height="60" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="697" y="32" text-anchor="middle" fill="var(--diagram-ink)" font-size="11.5" font-weight="600">PricingOrchestrator</text>
+              <text x="697" y="48" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">DriverMatchingEngine (DistanceCriterion)</text>
+              <line x1="592" y1="38" x2="512" y2="38" stroke="var(--diagram-line)" marker-start="url(#dia1)"/>
+
+              <line x1="410" y1="104" x2="410" y2="87" stroke="var(--diagram-line)" marker-end="url(#tri1)"/>
+              <line x1="150" y1="104" x2="670" y2="104" stroke="var(--diagram-line)"/>
+              <line x1="150" y1="104" x2="150" y2="130" stroke="var(--diagram-line)"/>
+              <line x1="410" y1="104" x2="410" y2="130" stroke="var(--diagram-line)"/>
+              <line x1="670" y1="104" x2="670" y2="130" stroke="var(--diagram-line)"/>
+
+              <text x="150" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10" letter-spacing=".5">STRAIGHT-LINE</text>
+              <text x="410" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10" letter-spacing=".5">ROAD-NETWORK</text>
+              <text x="670" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10" letter-spacing=".5">DECORATORS</text>
+
+              <line x1="150" y1="150" x2="150" y2="348" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+              <line x1="410" y1="150" x2="410" y2="418" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+              <line x1="670" y1="150" x2="670" y2="278" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+
+              <rect x="55" y="152" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="150" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">HaversineDistanceCalculator</text>
+              <text x="150" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">spherical earth — current default</text>
+
+              <rect x="55" y="222" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="150" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">VincentyDistanceCalculator</text>
+              <text x="150" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">ellipsoidal earth, higher precision</text>
+
+              <rect x="55" y="292" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="150" y="312" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">EuclideanFlatDistanceCalculator</text>
+              <text x="150" y="328" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">flat-plane approx, small areas only</text>
+
+              <rect x="315" y="152" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="410" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">OsrmDistanceCalculator</text>
+              <text x="410" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">self-hosted road network, OSM data</text>
+
+              <rect x="315" y="222" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="410" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">GoogleDistanceMatrixCalculator</text>
+              <text x="410" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">managed API, traffic-aware</text>
+
+              <rect x="315" y="292" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="410" y="312" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">MapboxDistanceCalculator</text>
+              <text x="410" y="328" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">managed API, alternative provider</text>
+
+              <rect x="315" y="362" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="410" y="382" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">GraphHopperDistanceCalculator</text>
+              <text x="410" y="398" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">self-hosted, Java-native</text>
+
+              <rect x="575" y="152" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="670" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">CachedDistanceDecorator</text>
+              <text x="670" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">wraps any impl, Redis-backed</text>
+
+              <rect x="575" y="222" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="670" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">FallbackDistanceDecorator</text>
+              <text x="670" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">road-network, falls back to Haversine</text>
+            </svg>
+          </figure>
+          <figcaption><span class="status-pill live">Implemented</span> Haversine only. Everything else is <span class="status-pill proposed">Proposed</span> — on record so a future "we need road distance" conversation starts from a menu, not a blank page.</figcaption>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Implementation</th><th>Category</th><th>Pick this when&hellip;</th></tr></thead>
+            <tbody>
+              <tr><td><code>HaversineDistanceCalculator</code></td><td>Straight-line</td><td>Default — cheap, no external dependency, fine for delivery-charge slabs</td></tr>
+              <tr><td><code>VincentyDistanceCalculator</code></td><td>Straight-line</td><td>Accuracy matters more than speed and there's still no road API budget</td></tr>
+              <tr><td><code>EuclideanFlatDistanceCalculator</code></td><td>Straight-line</td><td>Extremely dense, small city where curvature error is negligible</td></tr>
+              <tr><td><code>OsrmDistanceCalculator</code></td><td>Road-network</td><td>Self-hosting is acceptable and cost control matters at volume</td></tr>
+              <tr><td><code>GoogleDistanceMatrixCalculator</code></td><td>Road-network</td><td>Zero ops burden is worth the per-call cost; traffic data included</td></tr>
+              <tr><td><code>MapboxDistanceCalculator</code></td><td>Road-network</td><td>Google pricing/terms are a blocker; comparable managed alternative</td></tr>
+              <tr><td><code>GraphHopperDistanceCalculator</code></td><td>Road-network</td><td>Self-hosted preferred but the team wants a JVM-native stack over OSRM's C++</td></tr>
+              <tr><td><code>CachedDistanceCalculatorDecorator</code></td><td>Decorator</td><td>Restaurant &rarr; address pairs repeat often enough that caching beats recomputing</td></tr>
+              <tr><td><code>FallbackDistanceCalculatorDecorator</code></td><td>Decorator</td><td>Any road-network provider is in use — always wrap it, never call it bare</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="chapter" id="delivery-charge">
+        <div class="chapter-head"><span class="chapter-num">02</span><h2>Delivery Charge Strategy</h2></div>
+        <p class="chapter-dek">The three "core policy" implementations already exist — today as if/else branches inside <code>OrderPricingService.computeDeliveryCharge()</code> rather than separate classes. Extracting them is the whole §03 proposal in the Order Journey Blueprint; everything past that is new policy, not refactor.</p>
+        <div class="diagram-panel">
+          <figure>
+            <svg viewBox="0 0 820 380" role="img" aria-label="DeliveryChargeStrategy interface with method charge, realized by eight implementations in three groups: core policies (flat, dynamic distance-slab, free delivery), segment-based (zone flat rate, tiered by weight, subscription free delivery), and decorators (surge-adjusted, minimum fare guarantee). PricingOrchestrator holds a map from charge type to strategy.">
+              <defs>
+                <marker id="tri2" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1,1 L11,6 L1,11 Z" fill="var(--diagram-bg)" stroke="var(--diagram-line)" stroke-width="1"/></marker>
+                <marker id="dia2" viewBox="0 0 12 12" refX="6" refY="6" markerWidth="8" markerHeight="8"><path d="M6,0 L12,6 L6,12 L0,6 Z" fill="var(--diagram-line)"/></marker>
+              </defs>
+              <rect x="310" y="14" width="200" height="42" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)" stroke-width="1.4"/>
+              <text x="410" y="30" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9" letter-spacing="1">&#171;interface&#187;</text>
+              <text x="410" y="46" text-anchor="middle" fill="var(--diagram-ink)" font-size="13" font-style="italic" font-weight="600">DeliveryChargeStrategy</text>
+              <rect x="270" y="56" width="280" height="30" rx="8" fill="var(--diagram-bg)" stroke="var(--diagram-line)"/>
+              <text x="410" y="75" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5" font-family="'IBM Plex Mono',monospace">charge(ctx: DeliveryChargeContext): DeliveryChargeResult</text>
+
+              <rect x="592" y="8" width="210" height="60" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="697" y="32" text-anchor="middle" fill="var(--diagram-ink)" font-size="11.5" font-weight="600">PricingOrchestrator</text>
+              <text x="697" y="48" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">Map&lt;ChargeType, Strategy&gt;</text>
+              <line x1="592" y1="38" x2="512" y2="38" stroke="var(--diagram-line)" marker-start="url(#dia2)"/>
+
+              <line x1="410" y1="104" x2="410" y2="87" stroke="var(--diagram-line)" marker-end="url(#tri2)"/>
+              <line x1="150" y1="104" x2="670" y2="104" stroke="var(--diagram-line)"/>
+              <line x1="150" y1="104" x2="150" y2="130" stroke="var(--diagram-line)"/>
+              <line x1="410" y1="104" x2="410" y2="130" stroke="var(--diagram-line)"/>
+              <line x1="670" y1="104" x2="670" y2="130" stroke="var(--diagram-line)"/>
+
+              <text x="150" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10" letter-spacing=".5">CORE POLICIES</text>
+              <text x="410" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10" letter-spacing=".5">SEGMENT-BASED</text>
+              <text x="670" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10" letter-spacing=".5">DECORATORS</text>
+
+              <line x1="150" y1="150" x2="150" y2="348" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+              <line x1="410" y1="150" x2="410" y2="348" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+              <line x1="670" y1="150" x2="670" y2="278" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+
+              <rect x="55" y="152" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="150" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">FlatDeliveryChargeStrategy</text>
+              <text x="150" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">restaurant.deliveryCharges, fixed</text>
+
+              <rect x="55" y="222" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="150" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">DynamicDistanceSlabStrategy</text>
+              <text x="150" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">base + per-km step, ceil-rounded</text>
+
+              <rect x="55" y="292" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="150" y="312" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">FreeDeliveryChargeStrategy</text>
+              <text x="150" y="328" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">self-pickup or coupon-granted zero</text>
+
+              <rect x="315" y="152" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="410" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">ZoneBasedFlatStrategy</text>
+              <text x="410" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">rate varies by delivery polygon</text>
+
+              <rect x="315" y="222" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="410" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">TieredWeightBasedStrategy</text>
+              <text x="410" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">for bulk / grocery-style carts</text>
+
+              <rect x="315" y="292" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="410" y="312" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">SubscriptionFreeDeliveryStrategy</text>
+              <text x="410" y="328" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">membership tier, capped per period</text>
+
+              <rect x="575" y="152" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="670" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">SurgeAdjustedChargeDecorator</text>
+              <text x="670" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">multiplies a base strategy's result</text>
+
+              <rect x="575" y="222" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="670" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">MinimumFareGuaranteeDecorator</text>
+              <text x="670" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">floors the charge at rider's min payout</text>
+            </svg>
+          </figure>
+          <figcaption><span class="status-pill live">Implemented</span> as inline branches today, not classes — extracting them is a refactor, not new behavior. Segment-based and decorator strategies are <span class="status-pill proposed">Proposed</span> net-new policy.</figcaption>
+        </div>
+        <p>Decorators here follow the same rule as the distance decorators in §01: they wrap a <em>base</em> strategy rather than being selected directly — <code>SurgeAdjustedChargeDecorator</code> takes a <code>DeliveryChargeStrategy</code> and a <code>SurgeMultiplierStrategy</code> (§05) in its constructor and multiplies the base result, so surge pricing never has to be re-implemented per charge policy.</p>
+      </section>
+
+      <section class="chapter" id="coupon">
+        <div class="chapter-head"><span class="chapter-num">03</span><h2>Coupon Validity Rule</h2></div>
+        <p class="chapter-dek">Not to be confused with <code>DiscountCalculator</code> (already live — <code>PercentageDiscountCalculator</code>, <code>FlatDiscountCalculator</code>, <code>FreeDeliveryDiscountCalculator</code>, indexed by <code>DiscountType</code>): that family answers <em>"how much off,"</em> this one answers <em>"is this code even usable right now."</em> <code>CouponService.validate()</code> already runs the eligibility checks below — as sequential inline conditionals, not separate classes. Extracting them the same way as the cart rules turns "add a new eligibility check" from an edit into a new file.</p>
+        <div class="diagram-panel">
+          <figure>
+            <svg viewBox="0 0 820 380" role="img" aria-label="CouponValidityRule interface with method validate, realized by eleven implementations in four groups: eligibility-core (active status, expiry, usage limit), eligibility-scope (minimum order amount, first-order-only, restaurant scope), targeting (user segment, geo restriction, payment mode), and fraud and abuse (stacking, device first-use). Consumed by CouponService today and proposed to also be consumed by CartValidationService as an adapter rule.">
+              <defs>
+                <marker id="tri3" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1,1 L11,6 L1,11 Z" fill="var(--diagram-bg)" stroke="var(--diagram-line)" stroke-width="1"/></marker>
+                <marker id="dia3" viewBox="0 0 12 12" refX="6" refY="6" markerWidth="8" markerHeight="8"><path d="M6,0 L12,6 L6,12 L0,6 Z" fill="var(--diagram-line)"/></marker>
+              </defs>
+              <rect x="310" y="14" width="200" height="42" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)" stroke-width="1.4"/>
+              <text x="410" y="30" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9" letter-spacing="1">&#171;interface&#187;</text>
+              <text x="410" y="46" text-anchor="middle" fill="var(--diagram-ink)" font-size="13" font-style="italic" font-weight="600">CouponValidityRule</text>
+              <rect x="250" y="56" width="320" height="30" rx="8" fill="var(--diagram-bg)" stroke="var(--diagram-line)"/>
+              <text x="410" y="75" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5" font-family="'IBM Plex Mono',monospace">validate(ctx: CouponValidationContext): Result</text>
+
+              <rect x="592" y="4" width="210" height="72" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="697" y="26" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">CouponService.validate()</text>
+              <text x="697" y="42" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">today: inline checks</text>
+              <text x="697" y="58" text-anchor="middle" fill="var(--diagram-accent)" font-size="9">+ CartValidationService (proposed)</text>
+              <line x1="592" y1="40" x2="512" y2="40" stroke="var(--diagram-line)" marker-start="url(#dia3)"/>
+
+              <line x1="410" y1="104" x2="410" y2="87" stroke="var(--diagram-line)" marker-end="url(#tri3)"/>
+              <line x1="110" y1="104" x2="710" y2="104" stroke="var(--diagram-line)"/>
+              <line x1="110" y1="104" x2="110" y2="130" stroke="var(--diagram-line)"/>
+              <line x1="310" y1="104" x2="310" y2="130" stroke="var(--diagram-line)"/>
+              <line x1="510" y1="104" x2="510" y2="130" stroke="var(--diagram-line)"/>
+              <line x1="710" y1="104" x2="710" y2="130" stroke="var(--diagram-line)"/>
+
+              <text x="110" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5" letter-spacing=".3">ELIGIBILITY — CORE</text>
+              <text x="310" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5" letter-spacing=".3">ELIGIBILITY — SCOPE</text>
+              <text x="510" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5" letter-spacing=".3">TARGETING</text>
+              <text x="710" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5" letter-spacing=".3">FRAUD &amp; ABUSE</text>
+
+              <line x1="110" y1="150" x2="110" y2="348" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+              <line x1="310" y1="150" x2="310" y2="348" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+              <line x1="510" y1="150" x2="510" y2="348" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+              <line x1="710" y1="150" x2="710" y2="278" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+
+              <rect x="25" y="152" width="170" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="110" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5" font-weight="600">CouponActiveStatusRule</text>
+              <text x="110" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8.5">active flag + code match</text>
+
+              <rect x="25" y="222" width="170" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="110" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5" font-weight="600">CouponExpiryRule</text>
+              <text x="110" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8.5">not past expiryDate</text>
+
+              <rect x="25" y="292" width="170" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="110" y="312" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5" font-weight="600">CouponUsageLimitRule</text>
+              <text x="110" y="328" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8.5">count &gt;= totalCoupon</text>
+
+              <rect x="225" y="152" width="170" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="310" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5" font-weight="600">CouponMinOrderAmountRule</text>
+              <text x="310" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8.5">subtotal &gt;= minOrderAmount</text>
+
+              <rect x="225" y="222" width="170" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="310" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5" font-weight="600">CouponFirstOrderOnlyRule</text>
+              <text x="310" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8.5">user has no prior orders</text>
+
+              <rect x="225" y="292" width="170" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="310" y="312" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5" font-weight="600">CouponRestaurantScopeRule</text>
+              <text x="310" y="328" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8.5">restaurantId match, or global (0)</text>
+
+              <rect x="425" y="152" width="170" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="510" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5" font-weight="600">CouponUserSegmentRule</text>
+              <text x="510" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8.5">cohort / loyalty-tier targeting</text>
+
+              <rect x="425" y="222" width="170" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="510" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5" font-weight="600">CouponGeoRestrictionRule</text>
+              <text x="510" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8.5">valid only in specific cities/zones</text>
+
+              <rect x="425" y="292" width="170" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="510" y="312" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5" font-weight="600">CouponPaymentModeRule</text>
+              <text x="510" y="328" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8.5">e.g. UPI-only promotions</text>
+
+              <rect x="625" y="152" width="170" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="710" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5" font-weight="600">CouponStackingRule</text>
+              <text x="710" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8.5">blocks combining with other codes</text>
+
+              <rect x="625" y="222" width="170" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="710" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5" font-weight="600">CouponDeviceFirstUseRule</text>
+              <text x="710" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8.5">one redemption per device fingerprint</text>
+            </svg>
+          </figure>
+          <figcaption>Eligibility rules are <span class="status-pill live">Implemented</span> logic today, just not yet extracted into classes. Targeting and fraud/abuse rules are net-new, <span class="status-pill proposed">Proposed</span> policy — most food-delivery abuse (serial "first order" discount farming, one promo across five accounts on one phone) is exactly what the fraud lane exists to close off.</figcaption>
+        </div>
+      </section>
+
+      <section class="chapter" id="polygon">
+        <div class="chapter-head"><span class="chapter-num">04</span><h2>Zone Containment (Polygon) Check</h2></div>
+        <p class="chapter-dek">This is the missing piece behind <code>DeliveryZoneRule</code> in the Order Journey Blueprint's cart-validation table — "is this address inside a restaurant's serviceable area." Nothing in the codebase does point-in-polygon math today; <code>catalog-service</code>'s <code>DeliveryAreaCheckRequest/Response</code> DTOs suggest the shape of this check was anticipated but not built out.</p>
+        <div class="diagram-panel">
+          <figure>
+            <svg viewBox="0 0 820 450" role="img" aria-label="ZoneContainmentChecker interface with method contains, realized by seven implementations in two groups: geometry algorithms (ray casting, winding number, circular radius) and scale and performance (bounding box pre-filter, geohash bucket lookup, PostGIS database-side check, multi-polygon zones). Consumed by DeliveryZoneRule.">
+              <defs>
+                <marker id="tri4" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1,1 L11,6 L1,11 Z" fill="var(--diagram-bg)" stroke="var(--diagram-line)" stroke-width="1"/></marker>
+                <marker id="dia4" viewBox="0 0 12 12" refX="6" refY="6" markerWidth="8" markerHeight="8"><path d="M6,0 L12,6 L6,12 L0,6 Z" fill="var(--diagram-line)"/></marker>
+              </defs>
+              <rect x="310" y="14" width="200" height="42" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)" stroke-width="1.4"/>
+              <text x="410" y="30" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9" letter-spacing="1">&#171;interface&#187;</text>
+              <text x="410" y="46" text-anchor="middle" fill="var(--diagram-ink)" font-size="13" font-style="italic" font-weight="600">ZoneContainmentChecker</text>
+              <rect x="260" y="56" width="300" height="30" rx="8" fill="var(--diagram-bg)" stroke="var(--diagram-line)"/>
+              <text x="410" y="75" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5" font-family="'IBM Plex Mono',monospace">contains(point: GeoPoint, zone: DeliveryZone): boolean</text>
+
+              <rect x="592" y="8" width="210" height="60" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="697" y="32" text-anchor="middle" fill="var(--diagram-ink)" font-size="11.5" font-weight="600">DeliveryZoneRule</text>
+              <text x="697" y="48" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">a CartValidationRule (proposed)</text>
+              <line x1="592" y1="38" x2="512" y2="38" stroke="var(--diagram-line)" marker-start="url(#dia4)"/>
+
+              <line x1="410" y1="104" x2="410" y2="87" stroke="var(--diagram-line)" marker-end="url(#tri4)"/>
+              <line x1="230" y1="104" x2="590" y2="104" stroke="var(--diagram-line)"/>
+              <line x1="230" y1="104" x2="230" y2="130" stroke="var(--diagram-line)"/>
+              <line x1="590" y1="104" x2="590" y2="130" stroke="var(--diagram-line)"/>
+
+              <text x="230" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10" letter-spacing=".4">GEOMETRY ALGORITHMS</text>
+              <text x="590" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10" letter-spacing=".4">SCALE &amp; PERFORMANCE</text>
+
+              <line x1="230" y1="150" x2="230" y2="348" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+              <line x1="590" y1="150" x2="590" y2="418" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+
+              <rect x="125" y="152" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="230" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">RayCastingPolygonCheck</text>
+              <text x="230" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">even-odd rule, simple polygons</text>
+
+              <rect x="125" y="222" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="230" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">WindingNumberPolygonCheck</text>
+              <text x="230" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">handles self-intersecting shapes</text>
+
+              <rect x="125" y="292" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="230" y="312" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">CircularRadiusZoneCheck</text>
+              <text x="230" y="328" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">simplest — radius around restaurant</text>
+
+              <rect x="485" y="152" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="590" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">BoundingBoxPreFilterDecorator</text>
+              <text x="590" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">cheap rect check before polygon math</text>
+
+              <rect x="485" y="222" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="590" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">GeohashBucketZoneCheck</text>
+              <text x="590" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">precomputed grid buckets, O(1) lookup</text>
+
+              <rect x="485" y="292" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="590" y="312" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">PostGisContainsCheck</text>
+              <text x="590" y="328" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">DB-side ST_Contains, needs PostGIS</text>
+
+              <rect x="485" y="362" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="590" y="382" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">MultiPolygonZoneCheck</text>
+              <text x="590" y="398" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">disjoint zone shapes / carve-outs</text>
+            </svg>
+          </figure>
+          <figcaption>Everything here is <span class="status-pill proposed">Proposed</span> — a full open gap. For most restaurants a <code>CircularRadiusZoneCheck</code> is enough to start; reach for real polygons only once a restaurant needs an irregular service area (river, highway, a neighborhood carved out).</figcaption>
+        </div>
+        <p><strong>Build order that avoids overbuilding:</strong> start with <code>CircularRadiusZoneCheck</code> (a radius column on <code>Restaurant</code>, zero new geometry code), add <code>RayCastingPolygonCheck</code> when a restaurant genuinely needs a custom shape, and only reach for <code>PostGisContainsCheck</code> or <code>GeohashBucketZoneCheck</code> once per-request in-app polygon math shows up in a latency profile — premature geo-indexing is a common way this kind of feature turns into a multi-sprint detour.</p>
+      </section>
+
+      <section class="chapter" id="surge">
+        <div class="chapter-head"><span class="chapter-num">05</span><h2>Surge Price Engine</h2></div>
+        <p class="chapter-dek">None of these signals have a data pipeline in the repo yet, so the priority isn't the strategy list — it's landing <code>NoOpSurgeStrategy</code> as the wired-in default first, so the seam exists and every other strategy is additive, never a cutover.</p>
+        <div class="diagram-panel">
+          <figure>
+            <svg viewBox="0 0 820 380" role="img" aria-label="SurgeMultiplierStrategy interface with method multiplier, realized by eight implementations in four groups: demand and time (demand-supply ratio, time of day, weather), external feeds (event density, historical trend), combinators (composite, capped), and default (no-op, multiplier of one). Consumed by SurgeAdjustedChargeDecorator from the Delivery Charge Strategy family.">
+              <defs>
+                <marker id="tri5" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1,1 L11,6 L1,11 Z" fill="var(--diagram-bg)" stroke="var(--diagram-line)" stroke-width="1"/></marker>
+                <marker id="dia5" viewBox="0 0 12 12" refX="6" refY="6" markerWidth="8" markerHeight="8"><path d="M6,0 L12,6 L6,12 L0,6 Z" fill="var(--diagram-line)"/></marker>
+              </defs>
+              <rect x="310" y="14" width="200" height="42" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)" stroke-width="1.4"/>
+              <text x="410" y="30" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9" letter-spacing="1">&#171;interface&#187;</text>
+              <text x="410" y="46" text-anchor="middle" fill="var(--diagram-ink)" font-size="13" font-style="italic" font-weight="600">SurgeMultiplierStrategy</text>
+              <rect x="280" y="56" width="260" height="30" rx="8" fill="var(--diagram-bg)" stroke="var(--diagram-line)"/>
+              <text x="410" y="75" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5" font-family="'IBM Plex Mono',monospace">multiplier(ctx: SurgeContext): double</text>
+
+              <rect x="592" y="8" width="210" height="60" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="697" y="32" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">SurgeAdjustedChargeDecorator</text>
+              <text x="697" y="48" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">from §02, wraps a base charge strategy</text>
+              <line x1="592" y1="38" x2="512" y2="38" stroke="var(--diagram-line)" marker-start="url(#dia5)"/>
+
+              <line x1="410" y1="104" x2="410" y2="87" stroke="var(--diagram-line)" marker-end="url(#tri5)"/>
+              <line x1="110" y1="104" x2="710" y2="104" stroke="var(--diagram-line)"/>
+              <line x1="110" y1="104" x2="110" y2="130" stroke="var(--diagram-line)"/>
+              <line x1="310" y1="104" x2="310" y2="130" stroke="var(--diagram-line)"/>
+              <line x1="510" y1="104" x2="510" y2="130" stroke="var(--diagram-line)"/>
+              <line x1="710" y1="104" x2="710" y2="130" stroke="var(--diagram-line)"/>
+
+              <text x="110" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5" letter-spacing=".3">DEMAND &amp; TIME</text>
+              <text x="310" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5" letter-spacing=".3">EXTERNAL FEEDS</text>
+              <text x="510" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5" letter-spacing=".3">COMBINATORS</text>
+              <text x="710" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5" letter-spacing=".3">DEFAULT</text>
+
+              <line x1="110" y1="150" x2="110" y2="348" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+              <line x1="310" y1="150" x2="310" y2="278" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+              <line x1="510" y1="150" x2="510" y2="278" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+              <line x1="710" y1="150" x2="710" y2="208" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+
+              <rect x="25" y="152" width="170" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="110" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5" font-weight="600">DemandSupplyRatioStrategy</text>
+              <text x="110" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8.5">live orders / available drivers</text>
+
+              <rect x="25" y="222" width="170" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="110" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5" font-weight="600">TimeOfDaySurgeStrategy</text>
+              <text x="110" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8.5">static lunch / dinner rush table</text>
+
+              <rect x="25" y="292" width="170" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="110" y="312" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5" font-weight="600">WeatherSurgeStrategy</text>
+              <text x="110" y="328" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8.5">rain/storm via weather API</text>
+
+              <rect x="225" y="152" width="170" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="310" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5" font-weight="600">EventDensitySurgeStrategy</text>
+              <text x="310" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8.5">concerts/matches nearby</text>
+
+              <rect x="225" y="222" width="170" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="310" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5" font-weight="600">HistoricalTrendSurgeStrategy</text>
+              <text x="310" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8.5">statistical model on past demand</text>
+
+              <rect x="425" y="152" width="170" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="510" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5" font-weight="600">CompositeSurgeStrategy</text>
+              <text x="510" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8.5">multiplies several strategies together</text>
+
+              <rect x="425" y="222" width="170" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="510" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5" font-weight="600">CappedSurgeDecorator</text>
+              <text x="510" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8.5">enforces a max multiplier ceiling</text>
+
+              <rect x="625" y="152" width="170" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="710" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5" font-weight="600">NoOpSurgeStrategy</text>
+              <text x="710" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8.5">multiplier = 1.0, wire this first</text>
+            </svg>
+          </figure>
+          <figcaption><span class="status-pill live">Implemented</span> is <code>NoOpSurgeStrategy</code> only, and even that doesn't exist yet — it's the one implementation worth building before any signal-gathering work starts. Everything else is <span class="status-pill proposed">Proposed</span>, ordered left-to-right roughly by how much new infrastructure it needs.</figcaption>
+        </div>
+        <div class="formula">surge = base &times; demandFactor &times; weatherFactor &times; trafficFactor &nbsp;<span style="color:var(--ink-3)">— realized as <code>CompositeSurgeStrategy</code> multiplying a <code>List&lt;SurgeMultiplierStrategy&gt;</code>, capped by <code>CappedSurgeDecorator</code></span></div>
+      </section>
+
+      <section class="chapter" id="matching">
+        <div class="chapter-head"><span class="chapter-num">06</span><h2>Driver Matching Engine</h2></div>
+        <p class="chapter-dek">No matching or ranking logic exists in the repo today — assignment is a pull model (see §07). This is the full criterion catalog for the scoring engine proposed in the Order Journey Blueprint, §04, expanded with two filter-like criteria worth having on record even though they don't contribute to the score itself.</p>
+        <div class="diagram-panel">
+          <figure>
+            <svg viewBox="0 0 820 450" role="img" aria-label="MatchingCriterion interface with methods score and weight, realized by ten implementations in three groups: core scoring part one (distance, rating, acceptance rate), core scoring part two (cancellation rate, idle time, traffic), and advanced filters (vehicle type fit, rider preference, predicted demand, fairness rotation). Consumed by DriverMatchingEngine.">
+              <defs>
+                <marker id="tri6" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1,1 L11,6 L1,11 Z" fill="var(--diagram-bg)" stroke="var(--diagram-line)" stroke-width="1"/></marker>
+                <marker id="dia6" viewBox="0 0 12 12" refX="6" refY="6" markerWidth="8" markerHeight="8"><path d="M6,0 L12,6 L6,12 L0,6 Z" fill="var(--diagram-line)"/></marker>
+              </defs>
+              <rect x="310" y="14" width="200" height="42" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)" stroke-width="1.4"/>
+              <text x="410" y="30" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9" letter-spacing="1">&#171;interface&#187;</text>
+              <text x="410" y="46" text-anchor="middle" fill="var(--diagram-ink)" font-size="13" font-style="italic" font-weight="600">MatchingCriterion</text>
+              <rect x="270" y="56" width="280" height="30" rx="8" fill="var(--diagram-bg)" stroke="var(--diagram-line)"/>
+              <text x="410" y="75" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5" font-family="'IBM Plex Mono',monospace">score(driver, ctx): double &middot; weight(): double</text>
+
+              <rect x="592" y="8" width="210" height="60" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="697" y="32" text-anchor="middle" fill="var(--diagram-ink)" font-size="11.5" font-weight="600">DriverMatchingEngine</text>
+              <text x="697" y="48" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">ranks candidates by weighted score</text>
+              <line x1="592" y1="38" x2="512" y2="38" stroke="var(--diagram-line)" marker-start="url(#dia6)"/>
+
+              <line x1="410" y1="104" x2="410" y2="87" stroke="var(--diagram-line)" marker-end="url(#tri6)"/>
+              <line x1="150" y1="104" x2="670" y2="104" stroke="var(--diagram-line)"/>
+              <line x1="150" y1="104" x2="150" y2="130" stroke="var(--diagram-line)"/>
+              <line x1="410" y1="104" x2="410" y2="130" stroke="var(--diagram-line)"/>
+              <line x1="670" y1="104" x2="670" y2="130" stroke="var(--diagram-line)"/>
+
+              <text x="150" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10" letter-spacing=".4">CORE SCORING — I</text>
+              <text x="410" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10" letter-spacing=".4">CORE SCORING — II</text>
+              <text x="670" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10" letter-spacing=".4">ADVANCED / FILTERS</text>
+
+              <line x1="150" y1="150" x2="150" y2="348" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+              <line x1="410" y1="150" x2="410" y2="348" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+              <line x1="670" y1="150" x2="670" y2="418" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+
+              <rect x="55" y="152" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="150" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">DistanceCriterion</text>
+              <text x="150" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">driver &rarr; restaurant, via §01</text>
+
+              <rect x="55" y="222" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="150" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">RatingCriterion</text>
+              <text x="150" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">rating-service average</text>
+
+              <rect x="55" y="292" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="150" y="312" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">AcceptanceRateCriterion</text>
+              <text x="150" y="328" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">trailing offer-accept ratio</text>
+
+              <rect x="315" y="152" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="410" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">CancellationRateCriterion</text>
+              <text x="410" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">trailing 30-day decline rate</text>
+
+              <rect x="315" y="222" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="410" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">IdleTimeCriterion</text>
+              <text x="410" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">time since last GPS ping</text>
+
+              <rect x="315" y="292" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="410" y="312" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">TrafficCriterion</text>
+              <text x="410" y="328" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">external traffic API, via §08</text>
+
+              <rect x="575" y="152" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="670" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">VehicleTypeFitCriterion</text>
+              <text x="670" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">filter — bike vs car for bulk orders</text>
+
+              <rect x="575" y="222" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="670" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">RiderPreferenceCriterion</text>
+              <text x="670" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">blocked / preferred driver lists</text>
+
+              <rect x="575" y="292" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="670" y="312" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">PredictedDemandCriterion</text>
+              <text x="670" y="328" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">avoid pulling a driver from a hot zone</text>
+
+              <rect x="575" y="362" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="670" y="382" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">FairnessRotationCriterion</text>
+              <text x="670" y="398" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">stops the same top driver always winning</text>
+            </svg>
+          </figure>
+          <figcaption>Everything here is <span class="status-pill proposed">Proposed</span>. <code>VehicleTypeFitCriterion</code> and <code>RiderPreferenceCriterion</code> behave as pre-filters on the candidate pool rather than score contributors — same shape as <code>availableOrders()</code> filtering out self-pickup orders today, just applied before scoring instead of before listing.</figcaption>
+        </div>
+        <p>Normalization detail carried over from the Order Journey Blueprint, §04: every criterion returns a value in <code>[0,1]</code> (inverted where "lower is better" — distance, cancellation rate, idle time), so <code>DriverMatchingEngine</code> can sum <code>weight() &times; score()</code> across the whole list without the weights secretly doing unit conversion.</p>
+      </section>
+
+      <section class="chapter" id="assignment">
+        <div class="chapter-head"><span class="chapter-num">07</span><h2>Driver Assignment Strategy</h2></div>
+        <p class="chapter-dek">Easy to conflate with §06, so the boundary matters: <strong>Matching ranks</strong> — it answers "who's best." <strong>Assignment commits</strong> — it answers "how does a ranked list turn into one driver holding the order." <code>DriverMatchingEngine</code> can exist and simply feed a ranked list into today's pull model; nothing forces the two to ship together.</p>
+        <div class="diagram-panel">
+          <figure>
+            <svg viewBox="0 0 820 380" role="img" aria-label="DriverAssignmentStrategy interface with method assign, realized by five implementations in two groups: current-live (pull broadcast, admin manual assignment) and proposed (sequential offer with cascade, parallel batch offer, zone-sticky assignment). Consumed by DeliveryOrderService.">
+              <defs>
+                <marker id="tri7" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1,1 L11,6 L1,11 Z" fill="var(--diagram-bg)" stroke="var(--diagram-line)" stroke-width="1"/></marker>
+                <marker id="dia7" viewBox="0 0 12 12" refX="6" refY="6" markerWidth="8" markerHeight="8"><path d="M6,0 L12,6 L6,12 L0,6 Z" fill="var(--diagram-line)"/></marker>
+              </defs>
+              <rect x="310" y="14" width="200" height="42" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)" stroke-width="1.4"/>
+              <text x="410" y="30" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9" letter-spacing="1">&#171;interface&#187;</text>
+              <text x="410" y="46" text-anchor="middle" fill="var(--diagram-ink)" font-size="13" font-style="italic" font-weight="600">DriverAssignmentStrategy</text>
+              <rect x="260" y="56" width="300" height="30" rx="8" fill="var(--diagram-bg)" stroke="var(--diagram-line)"/>
+              <text x="410" y="75" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5" font-family="'IBM Plex Mono',monospace">assign(order, ranked: List&lt;RankedDriver&gt;): Outcome</text>
+
+              <rect x="592" y="8" width="210" height="60" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="697" y="32" text-anchor="middle" fill="var(--diagram-ink)" font-size="11.5" font-weight="600">DeliveryOrderService</text>
+              <text x="697" y="48" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">already exists — extend, don't replace</text>
+              <line x1="592" y1="38" x2="512" y2="38" stroke="var(--diagram-line)" marker-start="url(#dia7)"/>
+
+              <line x1="410" y1="104" x2="410" y2="87" stroke="var(--diagram-line)" marker-end="url(#tri7)"/>
+              <line x1="230" y1="104" x2="590" y2="104" stroke="var(--diagram-line)"/>
+              <line x1="230" y1="104" x2="230" y2="130" stroke="var(--diagram-line)"/>
+              <line x1="590" y1="104" x2="590" y2="130" stroke="var(--diagram-line)"/>
+
+              <text x="230" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10" letter-spacing=".4">CURRENT — LIVE</text>
+              <text x="590" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10" letter-spacing=".4">PROPOSED</text>
+
+              <line x1="230" y1="150" x2="230" y2="278" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+              <line x1="590" y1="150" x2="590" y2="348" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+
+              <rect x="125" y="152" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="230" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">PullBroadcastAssignmentStrategy</text>
+              <text x="230" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">broadcast to all riders, first claim wins</text>
+
+              <rect x="125" y="222" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="230" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">AdminManualAssignmentStrategy</text>
+              <text x="230" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">force-assign, bypasses the rider cap</text>
+
+              <rect x="485" y="152" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="590" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">SequentialOfferAssignmentStrategy</text>
+              <text x="590" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">offer rank #1, cascade on decline/timeout</text>
+
+              <rect x="485" y="222" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="590" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">ParallelBatchOfferAssignmentStrategy</text>
+              <text x="590" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">offer top-N at once, first accept wins</text>
+
+              <rect x="485" y="292" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="590" y="312" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">ZoneStickyAssignmentStrategy</text>
+              <text x="590" y="328" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">prefers drivers already idle in-zone</text>
+            </svg>
+          </figure>
+          <figcaption><span class="status-pill live">Implemented</span> today as the only two paths that exist — <code>acceptToDeliver()</code> and <code>assignDriverAsAdmin()</code> in <code>DeliveryOrderService</code>. Any proposed strategy should degrade to <code>PullBroadcastAssignmentStrategy</code> on failure, per the offer-cascade diagram in the Order Journey Blueprint, §04.</figcaption>
+        </div>
+      </section>
+
+      <section class="chapter" id="routing">
+        <div class="chapter-head"><span class="chapter-num">08</span><h2>Routing Engine</h2></div>
+        <p class="chapter-dek">All distance in the codebase today is straight-line Haversine — no routing engine exists. The one implementation deliberately included here as a caution rather than a recommendation is <code>StaticGraphAStarRoutingEngine</code>: hand-rolling A* over a self-built road graph. OSRM and GraphHopper already run contraction-hierarchy/A*-class search over real OpenStreetMap data — building this in-house means also owning map-data ingestion, which neither of the other eight implementations require.</p>
+        <div class="diagram-panel">
+          <figure>
+            <svg viewBox="0 0 820 380" role="img" aria-label="RoutingEngine interface with method route, realized by nine implementations in three groups: managed APIs (Google Directions, Mapbox Directions, Here), self-hosted (OSRM, GraphHopper, a hand-rolled static graph A star engine), and decorators (multi-stop, toll-aware, traffic-aware rerouting). Consumed by EtaCalculator and by the TrafficCriterion of the Driver Matching Engine.">
+              <defs>
+                <marker id="tri8" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1,1 L11,6 L1,11 Z" fill="var(--diagram-bg)" stroke="var(--diagram-line)" stroke-width="1"/></marker>
+                <marker id="dia8" viewBox="0 0 12 12" refX="6" refY="6" markerWidth="8" markerHeight="8"><path d="M6,0 L12,6 L6,12 L0,6 Z" fill="var(--diagram-line)"/></marker>
+              </defs>
+              <rect x="310" y="14" width="200" height="42" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)" stroke-width="1.4"/>
+              <text x="410" y="30" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9" letter-spacing="1">&#171;interface&#187;</text>
+              <text x="410" y="46" text-anchor="middle" fill="var(--diagram-ink)" font-size="13" font-style="italic" font-weight="600">RoutingEngine</text>
+              <rect x="260" y="56" width="300" height="30" rx="8" fill="var(--diagram-bg)" stroke="var(--diagram-line)"/>
+              <text x="410" y="75" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5" font-family="'IBM Plex Mono',monospace">route(origin, dest, opts: RoutingOptions): Route</text>
+
+              <rect x="592" y="4" width="210" height="70" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="697" y="26" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">EtaCalculator (§09)</text>
+              <text x="697" y="42" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">+ MatchingCriterion.Traffic (§06)</text>
+              <text x="697" y="58" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">+ customer live tracking</text>
+              <line x1="592" y1="38" x2="512" y2="38" stroke="var(--diagram-line)" marker-start="url(#dia8)"/>
+
+              <line x1="410" y1="104" x2="410" y2="87" stroke="var(--diagram-line)" marker-end="url(#tri8)"/>
+              <line x1="150" y1="104" x2="670" y2="104" stroke="var(--diagram-line)"/>
+              <line x1="150" y1="104" x2="150" y2="130" stroke="var(--diagram-line)"/>
+              <line x1="410" y1="104" x2="410" y2="130" stroke="var(--diagram-line)"/>
+              <line x1="670" y1="104" x2="670" y2="130" stroke="var(--diagram-line)"/>
+
+              <text x="150" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10" letter-spacing=".4">MANAGED APIS</text>
+              <text x="410" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10" letter-spacing=".4">SELF-HOSTED</text>
+              <text x="670" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10" letter-spacing=".4">DECORATORS</text>
+
+              <line x1="150" y1="150" x2="150" y2="348" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+              <line x1="410" y1="150" x2="410" y2="348" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+              <line x1="670" y1="150" x2="670" y2="348" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+
+              <rect x="55" y="152" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="150" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">GoogleDirectionsRoutingEngine</text>
+              <text x="150" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">traffic-aware, managed</text>
+
+              <rect x="55" y="222" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="150" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">MapboxDirectionsRoutingEngine</text>
+              <text x="150" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">managed alternative</text>
+
+              <rect x="55" y="292" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="150" y="312" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">HereRoutingEngine</text>
+              <text x="150" y="328" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">strong toll / logistics data</text>
+
+              <rect x="315" y="152" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="410" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">OsrmRoutingEngine</text>
+              <text x="410" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">self-hosted, contraction hierarchies</text>
+
+              <rect x="315" y="222" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="410" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">GraphHopperRoutingEngine</text>
+              <text x="410" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">self-hosted, JVM-native</text>
+
+              <rect x="315" y="292" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--danger)" stroke-dasharray="2 3"/>
+              <text x="410" y="312" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">StaticGraphAStarEngine</text>
+              <text x="410" y="328" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">hand-rolled — avoid, see note above</text>
+
+              <rect x="575" y="152" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="670" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">MultiStopRoutingDecorator</text>
+              <text x="670" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">sequences waypoints for multi-stop rides</text>
+
+              <rect x="575" y="222" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="670" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">TollAwareRoutingDecorator</text>
+              <text x="670" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">toll-cost preference / avoidance</text>
+
+              <rect x="575" y="292" width="190" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="670" y="312" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">TrafficAwareReroutingDecorator</text>
+              <text x="670" y="328" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">re-queries mid-trip, triggers reroute</text>
+            </svg>
+          </figure>
+          <figcaption>Everything is <span class="status-pill proposed">Proposed</span> — a full open gap, same as §04 and §05. The red-bordered card is a deliberate anti-recommendation, not a fourth option equal to the rest.</figcaption>
+        </div>
+      </section>
+
+      <section class="chapter" id="eta">
+        <div class="chapter-head"><span class="chapter-num">09</span><h2>ETA Calculation</h2></div>
+        <p class="chapter-dek">The naive form — <code>(distanceKm / avgSpeed) &times; 60</code> — is <code>SimpleSpeedBasedEtaCalculator</code>: a reasonable placeholder, and honest about its own limits once a real route exists to compare against.</p>
+        <div class="diagram-panel">
+          <figure>
+            <svg viewBox="0 0 820 380" role="img" aria-label="EtaCalculator interface with method estimate, realized by six implementations in two groups: base estimators (simple speed-based, route-duration, historical average) and refinements (traffic-adjusted decorator, ML-predicted, blended). Consumed by the order response shown to customers and by the Driver Matching Engine.">
+              <defs>
+                <marker id="tri9" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1,1 L11,6 L1,11 Z" fill="var(--diagram-bg)" stroke="var(--diagram-line)" stroke-width="1"/></marker>
+                <marker id="dia9" viewBox="0 0 12 12" refX="6" refY="6" markerWidth="8" markerHeight="8"><path d="M6,0 L12,6 L6,12 L0,6 Z" fill="var(--diagram-line)"/></marker>
+              </defs>
+              <rect x="310" y="14" width="200" height="42" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)" stroke-width="1.4"/>
+              <text x="410" y="30" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9" letter-spacing="1">&#171;interface&#187;</text>
+              <text x="410" y="46" text-anchor="middle" fill="var(--diagram-ink)" font-size="13" font-style="italic" font-weight="600">EtaCalculator</text>
+              <rect x="290" y="56" width="240" height="30" rx="8" fill="var(--diagram-bg)" stroke="var(--diagram-line)"/>
+              <text x="410" y="75" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5" font-family="'IBM Plex Mono',monospace">estimate(ctx: EtaContext): Duration</text>
+
+              <rect x="592" y="8" width="210" height="60" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="697" y="32" text-anchor="middle" fill="var(--diagram-ink)" font-size="11.5" font-weight="600">Order tracking UI</text>
+              <text x="697" y="48" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">+ DriverMatchingEngine (§06)</text>
+              <line x1="592" y1="38" x2="512" y2="38" stroke="var(--diagram-line)" marker-start="url(#dia9)"/>
+
+              <line x1="410" y1="104" x2="410" y2="87" stroke="var(--diagram-line)" marker-end="url(#tri9)"/>
+              <line x1="230" y1="104" x2="590" y2="104" stroke="var(--diagram-line)"/>
+              <line x1="230" y1="104" x2="230" y2="130" stroke="var(--diagram-line)"/>
+              <line x1="590" y1="104" x2="590" y2="130" stroke="var(--diagram-line)"/>
+
+              <text x="230" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10" letter-spacing=".4">BASE ESTIMATORS</text>
+              <text x="590" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10" letter-spacing=".4">REFINEMENTS</text>
+
+              <line x1="230" y1="150" x2="230" y2="348" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+              <line x1="590" y1="150" x2="590" y2="348" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+
+              <rect x="125" y="152" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="230" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">SimpleSpeedBasedEtaCalculator</text>
+              <text x="230" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">distanceKm/avgSpeed&times;60, naive</text>
+
+              <rect x="125" y="222" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="230" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">RouteDurationEtaCalculator</text>
+              <text x="230" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">uses RoutingEngine's own duration (§08)</text>
+
+              <rect x="125" y="292" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="230" y="312" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">HistoricalAverageEtaCalculator</text>
+              <text x="230" y="328" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">past actual times, same route/zone/hour</text>
+
+              <rect x="485" y="152" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="590" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">TrafficAdjustedEtaDecorator</text>
+              <text x="590" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">applies a live traffic-delay multiplier</text>
+
+              <rect x="485" y="222" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="590" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">MLPredictedEtaCalculator</text>
+              <text x="590" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">regression model on trip history</text>
+
+              <rect x="485" y="292" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="590" y="312" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">BlendedEtaCalculator</text>
+              <text x="590" y="328" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">weighted blend, hedges API anomalies</text>
+            </svg>
+          </figure>
+          <figcaption>All <span class="status-pill proposed">Proposed</span>. Build order follows §08 directly: <code>SimpleSpeedBasedEtaCalculator</code> needs nothing new and is honest to ship first; every refinement past <code>RouteDurationEtaCalculator</code> assumes a <code>RoutingEngine</code> already exists.</figcaption>
+        </div>
+      </section>
+
+      <section class="chapter" id="wiring">
+        <div class="chapter-head"><span class="chapter-num">10</span><h2>End-to-end wiring</h2></div>
+        <p class="chapter-dek">Every engine above slots into one of four moments in the order's life. Phases 1–2 exist today (see the Order Journey Blueprint, §01); phases 3–4 are where §06–§09 would actually get called if built.</p>
+        <div class="diagram-panel">
+          <figure>
+            <svg viewBox="0 0 820 620" role="img" aria-label="Four phases wired in sequence. Phase one, cart validate, runs CartValidationRule list, CouponValidityRule list, ZoneContainmentChecker, and PricingOrchestrator as a live preview. Phase two, place order, re-runs the same rules via assertPlaceable, records coupon usage, and computes authoritative pricing through the same PricingOrchestrator. When the order reaches ready-for-pickup, phase three runs MatchingCriterion list through DriverMatchingEngine to rank drivers, then DriverAssignmentStrategy to commit one. Once a driver is assigned, phase four uses RoutingEngine to compute the route and EtaCalculator to produce a live estimated arrival time shown to the customer through pickup and delivery.">
+              <defs>
+                <marker id="flow10" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" fill="var(--diagram-line)"/></marker>
+                <marker id="flow10a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" fill="var(--diagram-accent)"/></marker>
+              </defs>
+
+              <!-- PHASE A -->
+              <rect x="40" y="20" width="740" height="120" rx="12" fill="var(--diagram-surface)" stroke="var(--diagram-line)" stroke-width="1.4"/>
+              <text x="60" y="46" fill="var(--diagram-ink)" font-size="13" font-weight="600">&#9312; CART VALIDATE</text>
+              <text x="60" y="64" fill="var(--diagram-ink-dim)" font-size="9.5">client cart page &middot; live, non-committing preview</text>
+              <rect x="70" y="76" width="160" height="30" rx="6" fill="var(--diagram-bg)" stroke="var(--diagram-line)"/>
+              <text x="150" y="95" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5">CartValidationRule[]</text>
+              <rect x="243" y="76" width="160" height="30" rx="6" fill="var(--diagram-bg)" stroke="var(--diagram-accent)" stroke-dasharray="2 2"/>
+              <text x="323" y="95" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5">CouponValidityRule[] §03</text>
+              <rect x="416" y="76" width="160" height="30" rx="6" fill="var(--diagram-bg)" stroke="var(--diagram-accent)" stroke-dasharray="2 2"/>
+              <text x="496" y="95" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5">ZoneContainmentChecker §04</text>
+              <rect x="589" y="76" width="160" height="30" rx="6" fill="var(--diagram-bg)" stroke="var(--diagram-line)"/>
+              <text x="669" y="90" text-anchor="middle" fill="var(--diagram-ink)" font-size="9">PricingOrchestrator</text>
+              <text x="669" y="101" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8">§01 &middot; §02 &middot; §05</text>
+
+              <line x1="410" y1="140" x2="410" y2="166" stroke="var(--diagram-line)" marker-end="url(#flow10)"/>
+              <text x="424" y="156" fill="var(--diagram-ink-dim)" font-size="9.5">customer taps “Place order”</text>
+
+              <!-- PHASE B -->
+              <rect x="40" y="168" width="740" height="120" rx="12" fill="var(--diagram-surface)" stroke="var(--diagram-line)" stroke-width="1.4"/>
+              <text x="60" y="194" fill="var(--diagram-ink)" font-size="13" font-weight="600">&#9313; PLACE ORDER</text>
+              <text x="60" y="212" fill="var(--diagram-ink-dim)" font-size="9.5">OrderService.placeOrder() &middot; authoritative, atomic</text>
+              <rect x="81" y="224" width="210" height="30" rx="6" fill="var(--diagram-bg)" stroke="var(--diagram-line)"/>
+              <text x="186" y="243" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5">assertPlaceable() — same rules</text>
+              <rect x="305" y="224" width="210" height="30" rx="6" fill="var(--diagram-bg)" stroke="var(--diagram-line)"/>
+              <text x="410" y="243" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5">CouponService.recordUsage()</text>
+              <rect x="529" y="224" width="210" height="30" rx="6" fill="var(--diagram-bg)" stroke="var(--diagram-line)"/>
+              <text x="634" y="243" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5">PricingOrchestrator (final)</text>
+
+              <line x1="410" y1="288" x2="410" y2="314" stroke="var(--diagram-line)" marker-end="url(#flow10)"/>
+              <text x="424" y="304" fill="var(--diagram-ink-dim)" font-size="9.5">order reaches READY_FOR_PICKUP</text>
+
+              <!-- PHASE C -->
+              <rect x="40" y="316" width="740" height="120" rx="12" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="4 3"/>
+              <text x="60" y="342" fill="var(--diagram-ink)" font-size="13" font-weight="600">&#9314; MATCH &amp; ASSIGN DRIVER</text>
+              <text x="60" y="360" fill="var(--diagram-ink-dim)" font-size="9.5">proposed — today this is a pull-model broadcast instead</text>
+              <rect x="81" y="372" width="210" height="30" rx="6" fill="var(--diagram-bg)" stroke="var(--diagram-accent)" stroke-dasharray="2 2"/>
+              <text x="186" y="391" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5">MatchingCriterion[] §06</text>
+              <line x1="291" y1="387" x2="303" y2="387" stroke="var(--diagram-accent)" marker-end="url(#flow10a)"/>
+              <rect x="305" y="372" width="210" height="30" rx="6" fill="var(--diagram-bg)" stroke="var(--diagram-accent)" stroke-dasharray="2 2"/>
+              <text x="410" y="391" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5">DriverMatchingEngine ranks</text>
+              <line x1="515" y1="387" x2="527" y2="387" stroke="var(--diagram-accent)" marker-end="url(#flow10a)"/>
+              <rect x="529" y="372" width="210" height="30" rx="6" fill="var(--diagram-bg)" stroke="var(--diagram-accent)" stroke-dasharray="2 2"/>
+              <text x="634" y="391" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5">DriverAssignmentStrategy §07</text>
+
+              <line x1="410" y1="436" x2="410" y2="462" stroke="var(--diagram-accent)" marker-end="url(#flow10a)"/>
+              <text x="424" y="452" fill="var(--diagram-ink-dim)" font-size="9.5">driver commits &rarr; RIDER_ASSIGNED</text>
+
+              <!-- PHASE D -->
+              <rect x="40" y="464" width="740" height="120" rx="12" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="4 3"/>
+              <text x="60" y="490" fill="var(--diagram-ink)" font-size="13" font-weight="600">&#9315; ROUTE &amp; TRACK</text>
+              <text x="60" y="508" fill="var(--diagram-ink-dim)" font-size="9.5">RIDER_ASSIGNED &rarr; DRIVER_ARRIVING &rarr; PICKED_UP &rarr; DELIVERED</text>
+              <rect x="120" y="520" width="280" height="30" rx="6" fill="var(--diagram-bg)" stroke="var(--diagram-accent)" stroke-dasharray="2 2"/>
+              <text x="260" y="539" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5">RoutingEngine computes route §08</text>
+              <rect x="420" y="520" width="280" height="30" rx="6" fill="var(--diagram-bg)" stroke="var(--diagram-accent)" stroke-dasharray="2 2"/>
+              <text x="560" y="539" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5">EtaCalculator live ETA §09</text>
+
+              <text x="410" y="606" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5">DELIVERED &rarr; PAID — see the Order Journey Blueprint, §05</text>
+            </svg>
+          </figure>
+          <figcaption>Solid borders = engines that plug into a flow that already runs (§01 phase); dashed amber = engines and the phase that would call them, all <span class="status-pill proposed">Proposed</span>. Phase 1 and 2 share one rule set and one pricing call on purpose — that's the parity guarantee from the Order Journey Blueprint, §01, and nothing above breaks it: every new rule or strategy joins the same shared list, it never forks into a second path.</figcaption>
+        </div>
+        <div class="panel note">
+          <p style="margin:0"><strong>Reading this against the adoption path</strong> — phase 1–2 engines (<code>DistanceCalculator</code>, <code>DeliveryChargeStrategy</code>, <code>CouponValidityRule</code>, <code>ZoneContainmentChecker</code>) are extensions of code that runs today and were staged as phases 1–3 in the Order Journey Blueprint's rollout table. Phase 3–4 engines (<code>MatchingCriterion</code>, <code>DriverAssignmentStrategy</code>, <code>RoutingEngine</code>, <code>EtaCalculator</code>) are the phase 4–7 items — genuinely new systems, reviewed here structurally before anyone estimates a build.</p>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <footer>
+    Reference catalog only — no source files were modified. Read alongside the Order Journey Blueprint for narrative flow and rollout sequencing; this document is the structural detail behind that narrative's Strategy-pattern proposals.
+  </footer>
+</div>

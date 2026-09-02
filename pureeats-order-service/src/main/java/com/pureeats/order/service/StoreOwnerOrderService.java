@@ -66,7 +66,7 @@ public class StoreOwnerOrderService {
         log.info("Order {} transitioned PLACED -> RESTAURANT_ACCEPTED by store owner {}", orderId, ownerUserId);
 
         notificationDispatchService.notifyUser(order.getUserId().longValue(), "Order accepted",
-                "Your order #" + order.getUniqueOrderId() + " has been accepted by the restaurant");
+                "Your order #" + order.getUniqueOrderId() + " has been accepted by the restaurant", "ORDER_UPDATE");
         return orderService.toResponse(order);
     }
 
@@ -123,7 +123,7 @@ public class StoreOwnerOrderService {
         orderStatusLogService.record(order.getId(), current, OrderStatusCode.CANCELLED, "STORE_OWNER", ownerUserId, null);
         log.info("Order {} transitioned {} -> CANCELLED by store owner {}", orderId, current, ownerUserId);
         notificationDispatchService.notifyUser(order.getUserId().longValue(), "Order cancelled",
-                "Your order #" + order.getUniqueOrderId() + " was cancelled by the restaurant");
+                "Your order #" + order.getUniqueOrderId() + " was cancelled by the restaurant", "ORDER_UPDATE");
         return orderService.toResponse(order);
     }
 

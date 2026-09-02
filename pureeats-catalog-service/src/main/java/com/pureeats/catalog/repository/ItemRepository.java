@@ -16,6 +16,12 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
 
     List<Item> findByItemCategoryId(Integer itemCategoryId);
 
+    /** Cross-restaurant, newest first - the Home page "Recommended" section overfetches via this and filters out any whose restaurant is no longer active/accepted. */
+    Page<Item> findByIsRecommendedTrueAndIsActiveTrueOrderByIdDesc(Pageable pageable);
+
+    /** Cross-restaurant dish name search (Search page's "Dishes" tab) - active items only; overfetched and filtered the same way as the recommended-items query above. */
+    Page<Item> findByNameContainingIgnoreCaseAndIsActiveTrueOrderByIdDesc(String name, Pageable pageable);
+
     /** Admin listing - every item, optionally scoped to one restaurant and/or a name search. */
     @Query("select i from Item i where (:restaurantId is null or i.restaurantId = :restaurantId) " +
             "and (:search is null or :search = '' or lower(i.name) like lower(concat('%', :search, '%')))")

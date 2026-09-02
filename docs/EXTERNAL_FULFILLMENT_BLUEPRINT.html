@@ -1,0 +1,574 @@
+<title>External Fulfillment Blueprint</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F5F6F1; --surface:#FFFFFF; --surface-2:#EBEEE5;
+    --ink:#181B15; --ink-2:#4B5245; --ink-3:#7A8172; --border:#DCE1D4;
+    --accent:#1F6F5C; --accent-ink:#0E3A30; --accent-soft:#E1F0E9;
+    --warm:#C97A2E; --warm-soft:#FBEEDD; --warm-ink:#7A4413;
+    --code-bg:#EBEEE3; --danger:#A6432A; --danger-soft:#F6E4DD;
+    --diagram-bg:#101A16; --diagram-surface:#17251F; --diagram-line:#3F8A73;
+    --diagram-ink:#EAF3EE; --diagram-ink-dim:#93A89D; --diagram-accent:#E3A05C;
+    --code-str:#D98E6B; --code-kw:#E3A05C; --code-an:#7FBFA8;
+    --shadow:0 1px 2px rgba(20,30,20,.04), 0 8px 24px -12px rgba(20,30,20,.12);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0D110E; --surface:#141914; --surface-2:#1B221C;
+      --ink:#E9ECE4; --ink-2:#B7BEAF; --ink-3:#828A7B; --border:#28312A;
+      --accent:#55BFA1; --accent-ink:#C6EEDF; --accent-soft:#152922;
+      --warm:#E3A05C; --warm-soft:#2C2013; --warm-ink:#F2CB9B;
+      --code-bg:#1B221C; --danger:#E38A6E; --danger-soft:#301C15;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0D110E; --surface:#141914; --surface-2:#1B221C;
+    --ink:#E9ECE4; --ink-2:#B7BEAF; --ink-3:#828A7B; --border:#28312A;
+    --accent:#55BFA1; --accent-ink:#C6EEDF; --accent-soft:#152922;
+    --warm:#E3A05C; --warm-soft:#2C2013; --warm-ink:#F2CB9B;
+    --code-bg:#1B221C; --danger:#E38A6E; --danger-soft:#301C15;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:'IBM Plex Sans',-apple-system,'Segoe UI',Roboto,sans-serif; font-size:16px; line-height:1.6; -webkit-font-smoothing:antialiased;}
+  a{color:var(--accent);}
+  a:focus-visible,summary:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  ::selection{background:var(--accent-soft); color:var(--accent-ink);}
+  h1,h2,h3,h4{font-family:'Fraunces',Georgia,serif; font-weight:600; text-wrap:balance; color:var(--ink); margin:0;}
+  code,.mono{font-family:'IBM Plex Mono',SFMono-Regular,Consolas,monospace;}
+  code{background:var(--code-bg); padding:.12em .4em; border-radius:4px; font-size:.86em;}
+  .shell{max-width:1360px; margin:0 auto; padding:3.2rem 2rem 6rem;}
+  .layout{display:flex; gap:3.2rem; align-items:flex-start;}
+  .doc-header{max-width:760px; margin-bottom:2.6rem;}
+  .kicker{font-family:'IBM Plex Mono',monospace; font-size:.78rem; letter-spacing:.11em; text-transform:uppercase; color:var(--accent); font-weight:600; margin-bottom:.9rem; display:flex; gap:.6rem; align-items:center;}
+  .kicker::before{content:""; width:1.6rem; height:1px; background:var(--accent);}
+  h1.title{font-size:clamp(2.2rem,4.2vw,3rem); line-height:1.08; letter-spacing:-.01em;}
+  .lead{font-size:1.1rem; color:var(--ink-2); margin-top:1.1rem; max-width:66ch;}
+  .meta-row{display:flex; flex-wrap:wrap; gap:1.6rem; margin-top:1.5rem; padding-top:1.3rem; border-top:1px solid var(--border);}
+  .meta-item{font-size:.82rem;}
+  .meta-item .k{color:var(--ink-3); text-transform:uppercase; letter-spacing:.07em; font-size:.7rem; display:block; margin-bottom:.2rem;}
+  .toc{width:236px; flex:none; position:sticky; top:2.4rem; align-self:flex-start;}
+  .toc-title{font-size:.7rem; text-transform:uppercase; letter-spacing:.1em; color:var(--ink-3); margin-bottom:.9rem; font-weight:600;}
+  .toc ol{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.15rem;}
+  .toc li a{display:block; padding:.4rem .6rem; border-radius:6px; color:var(--ink-2); text-decoration:none; font-size:.86rem;}
+  .toc li a:hover{background:var(--surface-2); color:var(--ink);}
+  .toc-num{font-family:'IBM Plex Mono',monospace; color:var(--ink-3); margin-right:.5em; font-size:.8em;}
+  .content{flex:1; min-width:0; max-width:860px;}
+  section.chapter{padding-top:2.5rem; margin-top:2.5rem; border-top:1px solid var(--border);}
+  section.chapter:first-of-type{border-top:none; margin-top:0;}
+  .chapter-head{display:flex; align-items:baseline; gap:.9rem; margin-bottom:.5rem; flex-wrap:wrap;}
+  .chapter-num{font-family:'IBM Plex Mono',monospace; color:var(--ink-3); font-size:1rem;}
+  h2{font-size:1.5rem;}
+  h3{font-size:1.05rem; margin-top:1.6rem; margin-bottom:.5rem;}
+  .chapter-dek{color:var(--ink-2); font-size:1rem; margin-top:.5rem; max-width:72ch;}
+  p{margin:.8rem 0; color:var(--ink-2); max-width:72ch;}
+  p strong{color:var(--ink); font-weight:600;}
+  .status-pill{display:inline-flex; align-items:center; gap:.4em; font-family:'IBM Plex Mono',monospace; font-size:.66rem; letter-spacing:.05em; text-transform:uppercase; font-weight:600; padding:.26em .6em; border-radius:99px;}
+  .status-pill.live{background:var(--accent-soft); color:var(--accent-ink);}
+  .status-pill.proposed{background:var(--warm-soft); color:var(--warm-ink);}
+  .status-pill.dummy{background:var(--danger-soft); color:var(--danger);}
+  .panel{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1.3rem 1.5rem; margin:1.2rem 0; box-shadow:var(--shadow);}
+  .panel.note{background:var(--surface-2);}
+  .panel.warn{background:var(--danger-soft); border-color:var(--danger);}
+  .panel.warn p,.panel.warn h4,.panel.warn li{color:var(--danger);}
+  .panel.warn h4{font-family:'IBM Plex Sans',sans-serif; font-size:.85rem; text-transform:uppercase; letter-spacing:.06em; margin-bottom:.5rem;}
+  .diagram-panel{background:var(--diagram-bg); border-radius:12px; padding:1.4rem 1.5rem 1.1rem; margin:1.3rem 0; box-shadow:var(--shadow); overflow-x:auto;}
+  .diagram-panel svg{display:block; width:100%; height:auto; max-width:100%;}
+  figcaption{color:var(--diagram-ink-dim); font-size:.8rem; margin-top:.75rem; padding-top:.75rem; border-top:1px solid rgba(255,255,255,.08); line-height:1.55;}
+  figure{margin:0;}
+  .table-wrap{overflow-x:auto; margin:1.1rem 0;}
+  table{border-collapse:collapse; width:100%; font-size:.85rem; min-width:520px;}
+  th,td{text-align:left; padding:.55rem .75rem; border-bottom:1px solid var(--border); vertical-align:top;}
+  th{font-family:'IBM Plex Mono',monospace; font-size:.66rem; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-3); font-weight:600; background:var(--surface-2);}
+  td{color:var(--ink-2);}
+  tr:last-child td{border-bottom:none;}
+  footer{max-width:860px; margin-left:auto; margin-right:auto; padding-top:2.2rem; margin-top:2.8rem; border-top:1px solid var(--border); color:var(--ink-3); font-size:.84rem;}
+  .code-panel{background:var(--diagram-bg); border-radius:12px; margin:1.3rem 0; box-shadow:var(--shadow); overflow:hidden;}
+  .code-file{display:flex; align-items:center; justify-content:space-between; padding:.7rem 1.2rem; border-bottom:1px solid rgba(255,255,255,.08);}
+  .code-file span{font-family:'IBM Plex Mono',monospace; font-size:.78rem; color:var(--diagram-ink-dim);}
+  .code-panel pre{margin:0; padding:1.1rem 1.4rem 1.3rem; overflow-x:auto;}
+  .code-panel code{background:none; padding:0; font-size:.82rem; line-height:1.65; color:var(--diagram-ink); font-family:'IBM Plex Mono',monospace; white-space:pre;}
+  .kw{color:var(--code-kw);} .an{color:var(--code-an);} .cm{color:var(--diagram-ink-dim); font-style:italic;} .st{color:var(--code-str);} .ty{color:var(--diagram-ink); font-weight:600;}
+  details.toc-mobile{display:none;}
+  @media (max-width:980px){
+    .layout{flex-direction:column;} .toc{display:none;}
+    details.toc-mobile{display:block; margin-bottom:2rem; border:1px solid var(--border); border-radius:10px; background:var(--surface);}
+    details.toc-mobile summary{padding:.9rem 1.1rem; font-family:'IBM Plex Mono',monospace; font-size:.72rem; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-2); cursor:pointer;}
+    details.toc-mobile ol{list-style:none; margin:0; padding:0 1.1rem 1rem;}
+    details.toc-mobile li a{display:block; padding:.3rem 0; color:var(--ink-2); text-decoration:none; font-size:.86rem;}
+    .content{max-width:100%;}
+  }
+</style>
+
+<div class="shell">
+  <div class="doc-header">
+    <div class="kicker">PureEats Backend &middot; Third in the Blueprint series</div>
+    <h1 class="title">External Fulfillment Blueprint</h1>
+    <p class="lead">A design for handing delivery off to a third-party logistics partner — Rapido used throughout as the worked example — when the in-house rider pool is expensive or thin in a zone. Includes dummy implementation skeletons, not just diagrams, since that's what this one calls for.</p>
+    <div class="meta-row">
+      <div class="meta-item"><span class="k">Extends</span>Engine Interfaces Blueprint, §07</div>
+      <div class="meta-item"><span class="k">Status</span>Design proposal, code is illustrative</div>
+      <div class="meta-item"><span class="k">Prepared</span>2 Sept 2026</div>
+    </div>
+    <div class="panel warn">
+      <h4>Read before the Rapido examples</h4>
+      <p style="margin:0">Every Rapido-specific detail below — endpoint paths, request shape, status vocabulary, auth headers — is <strong>illustrative</strong>, written to show the integration pattern, not copied from Rapido's actual partner API contract. Confirm real field names, auth, and status values against Rapido's own integration docs before writing production code against them.</p>
+    </div>
+  </div>
+
+  <details class="toc-mobile">
+    <summary>Contents</summary>
+    <ol>
+      <li><a href="#provider"><span class="toc-num">01</span>DeliveryFulfillmentProvider</a></li>
+      <li><a href="#routing"><span class="toc-num">02</span>FulfillmentRoutingStrategy</a></li>
+      <li><a href="#rapido"><span class="toc-num">03</span>Rapido — dummy implementation</a></li>
+      <li><a href="#sequence"><span class="toc-num">04</span>End-to-end sequence</a></li>
+      <li><a href="#settlement"><span class="toc-num">05</span>What else changes</a></li>
+    </ol>
+  </details>
+
+  <div class="layout">
+    <nav class="toc">
+      <div class="toc-title">Contents</div>
+      <ol>
+        <li><a href="#provider"><span class="toc-num">01</span>DeliveryFulfillmentProvider</a></li>
+        <li><a href="#routing"><span class="toc-num">02</span>FulfillmentRoutingStrategy</a></li>
+        <li><a href="#rapido"><span class="toc-num">03</span>Rapido — dummy implementation</a></li>
+        <li><a href="#sequence"><span class="toc-num">04</span>End-to-end sequence</a></li>
+        <li><a href="#settlement"><span class="toc-num">05</span>What else changes</a></li>
+      </ol>
+    </nav>
+
+    <main class="content">
+
+      <section class="chapter" id="provider">
+        <div class="chapter-head"><span class="chapter-num">01</span><h2>DeliveryFulfillmentProvider</h2></div>
+        <p class="chapter-dek">This sits <em>above</em> <code>DriverAssignmentStrategy</code> from the Engine Interfaces Blueprint, §07 — that interface answers "which of our own riders." This one answers "our own fleet, or someone else's." The in-house path becomes one implementation among several, not a special case the rest of the system has to know about.</p>
+        <div class="diagram-panel">
+          <figure>
+            <svg viewBox="0 0 820 450" role="img" aria-label="DeliveryFulfillmentProvider interface with methods quote, handOff, cancel and source, realized by five implementations in two groups: in-house (a single wrapper around the existing driver matching and assignment engines) and external partners (Rapido, Shadowfax, Porter, Dunzo). Consumed by FulfillmentRoutingStrategy and DeliveryOrderService.">
+              <defs>
+                <marker id="triF1" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1,1 L11,6 L1,11 Z" fill="var(--diagram-bg)" stroke="var(--diagram-line)" stroke-width="1"/></marker>
+                <marker id="diaF1" viewBox="0 0 12 12" refX="6" refY="6" markerWidth="8" markerHeight="8"><path d="M6,0 L12,6 L6,12 L0,6 Z" fill="var(--diagram-line)"/></marker>
+              </defs>
+              <rect x="310" y="14" width="200" height="42" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)" stroke-width="1.4"/>
+              <text x="410" y="30" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9" letter-spacing="1">&#171;interface&#187;</text>
+              <text x="410" y="46" text-anchor="middle" fill="var(--diagram-ink)" font-size="13" font-style="italic" font-weight="600">DeliveryFulfillmentProvider</text>
+              <rect x="250" y="56" width="320" height="30" rx="8" fill="var(--diagram-bg)" stroke="var(--diagram-line)"/>
+              <text x="410" y="75" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5" font-family="'IBM Plex Mono',monospace">quote &middot; handOff &middot; cancel &middot; source</text>
+
+              <rect x="592" y="4" width="210" height="70" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="697" y="26" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">FulfillmentRoutingStrategy</text>
+              <text x="697" y="42" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">picks the source, §02</text>
+              <text x="697" y="58" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">+ DeliveryOrderService</text>
+              <line x1="592" y1="38" x2="512" y2="38" stroke="var(--diagram-line)" marker-start="url(#diaF1)"/>
+
+              <line x1="410" y1="104" x2="410" y2="87" stroke="var(--diagram-line)" marker-end="url(#triF1)"/>
+              <line x1="230" y1="104" x2="590" y2="104" stroke="var(--diagram-line)"/>
+              <line x1="230" y1="104" x2="230" y2="130" stroke="var(--diagram-line)"/>
+              <line x1="590" y1="104" x2="590" y2="130" stroke="var(--diagram-line)"/>
+
+              <text x="230" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10" letter-spacing=".4">IN-HOUSE</text>
+              <text x="590" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10" letter-spacing=".4">EXTERNAL PARTNERS</text>
+
+              <line x1="230" y1="150" x2="230" y2="208" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+              <line x1="590" y1="150" x2="590" y2="418" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+
+              <rect x="125" y="152" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="230" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">InHouseFleetProvider</text>
+              <text x="230" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">wraps today's matching + assignment</text>
+
+              <rect x="485" y="152" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="590" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">RapidoDeliveryProvider</text>
+              <text x="590" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">worked example — code in §03</text>
+
+              <rect x="485" y="222" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="590" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">ShadowfaxDeliveryProvider</text>
+              <text x="590" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">same shape, different adapter</text>
+
+              <rect x="485" y="292" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="590" y="312" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">PorterDeliveryProvider</text>
+              <text x="590" y="328" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">bulk / parcel-style orders</text>
+
+              <rect x="485" y="362" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="590" y="382" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">DunzoDeliveryProvider</text>
+              <text x="590" y="398" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">on record as a fourth option</text>
+            </svg>
+          </figure>
+          <figcaption><code>InHouseFleetProvider</code> is <span class="status-pill live">Implemented logic</span>, packaged into a new wrapper class. Every external provider is <span class="status-pill proposed">Proposed</span>; Rapido gets a full dummy implementation in §03 because it's the worked example — the other three would follow the identical shape.</figcaption>
+        </div>
+
+        <div class="code-panel">
+          <div class="code-file"><span>DeliveryFulfillmentProvider.java</span><span class="status-pill proposed">Proposed</span></div>
+          <pre><code><span class="kw">public interface</span> <span class="ty">DeliveryFulfillmentProvider</span> {
+    <span class="ty">FulfillmentQuote</span> quote(<span class="ty">Order</span> order);
+    <span class="ty">FulfillmentHandle</span> handOff(<span class="ty">Order</span> order);
+    <span class="kw">void</span> cancel(<span class="ty">FulfillmentHandle</span> handle);
+    <span class="ty">FulfillmentSource</span> source();
+}
+
+<span class="kw">public enum</span> <span class="ty">FulfillmentSource</span> { IN_HOUSE, RAPIDO, SHADOWFAX, PORTER, DUNZO }
+
+<span class="cm">// value object — same shape regardless of who ends up delivering</span>
+<span class="kw">public record</span> <span class="ty">FulfillmentHandle</span>(
+    <span class="ty">FulfillmentSource</span> source,
+    <span class="ty">String</span> externalTaskId,   <span class="cm">// null for IN_HOUSE — driverId lives on the Order/TripDetail instead</span>
+    <span class="ty">Long</span> driverId
+) {}
+
+<span class="kw">public record</span> <span class="ty">FulfillmentQuote</span>(
+    <span class="ty">FulfillmentSource</span> source,
+    <span class="ty">BigDecimal</span> fare,
+    <span class="kw">int</span> etaMinutes
+) {}</code></pre>
+        </div>
+
+        <div class="code-panel">
+          <div class="code-file"><span>InHouseFleetProvider.java</span><span class="status-pill live">Wraps existing logic</span></div>
+          <pre><code><span class="an">@Component</span>
+<span class="kw">public class</span> <span class="ty">InHouseFleetProvider</span> <span class="kw">implements</span> <span class="ty">DeliveryFulfillmentProvider</span> {
+
+    <span class="kw">private final</span> <span class="ty">DriverMatchingEngine</span> matchingEngine;              <span class="cm">// Engine Interfaces Blueprint §06</span>
+    <span class="kw">private final</span> <span class="ty">List</span>&lt;<span class="ty">DriverAssignmentStrategy</span>&gt; assignmentStrategies; <span class="cm">// §07</span>
+
+    <span class="an">@Override</span>
+    <span class="kw">public</span> <span class="ty">FulfillmentQuote</span> quote(<span class="ty">Order</span> order) {
+        <span class="cm">// no per-order quote step today — delivery charge is already fixed</span>
+        <span class="cm">// at checkout by PricingOrchestrator, so this is informational only</span>
+        <span class="kw">return new</span> <span class="ty">FulfillmentQuote</span>(<span class="ty">FulfillmentSource</span>.IN_HOUSE, order.getDeliveryCharge(), <span class="kw">null</span>);
+    }
+
+    <span class="an">@Override</span>
+    <span class="kw">public</span> <span class="ty">FulfillmentHandle</span> handOff(<span class="ty">Order</span> order) {
+        <span class="ty">List</span>&lt;<span class="ty">RankedDriver</span>&gt; ranked = matchingEngine.rank(order);
+        <span class="ty">AssignmentOutcome</span> outcome = assignmentStrategies.get(<span class="st">0</span>).assign(order, ranked);
+        <span class="kw">return new</span> <span class="ty">FulfillmentHandle</span>(<span class="ty">FulfillmentSource</span>.IN_HOUSE, <span class="kw">null</span>, outcome.driverId());
+    }
+
+    <span class="an">@Override</span>
+    <span class="kw">public void</span> cancel(<span class="ty">FulfillmentHandle</span> handle) {
+        <span class="cm">// delegates to the existing admin/rider cancellation path — no new logic</span>
+    }
+
+    <span class="an">@Override</span>
+    <span class="kw">public</span> <span class="ty">FulfillmentSource</span> source() { <span class="kw">return</span> <span class="ty">FulfillmentSource</span>.IN_HOUSE; }
+}</code></pre>
+        </div>
+      </section>
+
+      <section class="chapter" id="routing">
+        <div class="chapter-head"><span class="chapter-num">02</span><h2>FulfillmentRoutingStrategy</h2></div>
+        <p class="chapter-dek">The decision of <em>which</em> provider handles a given order — kept separate from the providers themselves, so "when do we go external" stays a tunable policy, not logic buried inside <code>RapidoDeliveryProvider</code>.</p>
+        <div class="diagram-panel">
+          <figure>
+            <svg viewBox="0 0 820 380" role="img" aria-label="FulfillmentRoutingStrategy interface with method decide, realized by four implementations in two groups: signal-based (zone coverage, capacity, cost) and combinator (hybrid, which tries the signal-based strategies in order). Consumed by DeliveryOrderService, which holds an ordered list of strategies.">
+              <defs>
+                <marker id="triF2" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1,1 L11,6 L1,11 Z" fill="var(--diagram-bg)" stroke="var(--diagram-line)" stroke-width="1"/></marker>
+                <marker id="diaF2" viewBox="0 0 12 12" refX="6" refY="6" markerWidth="8" markerHeight="8"><path d="M6,0 L12,6 L6,12 L0,6 Z" fill="var(--diagram-line)"/></marker>
+              </defs>
+              <rect x="300" y="14" width="220" height="42" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)" stroke-width="1.4"/>
+              <text x="410" y="30" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9" letter-spacing="1">&#171;interface&#187;</text>
+              <text x="410" y="46" text-anchor="middle" fill="var(--diagram-ink)" font-size="13" font-style="italic" font-weight="600">FulfillmentRoutingStrategy</text>
+              <rect x="270" y="56" width="280" height="30" rx="8" fill="var(--diagram-bg)" stroke="var(--diagram-line)"/>
+              <text x="410" y="75" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5" font-family="'IBM Plex Mono',monospace">decide(order, ctx): FulfillmentSource | null</text>
+
+              <rect x="592" y="8" width="210" height="60" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="697" y="32" text-anchor="middle" fill="var(--diagram-ink)" font-size="11.5" font-weight="600">DeliveryOrderService</text>
+              <text x="697" y="48" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">ordered List&lt;Strategy&gt;, first hit wins</text>
+              <line x1="592" y1="38" x2="512" y2="38" stroke="var(--diagram-line)" marker-start="url(#diaF2)"/>
+
+              <line x1="410" y1="104" x2="410" y2="87" stroke="var(--diagram-line)" marker-end="url(#triF2)"/>
+              <line x1="230" y1="104" x2="590" y2="104" stroke="var(--diagram-line)"/>
+              <line x1="230" y1="104" x2="230" y2="130" stroke="var(--diagram-line)"/>
+              <line x1="590" y1="104" x2="590" y2="130" stroke="var(--diagram-line)"/>
+
+              <text x="230" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10" letter-spacing=".4">SIGNAL-BASED</text>
+              <text x="590" y="144" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10" letter-spacing=".4">COMBINATOR</text>
+
+              <line x1="230" y1="150" x2="230" y2="348" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+              <line x1="590" y1="150" x2="590" y2="208" stroke="var(--diagram-line)" stroke-opacity=".35"/>
+
+              <rect x="125" y="152" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="230" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">ZoneCoverageRoutingStrategy</text>
+              <text x="230" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">no in-house driver covers this zone</text>
+
+              <rect x="125" y="222" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="230" y="242" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">CapacityBasedRoutingStrategy</text>
+              <text x="230" y="258" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">idle in-house drivers below threshold</text>
+
+              <rect x="125" y="292" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="230" y="312" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">CostBasedRoutingStrategy</text>
+              <text x="230" y="328" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">external quote beats in-house cost</text>
+
+              <rect x="485" y="152" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="590" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">HybridRoutingStrategy</text>
+              <text x="590" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">tries the others in order, first wins</text>
+            </svg>
+          </figure>
+          <figcaption>All <span class="status-pill proposed">Proposed</span>. A strategy returns <code>null</code> to mean "no opinion" rather than forcing a source — that's what lets <code>HybridRoutingStrategy</code> chain the other three without any of them needing to know about each other.</figcaption>
+        </div>
+
+        <div class="code-panel">
+          <div class="code-file"><span>HybridRoutingStrategy.java + DeliveryOrderService.java (excerpt)</span><span class="status-pill dummy">Dummy code</span></div>
+          <pre><code><span class="an">@Component</span>
+<span class="kw">public class</span> <span class="ty">HybridRoutingStrategy</span> <span class="kw">implements</span> <span class="ty">FulfillmentRoutingStrategy</span> {
+
+    <span class="kw">private final</span> <span class="ty">List</span>&lt;<span class="ty">FulfillmentRoutingStrategy</span>&gt; delegates; <span class="cm">// zone, then capacity, then cost</span>
+
+    <span class="an">@Override</span>
+    <span class="kw">public</span> <span class="ty">FulfillmentSource</span> decide(<span class="ty">Order</span> order, <span class="ty">FulfillmentContext</span> ctx) {
+        <span class="kw">return</span> delegates.stream()
+                .map(s -&gt; s.decide(order, ctx))
+                .filter(<span class="ty">Objects</span>::nonNull)
+                .findFirst()
+                .orElse(<span class="kw">null</span>);  <span class="cm">// null → DeliveryOrderService falls back to IN_HOUSE</span>
+    }
+}
+
+<span class="an">@Service</span>
+<span class="kw">class</span> <span class="ty">DeliveryOrderService</span> {
+
+    <span class="kw">private final</span> <span class="ty">List</span>&lt;<span class="ty">FulfillmentRoutingStrategy</span>&gt; routingStrategies; <span class="cm">// just HybridRoutingStrategy today</span>
+    <span class="kw">private final</span> <span class="ty">Map</span>&lt;<span class="ty">FulfillmentSource</span>, <span class="ty">DeliveryFulfillmentProvider</span>&gt; providers;
+
+    <span class="kw">void</span> dispatch(<span class="ty">Order</span> order) {
+        <span class="ty">FulfillmentContext</span> ctx = contextFor(order); <span class="cm">// zone, idle-driver count, live quotes</span>
+
+        <span class="ty">FulfillmentSource</span> source = routingStrategies.stream()
+                .map(s -&gt; s.decide(order, ctx))
+                .filter(<span class="ty">Objects</span>::nonNull)
+                .findFirst()
+                .orElse(<span class="ty">FulfillmentSource</span>.IN_HOUSE); <span class="cm">// safe default, never silently unassigned</span>
+
+        <span class="ty">DeliveryFulfillmentProvider</span> provider = providers.get(source);
+        <span class="ty">FulfillmentHandle</span> handle = provider.handOff(order);
+        tripDetailService.recordFulfillment(order, handle); <span class="cm">// extends the existing TripDetail entity</span>
+    }
+}</code></pre>
+        </div>
+      </section>
+
+      <section class="chapter" id="rapido">
+        <div class="chapter-head"><span class="chapter-num">03</span><h2>Rapido — dummy implementation</h2></div>
+        <p class="chapter-dek">Four pieces: the provider itself, a thin HTTP client, a status translator, and a webhook endpoint. The translator is the piece that matters most — it's what keeps the customer-facing order lifecycle (Order Journey Blueprint, §05) <strong>identical</strong> whether a PureEats rider or a Rapido rider is carrying the bag.</p>
+
+        <div class="code-panel">
+          <div class="code-file"><span>RapidoDeliveryProvider.java</span><span class="status-pill dummy">Dummy code</span></div>
+          <pre><code><span class="an">@Component</span>
+<span class="an">@ConditionalOnProperty</span>(<span class="st">"fulfillment.rapido.enabled"</span>)
+<span class="kw">public class</span> <span class="ty">RapidoDeliveryProvider</span> <span class="kw">implements</span> <span class="ty">DeliveryFulfillmentProvider</span> {
+
+    <span class="kw">private final</span> <span class="ty">RapidoApiClient</span> client;
+
+    <span class="an">@Override</span>
+    <span class="kw">public</span> <span class="ty">FulfillmentQuote</span> quote(<span class="ty">Order</span> order) {
+        <span class="kw">var</span> req = <span class="kw">new</span> <span class="ty">RapidoQuoteRequest</span>(
+            order.getRestaurantLocation(), order.getDeliveryLocation(), order.getPayable());
+        <span class="kw">var</span> res = client.getQuote(req);
+        <span class="kw">return new</span> <span class="ty">FulfillmentQuote</span>(<span class="ty">FulfillmentSource</span>.RAPIDO, res.fare(), res.etaMinutes());
+    }
+
+    <span class="an">@Override</span>
+    <span class="kw">public</span> <span class="ty">FulfillmentHandle</span> handOff(<span class="ty">Order</span> order) {
+        <span class="kw">var</span> req = <span class="ty">RapidoDeliveryRequest</span>.from(order); <span class="cm">// pickup, drop, parcel value, our order reference</span>
+        <span class="kw">var</span> res = client.createDelivery(req);
+        <span class="kw">return new</span> <span class="ty">FulfillmentHandle</span>(<span class="ty">FulfillmentSource</span>.RAPIDO, res.taskId(), <span class="kw">null</span>);
+    }
+
+    <span class="an">@Override</span>
+    <span class="kw">public void</span> cancel(<span class="ty">FulfillmentHandle</span> handle) {
+        client.cancelDelivery(handle.externalTaskId());
+    }
+
+    <span class="an">@Override</span>
+    <span class="kw">public</span> <span class="ty">FulfillmentSource</span> source() { <span class="kw">return</span> <span class="ty">FulfillmentSource</span>.RAPIDO; }
+}</code></pre>
+        </div>
+
+        <div class="code-panel">
+          <div class="code-file"><span>RapidoApiClient.java</span><span class="status-pill dummy">Dummy code &middot; endpoints illustrative</span></div>
+          <pre><code><span class="an">@Component</span>
+<span class="kw">class</span> <span class="ty">RapidoApiClient</span> {
+
+    <span class="kw">private final</span> <span class="ty">RestClient</span> restClient;         <span class="cm">// or WebClient — either fits Spring Boot 4.1</span>
+    <span class="kw">private final</span> <span class="ty">RapidoAuthTokenProvider</span> tokenProvider;
+
+    <span class="ty">RapidoQuoteResponse</span> getQuote(<span class="ty">RapidoQuoteRequest</span> req) {
+        <span class="kw">return</span> restClient.post()
+            .uri(<span class="st">"/v1/quotes"</span>)                        <span class="cm">// illustrative path — confirm against Rapido's docs</span>
+            .header(<span class="st">"Authorization"</span>, <span class="st">"Bearer "</span> + tokenProvider.token())
+            .body(req)
+            .retrieve()
+            .body(<span class="ty">RapidoQuoteResponse</span>.<span class="kw">class</span>);
+    }
+
+    <span class="ty">RapidoDeliveryResponse</span> createDelivery(<span class="ty">RapidoDeliveryRequest</span> req) {
+        <span class="kw">return</span> restClient.post()
+            .uri(<span class="st">"/v1/deliveries"</span>)
+            .header(<span class="st">"Authorization"</span>, <span class="st">"Bearer "</span> + tokenProvider.token())
+            .body(req)
+            .retrieve()
+            .body(<span class="ty">RapidoDeliveryResponse</span>.<span class="kw">class</span>);
+    }
+
+    <span class="kw">void</span> cancelDelivery(<span class="ty">String</span> taskId) {
+        restClient.post().uri(<span class="st">"/v1/deliveries/{id}/cancel"</span>, taskId)
+            .header(<span class="st">"Authorization"</span>, <span class="st">"Bearer "</span> + tokenProvider.token())
+            .retrieve().toBodilessEntity();
+    }
+}</code></pre>
+        </div>
+
+        <div class="code-panel">
+          <div class="code-file"><span>ExternalStatusMapper.java + RapidoStatusMapper.java</span><span class="status-pill dummy">Dummy code &middot; status values illustrative</span></div>
+          <pre><code><span class="kw">public interface</span> <span class="ty">ExternalStatusMapper</span> {
+    <span class="ty">OrderStatusCode</span> map(<span class="ty">String</span> externalStatus); <span class="cm">// returns null for an unrecognized status — never guess</span>
+    <span class="ty">FulfillmentSource</span> source();
+}
+
+<span class="an">@Component</span>
+<span class="kw">class</span> <span class="ty">RapidoStatusMapper</span> <span class="kw">implements</span> <span class="ty">ExternalStatusMapper</span> {
+
+    <span class="kw">private static final</span> <span class="ty">Map</span>&lt;<span class="ty">String</span>, <span class="ty">OrderStatusCode</span>&gt; STATUS_MAP = <span class="ty">Map</span>.of(
+        <span class="st">"RIDER_ASSIGNED"</span>,   <span class="ty">OrderStatusCode</span>.RIDER_ASSIGNED,
+        <span class="st">"RIDER_ARRIVED"</span>,    <span class="ty">OrderStatusCode</span>.DRIVER_ARRIVING,   <span class="cm">// proposed state, Order Journey Blueprint §05</span>
+        <span class="st">"PARCEL_PICKED"</span>,    <span class="ty">OrderStatusCode</span>.PICKED_UP,
+        <span class="st">"PARCEL_DELIVERED"</span>, <span class="ty">OrderStatusCode</span>.DELIVERED,
+        <span class="st">"CANCELLED"</span>,        <span class="ty">OrderStatusCode</span>.CANCELLED
+    );
+
+    <span class="an">@Override</span>
+    <span class="kw">public</span> <span class="ty">OrderStatusCode</span> map(<span class="ty">String</span> externalStatus) {
+        <span class="kw">return</span> STATUS_MAP.get(externalStatus); <span class="cm">// caller must handle null — log + no-op, don't force a transition</span>
+    }
+
+    <span class="an">@Override</span>
+    <span class="kw">public</span> <span class="ty">FulfillmentSource</span> source() { <span class="kw">return</span> <span class="ty">FulfillmentSource</span>.RAPIDO; }
+}</code></pre>
+        </div>
+
+        <div class="code-panel">
+          <div class="code-file"><span>RapidoWebhookController.java</span><span class="status-pill dummy">Dummy code</span></div>
+          <pre><code><span class="an">@RestController</span>
+<span class="an">@RequestMapping</span>(<span class="st">"/webhooks/rapido"</span>)
+<span class="kw">class</span> <span class="ty">RapidoWebhookController</span> {
+
+    <span class="kw">private final</span> <span class="ty">RapidoStatusMapper</span> statusMapper;
+    <span class="kw">private final</span> <span class="ty">OrderStatusService</span> orderStatusService;         <span class="cm">// existing — order-service</span>
+    <span class="kw">private final</span> <span class="ty">RapidoWebhookSignatureValidator</span> signatureValidator;
+
+    <span class="an">@PostMapping</span>(<span class="st">"/delivery-status"</span>)
+    <span class="ty">ResponseEntity</span>&lt;<span class="ty">Void</span>&gt; onStatusUpdate(<span class="an">@RequestBody</span> <span class="ty">RapidoStatusWebhook</span> payload,
+                                         <span class="an">@RequestHeader</span>(<span class="st">"X-Rapido-Signature"</span>) <span class="ty">String</span> signature) {
+
+        signatureValidator.verify(payload, signature); <span class="cm">// reject anything unsigned or mis-signed, before touching state</span>
+
+        <span class="ty">OrderStatusCode</span> next = statusMapper.map(payload.status());
+        <span class="kw">if</span> (next != <span class="kw">null</span>) {
+            orderStatusService.transition(payload.orderReferenceId(), next, <span class="st">"RAPIDO_WEBHOOK"</span>);
+        }
+        <span class="kw">return</span> <span class="ty">ResponseEntity</span>.ok().build(); <span class="cm">// 200 regardless, so Rapido doesn't retry-storm an unmapped status</span>
+    }
+}</code></pre>
+        </div>
+
+        <div class="panel note">
+          <p style="margin:0"><strong>Why the mapper is its own class and not a switch statement inside the controller:</strong> every partner speaks a different status vocabulary, but there is exactly one <code>OrderStatusCode</code> state machine on the PureEats side (Order Journey Blueprint, §05). One <code>ExternalStatusMapper</code> implementation per partner keeps that translation isolated and testable — <code>ShadowfaxStatusMapper</code>, <code>PorterStatusMapper</code> would follow the same shape without touching this one.</p>
+        </div>
+      </section>
+
+      <section class="chapter" id="sequence">
+        <div class="chapter-head"><span class="chapter-num">04</span><h2>End-to-end sequence</h2></div>
+        <p class="chapter-dek">The in-house branch is deliberately collapsed here — it's the full diagram from the Engine Interfaces Blueprint, §06–07. What's new is everything on the right: PureEats never assigns a Rapido rider directly, it only ever finds out who Rapido assigned, after the fact, through a webhook.</p>
+        <div class="diagram-panel">
+          <figure>
+            <svg viewBox="0 0 820 620" role="img" aria-label="Sequence starting when an order reaches ready-for-pickup: DeliveryOrderService dispatches to HybridRoutingStrategy, which decides in-house or Rapido. The in-house branch is a reference to the existing matching and assignment flow. The Rapido branch calls RapidoDeliveryProvider handOff, Rapido assigns its own rider outside PureEats' system boundary, then repeatedly posts webhook status updates that RapidoStatusMapper translates into OrderStatusService transitions. Both branches converge on the same OrderStatusCode progression and the same customer tracking UI.">
+              <defs>
+                <marker id="triF3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" fill="var(--diagram-line)"/></marker>
+                <marker id="triF3a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" fill="var(--diagram-accent)"/></marker>
+              </defs>
+
+              <rect x="310" y="16" width="200" height="36" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="410" y="39" text-anchor="middle" fill="var(--diagram-ink)" font-size="11">Order reaches READY_FOR_PICKUP</text>
+
+              <line x1="410" y1="52" x2="410" y2="72" stroke="var(--diagram-line)" marker-end="url(#triF3)"/>
+              <rect x="260" y="74" width="300" height="36" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="410" y="97" text-anchor="middle" fill="var(--diagram-ink)" font-size="11">DeliveryOrderService.dispatch()</text>
+
+              <line x1="410" y1="110" x2="410" y2="128" stroke="var(--diagram-line)" marker-end="url(#triF3)"/>
+              <polygon points="410,128 480,168 410,208 340,168" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="410" y="164" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5">Hybrid</text>
+              <text x="410" y="177" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5">Routing</text>
+
+              <line x1="340" y1="168" x2="170" y2="168" stroke="var(--diagram-line)" marker-end="url(#triF3)"/>
+              <text x="255" y="158" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">IN_HOUSE (default)</text>
+              <rect x="50" y="188" width="220" height="50" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="160" y="208" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5">Existing in-house flow</text>
+              <text x="160" y="223" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">Engine Interfaces Blueprint §06&#8211;07</text>
+
+              <line x1="480" y1="168" x2="650" y2="168" stroke="var(--diagram-accent)" marker-end="url(#triF3a)"/>
+              <text x="565" y="158" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">RAPIDO</text>
+
+              <rect x="560" y="188" width="220" height="44" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="670" y="214" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5">RapidoDeliveryProvider.handOff()</text>
+
+              <line x1="670" y1="232" x2="670" y2="250" stroke="var(--diagram-accent)" marker-end="url(#triF3a)"/>
+              <rect x="560" y="252" width="220" height="50" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-ink-dim)"/>
+              <text x="670" y="272" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5">Rapido assigns its own rider</text>
+              <text x="670" y="287" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8.5">outside PureEats' system boundary</text>
+
+              <line x1="670" y1="302" x2="670" y2="338" stroke="var(--diagram-accent)" marker-end="url(#triF3a)"/>
+              <text x="686" y="324" fill="var(--diagram-ink-dim)" font-size="8.5">webhook &times; N over the trip</text>
+              <rect x="560" y="340" width="220" height="44" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="670" y="358" text-anchor="middle" fill="var(--diagram-ink)" font-size="10">POST /webhooks/rapido/</text>
+              <text x="670" y="372" text-anchor="middle" fill="var(--diagram-ink)" font-size="10">delivery-status</text>
+
+              <line x1="670" y1="384" x2="670" y2="402" stroke="var(--diagram-accent)" marker-end="url(#triF3a)"/>
+              <rect x="540" y="404" width="260" height="50" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-dasharray="3 3"/>
+              <text x="670" y="424" text-anchor="middle" fill="var(--diagram-ink)" font-size="10">RapidoStatusMapper.map() &rarr;</text>
+              <text x="670" y="439" text-anchor="middle" fill="var(--diagram-ink)" font-size="10">OrderStatusService.transition()</text>
+
+              <line x1="160" y1="238" x2="380" y2="488" stroke="var(--diagram-line)" marker-end="url(#triF3)"/>
+              <line x1="670" y1="454" x2="440" y2="488" stroke="var(--diagram-accent)" marker-end="url(#triF3a)"/>
+
+              <rect x="140" y="490" width="540" height="52" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)" stroke-width="1.4"/>
+              <text x="410" y="512" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5" font-weight="600">Same OrderStatusCode progression</text>
+              <text x="410" y="528" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">RIDER_ASSIGNED &rarr; DRIVER_ARRIVING &rarr; PICKED_UP &rarr; DELIVERED</text>
+
+              <line x1="410" y1="542" x2="410" y2="562" stroke="var(--diagram-line)" marker-end="url(#triF3)"/>
+              <rect x="310" y="564" width="200" height="34" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="410" y="586" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5">Customer tracking UI</text>
+            </svg>
+          </figure>
+          <figcaption>The convergence point is the whole design: the customer's app, the restaurant's dashboard, and every downstream consumer of order status keep reading <code>OrderStatusCode</code> exactly as before. They never need to know a Rapido rider is carrying the order instead of a PureEats one.</figcaption>
+        </div>
+      </section>
+
+      <section class="chapter" id="settlement">
+        <div class="chapter-head"><span class="chapter-num">05</span><h2>What else changes</h2></div>
+        <p class="chapter-dek">The state machine stays one piece, but money and liability don't — these differ enough per partner that they belong on <code>TripDetail</code> as explicit fields, not inferred from which provider handled the order.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Aspect</th><th>In-house (today)</th><th>External partner (e.g. Rapido)</th></tr></thead>
+            <tbody>
+              <tr><td>Rider payout</td><td><code>Wallet</code> credit + commission via <code>RestaurantPayoutService</code></td><td>Invoice/settlement from the partner — no <code>Wallet</code> entry, since PureEats doesn't employ their rider</td></tr>
+              <tr><td>Live location</td><td><code>GpsTable</code> pings from PureEats' own rider app</td><td>Partner's own tracking link or webhook payload — no GPS ping infra needed</td></tr>
+              <tr><td>Cancellation liability</td><td>Existing cancellation policy, PureEats-absorbed</td><td>Partner's SLA/cancellation-fee terms apply — a contract term, not an engineering default</td></tr>
+              <tr><td>Failure mode</td><td>Falls back to <code>AdminManualAssignmentStrategy</code></td><td>Needs its own fallback: quote timeout / no rider available &rarr; <code>HybridRoutingStrategy</code> falls through to in-house</td></tr>
+              <tr><td>Marginal cost signal</td><td>~Zero marginal cost per order (fixed rider pool, already paid for)</td><td>Real per-order cost — the exact number <code>CostBasedRoutingStrategy</code> compares against</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Concretely: add <code>fulfillmentSource</code> and <code>externalTaskId</code> columns to the existing <code>TripDetail</code> entity (found in <code>pureeats-order-service</code>, currently in-house-only) so reconciliation, refunds, and support tooling can tell at a glance who actually delivered an order — without threading a new lookup through every consumer that reads a trip.</p>
+      </section>
+
+    </main>
+  </div>
+
+  <footer>
+    Design proposal with illustrative code only — nothing here was run against a real Rapido (or any partner) endpoint, and no source files in the repo were modified. Read alongside the Order Journey Blueprint (§04, §07 rollout) and the Engine Interfaces Blueprint (§07, Driver Assignment Strategy) for the surrounding context this extends.
+  </footer>
+</div>

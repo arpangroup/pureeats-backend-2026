@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pureeats.catalog.dto.AppConfigAdminRequest;
 import com.pureeats.catalog.dto.AppConfigAdminResponse;
 import com.pureeats.catalog.dto.AppConfigResponse;
+import com.pureeats.catalog.dto.DeliveryInstructionOptionDto;
 import com.pureeats.catalog.repository.SettingRepository;
 import com.pureeats.domain.entity.Setting;
 import lombok.RequiredArgsConstructor;
@@ -36,14 +37,22 @@ public class AppConfigService {
         AppConfigAdminRequest config = readStored();
         String severity = severityFor(clientVersion, config);
         return new AppConfigResponse(severity, config.message(), config.latestVersion(),
-                config.googleMapsApiKey(), config.enabledPaymentMethods(), config.forceLogoutOnHardUpdate());
+                config.googleMapsApiKey(), config.enabledPaymentMethods(), config.forceLogoutOnHardUpdate(),
+                config.audioSearchEnabled(), config.promoSliderEnabled(), config.topPicksEnabled(), config.recommendedItemsEnabled(),
+                config.restaurantListLayout(), config.recommendedItemsLayout(), config.restaurantItemsLayout(),
+                config.deliveryInstructionMode(), config.deliveryInstructionOptions(), config.mapProvider(),
+                config.orderStatusUpdateMode(), config.orderStatusPollIntervalMs());
     }
 
     @Transactional(readOnly = true)
     public AppConfigAdminResponse getForAdmin() {
         AppConfigAdminRequest config = readStored();
         return new AppConfigAdminResponse(config.latestVersion(), config.minSupportedVersion(), config.message(),
-                config.googleMapsApiKey(), config.enabledPaymentMethods(), config.forceLogoutOnHardUpdate());
+                config.googleMapsApiKey(), config.enabledPaymentMethods(), config.forceLogoutOnHardUpdate(),
+                config.audioSearchEnabled(), config.promoSliderEnabled(), config.topPicksEnabled(), config.recommendedItemsEnabled(),
+                config.restaurantListLayout(), config.recommendedItemsLayout(), config.restaurantItemsLayout(),
+                config.deliveryInstructionMode(), config.deliveryInstructionOptions(), config.mapProvider(),
+                config.orderStatusUpdateMode(), config.orderStatusPollIntervalMs());
     }
 
     @Transactional
@@ -75,12 +84,46 @@ public class AppConfigService {
 
     private AppConfigAdminRequest readStored() {
         return settingRepository.findByKey(SETTING_KEY)
-                .map(s -> parseJson(s.getValue()))
+                .map(s -> withDefaults(parseJson(s.getValue())))
                 .orElseGet(AppConfigService::defaults);
     }
 
+    /** Client-side fallback list on the Cart page's Instructions tab mirrors this exactly - keep the two in sync. */
+    private static List<DeliveryInstructionOptionDto> defaultDeliveryInstructionOptions() {
+        return List.of(
+                new DeliveryInstructionOptionDto("LEAVE_AT_DOOR", "Leave at the door", "DoorOpen"),
+                new DeliveryInstructionOptionDto("AVOID_CALLING", "Avoid calling", "PhoneOff"),
+                new DeliveryInstructionOptionDto("AVOID_RINGING_BELL", "Avoid ringing bell", "BellOff"),
+                new DeliveryInstructionOptionDto("LEAVE_WITH_SECURITY", "Leave with security", "UserCheck"));
+    }
+
     private static AppConfigAdminRequest defaults() {
-        return new AppConfigAdminRequest("0.0.0", "0.0.0", null, null, List.of(), false);
+        return new AppConfigAdminRequest("0.0.0", "0.0.0", null, null, List.of(), false,
+                false, true, true, true,
+                "TWO_COLUMN", "TWO_COLUMN", "TWO_COLUMN",
+                "QUICK_OPTIONS", defaultDeliveryInstructionOptions(), "OSM",
+                "POLL", 8000);
+    }
+
+    /** Fills any null field (a row stored before this field existed) with its default, so an old/partial stored blob never trips a NPE unboxing a primitive in AppConfigResponse/AppConfigAdminResponse. */
+    private static AppConfigAdminRequest withDefaults(AppConfigAdminRequest config) {
+        AppConfigAdminRequest d = defaults();
+        return new AppConfigAdminRequest(
+                config.latestVersion(), config.minSupportedVersion(), config.message(), config.googleMapsApiKey(),
+                config.enabledPaymentMethods() != null ? config.enabledPaymentMethods() : d.enabledPaymentMethods(),
+                config.forceLogoutOnHardUpdate(),
+                config.audioSearchEnabled() != null ? config.audioSearchEnabled() : d.audioSearchEnabled(),
+                config.promoSliderEnabled() != null ? config.promoSliderEnabled() : d.promoSliderEnabled(),
+                config.topPicksEnabled() != null ? config.topPicksEnabled() : d.topPicksEnabled(),
+                config.recommendedItemsEnabled() != null ? config.recommendedItemsEnabled() : d.recommendedItemsEnabled(),
+                config.restaurantListLayout() != null ? config.restaurantListLayout() : d.restaurantListLayout(),
+                config.recommendedItemsLayout() != null ? config.recommendedItemsLayout() : d.recommendedItemsLayout(),
+                config.restaurantItemsLayout() != null ? config.restaurantItemsLayout() : d.restaurantItemsLayout(),
+                config.deliveryInstructionMode() != null ? config.deliveryInstructionMode() : d.deliveryInstructionMode(),
+                config.deliveryInstructionOptions() != null ? config.deliveryInstructionOptions() : d.deliveryInstructionOptions(),
+                config.mapProvider() != null ? config.mapProvider() : d.mapProvider(),
+                config.orderStatusUpdateMode() != null ? config.orderStatusUpdateMode() : d.orderStatusUpdateMode(),
+                config.orderStatusPollIntervalMs() != null ? config.orderStatusPollIntervalMs() : d.orderStatusPollIntervalMs());
     }
 
     private AppConfigAdminRequest parseJson(String json) {

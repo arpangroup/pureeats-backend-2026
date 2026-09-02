@@ -328,6 +328,13 @@ public class RestaurantService {
         return id != null && restaurantRepository.existsById(id);
     }
 
+    /** Batch lookup for cross-restaurant listings (e.g. the Home page's recommended-items feed) that need restaurant context for a set of ids without an N+1 fetch per item. */
+    @Transactional(readOnly = true)
+    public Map<Long, RestaurantSummaryResponse> summariesByIds(List<Long> ids) {
+        return restaurantRepository.findAllById(ids).stream()
+                .collect(java.util.stream.Collectors.toMap(Restaurant::getId, this::toSummary));
+    }
+
     private static double haversineKm(double lat1, double lon1, double lat2, double lon2) {
         double earthRadiusKm = 6371.0;
         double dLat = Math.toRadians(lat2 - lat1);
@@ -347,7 +354,8 @@ public class RestaurantService {
         return new RestaurantSummaryResponse(r.getId(), r.getName(), r.getSlug(), mediaUrlResolver.resolve(r.getImage()), r.getRating(),
                 r.getDeliveryTime(), r.getPriceRange(), Boolean.TRUE.equals(r.getIsPureveg()),
                 Boolean.TRUE.equals(r.getIsActive()), Boolean.TRUE.equals(r.getIsAccepted()),
-                r.getMinOrderPrice(), r.getDeliveryCharges());
+                r.getMinOrderPrice(), r.getDeliveryCharges(),
+                r.getOpeningTime(), r.getClosingTime(), Boolean.TRUE.equals(r.getIsFeatured()));
     }
 
     private RestaurantDetailResponse toDetail(Restaurant r) {

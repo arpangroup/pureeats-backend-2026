@@ -4,6 +4,7 @@ import com.pureeats.catalog.dto.*;
 import com.pureeats.catalog.repository.*;
 import com.pureeats.domain.common.exception.ResourceNotFoundException;
 import com.pureeats.domain.entity.Slide;
+import com.pureeats.media.storage.MediaUrlResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,7 @@ public class ContentService {
     private final SlideRepository slideRepository;
     private final TranslationRepository translationRepository;
     private final PaymentGatewayRepository paymentGatewayRepository;
+    private final MediaUrlResolver mediaUrlResolver;
 
     @Transactional(readOnly = true)
     public List<PageResponse> listPages() {
@@ -72,6 +74,11 @@ public class ContentService {
     }
 
     private SlideResponse toSlideResponse(Slide s) {
-        return new SlideResponse(s.getId(), s.getName(), s.getImage(), s.getImagePlaceholder(), s.getUrl());
+        // s.getImage() is a storage key (see MediaAssetService/AdminSliderService.uploadSlideImage),
+        // not a browsable URL - must go through MediaUrlResolver same as every other image field,
+        // or the client gets a bare "slide/xxx.jpg" it can't load. (MediaUrlResolver also passes an
+        // already-absolute URL/data: URI straight through, so this is safe for any older row that
+        // has one of those stored directly instead of a key.)
+        return new SlideResponse(s.getId(), s.getName(), mediaUrlResolver.resolve(s.getImage()), s.getImagePlaceholder(), s.getUrl());
     }
 }
