@@ -9,6 +9,8 @@ import com.pureeats.catalog.dto.ItemImageResponse;
 import com.pureeats.catalog.dto.ItemPatchRequest;
 import com.pureeats.catalog.dto.ItemRequest;
 import com.pureeats.catalog.dto.ItemResponse;
+import com.pureeats.catalog.dto.RecommendedItemResponse;
+import com.pureeats.catalog.dto.RestaurantSummaryResponse;
 import com.pureeats.catalog.repository.ItemCategoryRepository;
 import com.pureeats.catalog.repository.ItemRepository;
 import com.pureeats.domain.common.exception.ResourceNotFoundException;
@@ -20,6 +22,7 @@ import com.pureeats.media.storage.MediaUrlResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +32,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -52,6 +56,45 @@ public class MenuService {
     @Transactional(readOnly = true)
     public ItemResponse getItem(Long itemId) {
         return toItemResponse(findItemOrThrow(itemId));
+    }
+
+    /**
+     * Cross-restaurant recommended items for the Home page. No geo-filtering (the restaurant listing
+     * endpoints don't do that either yet) — just recommended + active items whose restaurant is still
+     * active and accepted. Overfetches 3x the requested limit since some recommended items may belong
+     * to a restaurant that's since gone inactive, then trims to the caller's limit after filtering.
+     */
+    @Transactional(readOnly = true)
+    public List<RecommendedItemResponse> listRecommendedItems(int limit) {
+        int fetchSize = Math.min(Math.max(limit, 1) * 3, 90);
+        List<Item> items = itemRepository.findByIsRecommendedTrueAndIsActiveTrueOrderByIdDesc(PageRequest.of(0, fetchSize)).getContent();
+        return withRestaurantContext(items, limit);
+    }
+
+    /**
+     * Cross-restaurant dish name search — the Search page's "Dishes" tab (mirrors
+     * {@code /restaurants/search}'s restaurant-name search, one level down at the item level). Same
+     * overfetch-then-filter shape as {@link #listRecommendedItems} — a blank query returns nothing
+     * rather than the whole catalog, matching RestaurantService.search's contract.
+     */
+    @Transactional(readOnly = true)
+    public List<RecommendedItemResponse> searchItems(String query, int limit) {
+        if (query == null || query.isBlank()) return List.of();
+        int fetchSize = Math.min(Math.max(limit, 1) * 3, 90);
+        List<Item> items = itemRepository.findByNameContainingIgnoreCaseAndIsActiveTrueOrderByIdDesc(query, PageRequest.of(0, fetchSize)).getContent();
+        return withRestaurantContext(items, limit);
+    }
+
+    /** Shared by listRecommendedItems/searchItems: attaches each item's restaurant context, drops any whose restaurant is no longer active/accepted, and trims to the caller's limit. */
+    private List<RecommendedItemResponse> withRestaurantContext(List<Item> items, int limit) {
+        List<Long> restaurantIds = items.stream().map(i -> i.getRestaurantId().longValue()).distinct().toList();
+        Map<Long, RestaurantSummaryResponse> restaurants = restaurantService.summariesByIds(restaurantIds);
+        return items.stream()
+                .map(i -> Map.entry(i, restaurants.get(i.getRestaurantId().longValue())))
+                .filter(e -> e.getValue() != null && e.getValue().isActive() && e.getValue().isAccepted())
+                .limit(limit)
+                .map(e -> toRecommendedResponse(e.getKey(), e.getValue()))
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -295,6 +338,12 @@ public class MenuService {
 
     private ItemCategoryResponse toCategoryResponse(ItemCategory c) {
         return new ItemCategoryResponse(c.getId(), c.getName(), Boolean.TRUE.equals(c.getIsEnabled()));
+    }
+
+    private RecommendedItemResponse toRecommendedResponse(Item i, RestaurantSummaryResponse restaurant) {
+        return new RecommendedItemResponse(i.getId(), i.getRestaurantId().longValue(), restaurant.name(), restaurant.image(),
+                i.getItemCategoryId().longValue(), i.getName(), i.getPrice(), i.getOldPrice(),
+                mediaUrlResolver.resolve(i.getImage()), i.getDesc(), Boolean.TRUE.equals(i.getIsVeg()));
     }
 
     private ItemResponse toItemResponse(Item i) {

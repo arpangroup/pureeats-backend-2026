@@ -1,5 +1,6 @@
 package com.pureeats.notification.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pureeats.domain.entity.Alert;
 import com.pureeats.domain.entity.PushToken;
 import com.pureeats.notification.repository.AlertRepository;
@@ -10,13 +11,20 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The one bean every other module (order-service, rating-service, ...) calls to notify a user.
- * No FCM/APNs credentials are wired up yet, so the "push" itself is logged rather than sent -
- * the in-app {@code Alert} record is always persisted so {@code GET /api/v1/notifications} works
- * end-to-end regardless.
+ * The in-app {@code Alert} record is always persisted so {@code GET /api/v1/notifications} works
+ * regardless of push delivery. Real FCM sending is behind {@link FcmSender} - with no service
+ * account configured (no Firebase project exists yet - see application.yml
+ * `pureeats.fcm.credentials-path`), it stays a log-only stub exactly as before.
+ * <p>
+ * {@code type} is a free-form category the client groups/badges by (e.g. "ORDER_UPDATE",
+ * "PROMOTION", "OFFER") - pass whatever is meaningful for the call site; {@code null} is fine for a
+ * generic alert. See NotificationsPage.tsx's TYPE_STYLE map on the client for the currently known set.
  */
 @Service
 @RequiredArgsConstructor
@@ -25,13 +33,21 @@ public class NotificationDispatchService {
 
     private final AlertRepository alertRepository;
     private final PushTokenRepository pushTokenRepository;
+    private final ObjectMapper objectMapper;
+    private final FcmSender fcmSender;
 
+    /** Convenience overload for the common case of no explicit category. */
     @Transactional
     public void notifyUser(Long userId, String title, String body) {
-        log.info("Notifying user {}: {}", userId, title);
+        notifyUser(userId, title, body, null);
+    }
+
+    @Transactional
+    public void notifyUser(Long userId, String title, String body, String type) {
+        log.info("Notifying user {}: {} (type={})", userId, title, type);
         Alert alert = new Alert();
         alert.setUserId(userId);
-        alert.setData("{\"title\":\"" + escape(title) + "\",\"body\":\"" + escape(body) + "\"}");
+        alert.setData(writeData(title, body, type));
         alert.setIsRead(false);
         alert.setCreatedAt(LocalDateTime.now());
         alert.setUpdatedAt(LocalDateTime.now());
@@ -40,11 +56,20 @@ public class NotificationDispatchService {
         List<PushToken> tokens = pushTokenRepository.findByUserIdAndIsActiveTrue(userId.intValue());
         log.debug("Found {} active push token(s) for user {}", tokens.size(), userId);
         for (PushToken token : tokens) {
-            log.info("[push-stub] would send to token={} title='{}' body='{}'", token.getToken(), title, body);
+            fcmSender.send(token.getToken(), title, body, type);
         }
     }
 
-    private static String escape(String value) {
-        return value == null ? "" : value.replace("\"", "\\\"");
+    private String writeData(String title, String body, String type) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("title", title);
+        data.put("body", body);
+        if (type != null) data.put("type", type);
+        try {
+            return objectMapper.writeValueAsString(data);
+        } catch (Exception e) {
+            log.warn("Failed to serialize notification data, falling back to a minimal payload", e);
+            return "{\"title\":\"" + title.replace("\"", "\\\"") + "\"}";
+        }
     }
 }

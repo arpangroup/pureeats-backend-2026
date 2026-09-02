@@ -90,7 +90,7 @@ public class DeliveryOrderService {
         log.info("Order {} transitioned {} -> RIDER_ASSIGNED (rider {} self-accepted)", orderId, from, riderUserId);
 
         notificationDispatchService.notifyUser(order.getUserId().longValue(), "Rider assigned",
-                "A delivery partner has been assigned to order #" + order.getUniqueOrderId());
+                "A delivery partner has been assigned to order #" + order.getUniqueOrderId(), "ORDER_UPDATE");
         return orderService.toResponse(order);
     }
 
@@ -120,9 +120,9 @@ public class DeliveryOrderService {
         log.info("Order {} transitioned {} -> RIDER_ASSIGNED (rider {} assigned by admin {})", orderId, from, riderUserId, adminUserId);
 
         notificationDispatchService.notifyUser(order.getUserId().longValue(), "Rider assigned",
-                "A delivery partner has been assigned to order #" + order.getUniqueOrderId());
+                "A delivery partner has been assigned to order #" + order.getUniqueOrderId(), "ORDER_UPDATE");
         notificationDispatchService.notifyUser(riderUserId, "New delivery assigned",
-                "You've been assigned to deliver order #" + order.getUniqueOrderId());
+                "You've been assigned to deliver order #" + order.getUniqueOrderId(), "ORDER_UPDATE");
         return orderService.toResponse(order);
     }
 
@@ -185,7 +185,7 @@ public class DeliveryOrderService {
         }
 
         notificationDispatchService.notifyUser(order.getUserId().longValue(), "Order delivered",
-                "Your order #" + order.getUniqueOrderId() + " has been delivered. Enjoy your meal!");
+                "Your order #" + order.getUniqueOrderId() + " has been delivered. Enjoy your meal!", "ORDER_UPDATE");
         return orderService.toResponse(order);
     }
 

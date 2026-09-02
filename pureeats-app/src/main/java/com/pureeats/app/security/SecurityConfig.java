@@ -82,6 +82,8 @@ public class SecurityConfig {
                                 "/actuator/**",
                                 "/api/v1/restaurants/**",
                                 "/api/v1/restaurant-categories/**",
+                                "/api/v1/items/recommended",
+                                "/api/v1/items/search",
                                 "/api/v1/locations/**",
                                 "/api/v1/coupons",
                                 "/api/v1/pages/**",

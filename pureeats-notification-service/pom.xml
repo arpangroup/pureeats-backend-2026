@@ -42,6 +42,15 @@
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
 		</dependency>
 
+		<!-- Firebase Admin SDK — sends real FCM push (order status updates, promotions/offers). Inert
+		     until pureeats.fcm.credentials-path points at a real service-account JSON (no Firebase
+		     project exists yet); FcmSender falls back to logging exactly as before that's configured. -->
+		<dependency>
+			<groupId>com.google.firebase</groupId>
+			<artifactId>firebase-admin</artifactId>
+			<version>9.4.1</version>
+		</dependency>
+
 		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>

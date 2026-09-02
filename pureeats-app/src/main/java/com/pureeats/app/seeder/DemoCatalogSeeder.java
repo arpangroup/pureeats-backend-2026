@@ -215,6 +215,10 @@ public class DemoCatalogSeeder implements ApplicationRunner {
         for (int i = 1; i <= 10; i++) {
             String name = "Demo Restaurant " + i;
             final int idx = i;
+            // Every 3rd demo restaurant is "featured" so the Home page's Top Picks slider has
+            // something to show — was hardcoded false for every restaurant before, which is why
+            // Top Picks was always empty.
+            final boolean shouldBeFeatured = idx % 3 == 0;
             Restaurant restaurant = restaurantRepository.findAll().stream()
                     .filter(r -> name.equals(r.getName())).findFirst()
                     .orElseGet(() -> {
@@ -234,7 +238,7 @@ public class DemoCatalogSeeder implements ApplicationRunner {
                         r.setSku("DEMO-SKU-" + idx);
                         r.setIsActive(true);
                         r.setIsAccepted(true);
-                        r.setIsFeatured(false);
+                        r.setIsFeatured(shouldBeFeatured);
                         r.setCommissionRate(BigDecimal.TEN);
                         r.setRestaurantCharges(BigDecimal.valueOf(10));
                         r.setDeliveryCharges(BigDecimal.valueOf(30));
@@ -250,6 +254,14 @@ public class DemoCatalogSeeder implements ApplicationRunner {
                         r.setUpdatedAt(LocalDateTime.now());
                         return restaurantRepository.save(r);
                     });
+            // Reconciles isFeatured even for a restaurant seeded by an older run of this method
+            // (e.g. before this flag existed) — every other field is left alone so any admin edits
+            // to those aren't clobbered by a restart.
+            if (!Boolean.valueOf(shouldBeFeatured).equals(restaurant.getIsFeatured())) {
+                restaurant.setIsFeatured(shouldBeFeatured);
+                restaurant.setUpdatedAt(LocalDateTime.now());
+                restaurantRepository.save(restaurant);
+            }
             restaurants.add(restaurant);
 
             User owner = i % 2 == 0 ? owner2 : owner1;

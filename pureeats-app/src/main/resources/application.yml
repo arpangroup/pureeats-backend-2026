@@ -63,6 +63,12 @@ pureeats:
     local:
       base-dir: ${MEDIA_LOCAL_BASE_DIR:./uploads}
     public-base-url: ${MEDIA_PUBLIC_BASE_URL:http://localhost:8081}
+  # Firebase Admin SDK service-account JSON path for real FCM push (order status updates,
+  # promotions/offers) — empty by default (no Firebase project exists yet), which keeps
+  # FcmSender in its log-only stub mode exactly as before this existed. Set to an absolute path
+  # once a project is created; no code change needed after.
+  fcm:
+    credentials-path: ${FCM_CREDENTIALS_PATH:}
 
 # OTP-challenge auth subsystem (signup/otp/refresh/logout endpoints) - see AUTH_SECURITY.md.
 security:

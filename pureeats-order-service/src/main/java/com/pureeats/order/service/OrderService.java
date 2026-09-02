@@ -276,7 +276,7 @@ public class OrderService {
 
         orderStatusLogService.record(order.getId(), from, toStatus, "ADMIN", adminUserId, "Updated by admin");
         notificationDispatchService.notifyUser(order.getUserId().longValue(), "Order status updated",
-                "Your order #" + order.getUniqueOrderId() + " is now " + toStatus.name());
+                "Your order #" + order.getUniqueOrderId() + " is now " + toStatus.name(), "ORDER_UPDATE");
         log.info("Order {} transitioned {} -> {} by admin {}", orderId, from, toStatus, adminUserId);
         return toResponse(order);
     }
@@ -416,7 +416,7 @@ public class OrderService {
                 .map(RestaurantUser::getUserId)
                 .distinct()
                 .forEach(ownerId -> notificationDispatchService.notifyUser(ownerId, "New order received",
-                        "Order #" + uniqueOrderId + " has been placed"));
+                        "Order #" + uniqueOrderId + " has been placed", "ORDER_UPDATE"));
     }
 
     private static String generateUniqueOrderId() {
