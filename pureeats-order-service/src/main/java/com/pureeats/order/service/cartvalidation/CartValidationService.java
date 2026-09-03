@@ -43,7 +43,10 @@ import java.util.stream.Collectors;
  * {@link #validate} is the live, non-throwing check the Cart page polls to grey out unavailable
  * items and show an up-to-date price. {@link #assertPlaceable} runs the exact same rules but
  * throws on the first issue, fail-fast - it's what {@code OrderService.placeOrder} calls so the
- * server-side guard and the live UI can never disagree about what counts as "available".
+ * server-side guard and the live UI can never disagree about what counts as "available". The two
+ * differ only in how much context they have: {@code validate()} never knows the payment mode
+ * (chosen later, on Checkout) and may not have an address yet; a rule that needs either simply
+ * reports nothing when it's null (see {@link CartValidationContext}).
  */
 @Slf4j
 @Service
@@ -60,8 +63,15 @@ public class CartValidationService {
 
     @Transactional(readOnly = true)
     public CartValidationResponse validate(CartValidationRequest request, Long userId) {
+        Restaurant restaurant = findRestaurant(request.restaurantId());
         List<CartLine> lines = toLines(request.items());
-        CartValidationContext context = resolveContext(request.restaurantId(), lines);
+        boolean isSelfPickup = request.deliveryType() == DeliveryType.SELF_PICKUP;
+        String[] addressLatLng = resolveAddressLatLng(request.addressId(), userId);
+        BigDecimal distanceKm = isSelfPickup ? null : orderPricingService.distanceKm(restaurant, addressLatLng[0], addressLatLng[1]);
+        // Zero (both coordinates missing) isn't a real "in range" answer - don't let DeliveryRadiusRule act on it.
+        BigDecimal distanceForRules = (distanceKm != null && addressLatLng[0] != null) ? distanceKm : null;
+
+        CartValidationContext context = buildContext(restaurant, lines, request.deliveryType(), distanceForRules, null, userId);
         List<CartIssue> issues = evaluateAll(context);
 
         CartIssue restaurantIssue = issues.stream().filter(i -> i.itemId() == null).findFirst().orElse(null);
@@ -93,14 +103,12 @@ public class CartValidationService {
             }
         }
 
-        boolean isSelfPickup = request.deliveryType() == DeliveryType.SELF_PICKUP;
-        String[] addressLatLng = resolveAddressLatLng(request.addressId(), userId);
         DeliveryChargeResult deliveryChargeResult = orderPricingService.computeDeliveryCharge(
-                context.restaurant(), isSelfPickup, freeDelivery, addressLatLng[0], addressLatLng[1]);
+                restaurant, isSelfPickup, freeDelivery, addressLatLng[0], addressLatLng[1]);
 
         BigDecimal amountAfterDiscount = itemTotal.subtract(discount);
         BigDecimal tax = orderPricingService.tax(amountAfterDiscount);
-        BigDecimal restaurantCharge = orderPricingService.restaurantCharge(context.restaurant(), amountAfterDiscount);
+        BigDecimal restaurantCharge = orderPricingService.restaurantCharge(restaurant, amountAfterDiscount);
         BigDecimal payable = amountAfterDiscount.add(tax).add(restaurantCharge).add(deliveryChargeResult.amount());
 
         CartPricingResponse pricing = new CartPricingResponse(itemTotal, discount, tax, restaurantCharge,
@@ -113,10 +121,18 @@ public class CartValidationService {
                 itemResponses, couponResponse, pricing, anyUnavailable);
     }
 
-    /** Fail-fast twin of {@link #validate} - same rules, throws BadRequestException on the first issue found (restaurant-level issues take priority, matching the pre-existing placeOrder check order). */
+    /**
+     * Fail-fast twin of {@link #validate} - same rules, throws BadRequestException on the first
+     * issue found (restaurant-level issues take priority, matching the pre-existing placeOrder
+     * check order). Unlike {@code validate()}, this always has a payment mode and (for a DELIVERY
+     * order) a resolved address, since {@code OrderService.placeOrder} only calls this once both
+     * are known.
+     */
     @Transactional(readOnly = true)
-    public void assertPlaceable(Long restaurantId, List<PlaceOrderItemRequest> items) {
-        CartValidationContext context = resolveContext(restaurantId, toLines(items));
+    public void assertPlaceable(Long restaurantId, List<PlaceOrderItemRequest> items, DeliveryType deliveryType,
+                                 BigDecimal distanceKm, String paymentMode, Long userId) {
+        Restaurant restaurant = findRestaurant(restaurantId);
+        CartValidationContext context = buildContext(restaurant, toLines(items), deliveryType, distanceKm, paymentMode, userId);
         List<CartIssue> issues = evaluateAll(context);
         if (!issues.isEmpty()) {
             throw new BadRequestException(issues.get(0).reason());
@@ -130,16 +146,24 @@ public class CartValidationService {
                 .toList();
     }
 
-    private CartValidationContext resolveContext(Long restaurantId, List<CartLine> lines) {
-        Restaurant restaurant = restaurantRepository.findById(restaurantId)
+    private Restaurant findRestaurant(Long restaurantId) {
+        return restaurantRepository.findById(restaurantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Restaurant not found: " + restaurantId));
+    }
+
+    private CartValidationContext buildContext(Restaurant restaurant, List<CartLine> lines, DeliveryType deliveryType,
+                                                BigDecimal distanceKm, String paymentMode, Long userId) {
         Map<Long, Item> items = lines.stream()
                 .map(CartLine::itemId)
                 .distinct()
                 .map(itemRepository::findById)
                 .flatMap(java.util.Optional::stream)
                 .collect(Collectors.toMap(Item::getId, Function.identity()));
-        return new CartValidationContext(restaurant, lines, items);
+        BigDecimal rawItemTotal = lines.stream()
+                .filter(line -> items.containsKey(line.itemId()))
+                .map(line -> lineTotal(items.get(line.itemId()), line))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return new CartValidationContext(restaurant, lines, items, deliveryType, distanceKm, paymentMode, userId, rawItemTotal);
     }
 
     private BigDecimal lineTotal(Item item, CartLine line) {

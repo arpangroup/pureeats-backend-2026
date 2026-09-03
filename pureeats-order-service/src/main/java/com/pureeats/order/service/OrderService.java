@@ -72,10 +72,6 @@ public class OrderService {
         log.info("Placing order for user {} at restaurant {}", userId, request.restaurantId());
         Restaurant restaurant = restaurantRepository.findById(request.restaurantId())
                 .orElseThrow(() -> new ResourceNotFoundException("Restaurant not found: " + request.restaurantId()));
-        // Same rule pipeline (CartValidationRule beans) that backs the Cart page's live availability
-        // check (see CartController) - throws on the first issue (restaurant closed, item
-        // unavailable, out of stock, ...) instead of duplicating those checks inline here.
-        cartValidationService.assertPlaceable(restaurant.getId(), request.items());
 
         Address address = addressRepository.findById(request.addressId())
                 .orElseThrow(() -> new ResourceNotFoundException("Address not found: " + request.addressId()));
@@ -83,6 +79,15 @@ public class OrderService {
             log.warn("Rejected order for user {}: address {} does not belong to them", userId, request.addressId());
             throw new ForbiddenException("This address does not belong to you");
         }
+
+        boolean isSelfPickup = request.deliveryType() == DeliveryType.SELF_PICKUP;
+        BigDecimal distanceKm = isSelfPickup ? null : orderPricingService.distanceKm(restaurant, address.getLatitude(), address.getLongitude());
+        // Same rule pipeline (CartValidationRule beans) that backs the Cart page's live availability
+        // check (see CartController) - throws on the first issue (restaurant closed, item
+        // unavailable, out of stock, outside delivery radius, below minimum order, disallowed addon,
+        // COD not accepted here, ordering too frequently, ...) instead of duplicating those checks inline here.
+        cartValidationService.assertPlaceable(restaurant.getId(), request.items(), request.deliveryType(),
+                distanceKm, request.paymentMode().name(), userId);
 
         Order order = new Order();
         order.setUniqueOrderId(generateUniqueOrderId());
@@ -136,7 +141,6 @@ public class OrderService {
         BigDecimal amountAfterDiscount = itemTotal.subtract(discount);
         BigDecimal tax = orderPricingService.tax(amountAfterDiscount);
         BigDecimal restaurantCharge = orderPricingService.restaurantCharge(restaurant, amountAfterDiscount);
-        boolean isSelfPickup = request.deliveryType() == DeliveryType.SELF_PICKUP;
         DeliveryChargeResult deliveryChargeResult = orderPricingService.computeDeliveryCharge(
                 restaurant, isSelfPickup, freeDelivery, address.getLatitude(), address.getLongitude());
         BigDecimal deliveryCharge = deliveryChargeResult.amount();

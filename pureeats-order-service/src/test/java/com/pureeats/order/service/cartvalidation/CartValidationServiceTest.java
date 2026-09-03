@@ -1,17 +1,20 @@
 package com.pureeats.order.service.cartvalidation;
 
 import com.pureeats.catalog.dto.CouponApplyResponse;
+import com.pureeats.catalog.repository.AddonCategoryItemRepository;
 import com.pureeats.catalog.repository.AddonRepository;
 import com.pureeats.catalog.repository.ItemRepository;
 import com.pureeats.catalog.repository.RestaurantRepository;
 import com.pureeats.catalog.service.CouponService;
 import com.pureeats.domain.common.exception.BadRequestException;
+import com.pureeats.domain.entity.Addon;
 import com.pureeats.domain.entity.Item;
 import com.pureeats.domain.entity.Restaurant;
 import com.pureeats.domain.enums.DeliveryType;
 import com.pureeats.order.dto.CartValidationRequest;
 import com.pureeats.order.dto.CartValidationResponse;
 import com.pureeats.order.dto.PlaceOrderItemRequest;
+import com.pureeats.order.repository.OrderRepository;
 import com.pureeats.order.service.OrderPricingService;
 import com.pureeats.user.repository.AddressRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,7 +33,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -48,6 +52,10 @@ class CartValidationServiceTest {
     private AddonRepository addonRepository;
     @Mock
     private AddressRepository addressRepository;
+    @Mock
+    private AddonCategoryItemRepository addonCategoryItemRepository;
+    @Mock
+    private OrderRepository orderRepository;
 
     private CouponService couponService;
     private OrderPricingService orderPricingService;
@@ -59,8 +67,17 @@ class CartValidationServiceTest {
         orderPricingService = new OrderPricingService();
         ReflectionTestUtils.setField(orderPricingService, "taxPercentage", BigDecimal.valueOf(5));
 
+        // Every rule the real pipeline runs (see CartValidationRule beans), same set the Spring
+        // context auto-collects in production - keeps this suite representative of the real gate.
+        OrderFrequencyRule orderFrequencyRule = new OrderFrequencyRule(orderRepository);
+        ReflectionTestUtils.setField(orderFrequencyRule, "windowMinutes", 10);
+        ReflectionTestUtils.setField(orderFrequencyRule, "maxOrders", 3);
+        lenient().when(orderRepository.findByUserIdOrderByCreatedAtDesc(anyInt())).thenReturn(List.of());
+
         List<CartValidationRule> rules = List.of(
-                new RestaurantAvailabilityRule(), new ItemAvailabilityRule(), new ItemStockRule());
+                new RestaurantAvailabilityRule(), new ItemAvailabilityRule(), new ItemStockRule(),
+                new AddonSelectionRule(addonRepository, addonCategoryItemRepository),
+                new DeliveryRadiusRule(), new MinimumOrderAmountRule(), new PaymentMethodRule(), orderFrequencyRule);
         cartValidationService = new CartValidationService(restaurantRepository, itemRepository, addonRepository,
                 addressRepository, couponService, orderPricingService, rules);
     }
@@ -70,9 +87,12 @@ class CartValidationServiceTest {
         restaurant.setId(RESTAURANT_ID);
         restaurant.setIsActive(true);
         restaurant.setIsAccepted(true);
+        restaurant.setIsAcceptCod(true);
         restaurant.setDeliveryChargeType("fixed");
         restaurant.setDeliveryCharges(BigDecimal.valueOf(25));
         restaurant.setRestaurantCharges(BigDecimal.valueOf(5));
+        restaurant.setDeliveryRadius(BigDecimal.valueOf(10));
+        restaurant.setMinOrderPrice(BigDecimal.valueOf(50));
         return restaurant;
     }
 
@@ -161,12 +181,82 @@ class CartValidationServiceTest {
     }
 
     @Test
+    void validate_belowMinimumOrderAmount_flagsRestaurantLevel() {
+        Restaurant restaurant = activeRestaurant();
+        restaurant.setMinOrderPrice(BigDecimal.valueOf(500));
+        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant));
+        when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(activeItem()));
+
+        CartValidationResponse response = cartValidationService.validate(requestFor(1), 99L);
+
+        assertFalse(response.restaurant().available());
+        assertTrue(response.restaurant().reason().contains("minimum order amount"));
+    }
+
+    @Test
+    void validate_addonNotOfferedOnItem_flagsItem() {
+        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(activeRestaurant()));
+        when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(activeItem()));
+        Addon addon = new Addon();
+        addon.setId(500L);
+        addon.setName("Extra Cheese");
+        addon.setAddonCategoryId(999);
+        when(addonRepository.findById(500L)).thenReturn(Optional.of(addon));
+        when(addonCategoryItemRepository.findByItemId(ITEM_ID)).thenReturn(List.of()); // item offers no addon categories
+
+        CartValidationRequest request = new CartValidationRequest(RESTAURANT_ID,
+                List.of(new PlaceOrderItemRequest(ITEM_ID, 1, List.of(500L))), null, null, DeliveryType.DELIVERY);
+        CartValidationResponse response = cartValidationService.validate(request, 99L);
+
+        assertFalse(response.items().get(0).available());
+        assertTrue(response.items().get(0).reason().contains("not available for this item"));
+    }
+
+    @Test
     void assertPlaceable_restaurantNotAccepting_throwsOnFirstIssue() {
         Restaurant restaurant = activeRestaurant();
         restaurant.setIsAccepted(false);
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant));
 
         assertThrows(BadRequestException.class, () -> cartValidationService.assertPlaceable(RESTAURANT_ID,
-                List.of(new PlaceOrderItemRequest(ITEM_ID, 1, null))));
+                List.of(new PlaceOrderItemRequest(ITEM_ID, 1, null)), DeliveryType.DELIVERY, null, "COD", 99L));
+    }
+
+    @Test
+    void assertPlaceable_outsideDeliveryRadius_throws() {
+        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(activeRestaurant()));
+        when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(activeItem()));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> cartValidationService.assertPlaceable(
+                RESTAURANT_ID, List.of(new PlaceOrderItemRequest(ITEM_ID, 1, null)),
+                DeliveryType.DELIVERY, BigDecimal.valueOf(25), "COD", 99L));
+        assertTrue(ex.getMessage().contains("delivery radius"));
+    }
+
+    @Test
+    void assertPlaceable_codOnCodRejectingRestaurant_throws() {
+        Restaurant restaurant = activeRestaurant();
+        restaurant.setIsAcceptCod(false);
+        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant));
+        when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(activeItem()));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> cartValidationService.assertPlaceable(
+                RESTAURANT_ID, List.of(new PlaceOrderItemRequest(ITEM_ID, 1, null)),
+                DeliveryType.DELIVERY, BigDecimal.valueOf(2), "COD", 99L));
+        assertTrue(ex.getMessage().contains("Cash on Delivery"));
+    }
+
+    @Test
+    void assertPlaceable_tooManyRecentOrders_throws() {
+        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(activeRestaurant()));
+        when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(activeItem()));
+        com.pureeats.domain.entity.Order recent = new com.pureeats.domain.entity.Order();
+        recent.setCreatedAt(java.time.LocalDateTime.now());
+        when(orderRepository.findByUserIdOrderByCreatedAtDesc(99)).thenReturn(List.of(recent, recent, recent));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> cartValidationService.assertPlaceable(
+                RESTAURANT_ID, List.of(new PlaceOrderItemRequest(ITEM_ID, 1, null)),
+                DeliveryType.DELIVERY, BigDecimal.valueOf(2), "COD", 99L));
+        assertTrue(ex.getMessage().contains("orders in the last"));
     }
 }
