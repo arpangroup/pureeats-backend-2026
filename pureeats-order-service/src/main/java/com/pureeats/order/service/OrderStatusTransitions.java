@@ -21,14 +21,24 @@ public final class OrderStatusTransitions {
     private static final Map<OrderStatusCode, Set<OrderStatusCode>> GRAPH = new EnumMap<>(OrderStatusCode.class);
 
     static {
-        GRAPH.put(OrderStatusCode.PLACED, EnumSet.of(OrderStatusCode.RESTAURANT_ACCEPTED, OrderStatusCode.CANCELLED));
-        GRAPH.put(OrderStatusCode.RESTAURANT_ACCEPTED, EnumSet.of(OrderStatusCode.READY_FOR_PICKUP, OrderStatusCode.CANCELLED));
-        GRAPH.put(OrderStatusCode.READY_FOR_PICKUP, EnumSet.of(OrderStatusCode.RIDER_ASSIGNED, OrderStatusCode.SELF_PICKUP_COMPLETED, OrderStatusCode.CANCELLED));
-        GRAPH.put(OrderStatusCode.RIDER_ASSIGNED, EnumSet.of(OrderStatusCode.PICKED_UP, OrderStatusCode.CANCELLED));
-        GRAPH.put(OrderStatusCode.PICKED_UP, EnumSet.of(OrderStatusCode.DELIVERED));
+        GRAPH.put(OrderStatusCode.PLACED, EnumSet.of(
+                OrderStatusCode.RESTAURANT_ACCEPTED, OrderStatusCode.CANCELLED,
+                OrderStatusCode.REJECTED, OrderStatusCode.AUTO_CANCELLED));
+        GRAPH.put(OrderStatusCode.RESTAURANT_ACCEPTED, EnumSet.of(OrderStatusCode.PREPARING, OrderStatusCode.CANCELLED));
+        GRAPH.put(OrderStatusCode.PREPARING, EnumSet.of(OrderStatusCode.READY_FOR_PICKUP, OrderStatusCode.CANCELLED));
+        GRAPH.put(OrderStatusCode.READY_FOR_PICKUP, EnumSet.of(
+                OrderStatusCode.RIDER_ASSIGNED, OrderStatusCode.SELF_PICKUP_COMPLETED,
+                OrderStatusCode.CANCELLED, OrderStatusCode.AUTO_CANCELLED));
+        GRAPH.put(OrderStatusCode.RIDER_ASSIGNED, EnumSet.of(
+                OrderStatusCode.PICKED_UP, OrderStatusCode.CANCELLED, OrderStatusCode.AUTO_CANCELLED));
+        GRAPH.put(OrderStatusCode.PICKED_UP, EnumSet.of(OrderStatusCode.ON_THE_WAY, OrderStatusCode.RETURNED));
+        GRAPH.put(OrderStatusCode.ON_THE_WAY, EnumSet.of(OrderStatusCode.DELIVERED, OrderStatusCode.RETURNED));
         GRAPH.put(OrderStatusCode.DELIVERED, EnumSet.noneOf(OrderStatusCode.class));
         GRAPH.put(OrderStatusCode.SELF_PICKUP_COMPLETED, EnumSet.noneOf(OrderStatusCode.class));
         GRAPH.put(OrderStatusCode.CANCELLED, EnumSet.noneOf(OrderStatusCode.class));
+        GRAPH.put(OrderStatusCode.REJECTED, EnumSet.noneOf(OrderStatusCode.class));
+        GRAPH.put(OrderStatusCode.RETURNED, EnumSet.noneOf(OrderStatusCode.class));
+        GRAPH.put(OrderStatusCode.AUTO_CANCELLED, EnumSet.noneOf(OrderStatusCode.class));
     }
 
     private OrderStatusTransitions() {

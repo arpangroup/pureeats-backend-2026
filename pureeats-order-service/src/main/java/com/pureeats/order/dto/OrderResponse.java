@@ -29,6 +29,8 @@ public record OrderResponse(
         Integer deliveryType,
         String orderFrom,
         LocalDateTime createdAt,
+        /** Last status-transition time - what the admin panel's order-journey diagram uses as the "when did this terminal state happen" timestamp. */
+        LocalDateTime updatedAt,
         List<String> legalNextStatuses,
         /** Null for orders placed before this was tracked. */
         PricingBreakdown pricingBreakdown,

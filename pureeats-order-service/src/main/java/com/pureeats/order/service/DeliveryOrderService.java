@@ -54,7 +54,7 @@ public class DeliveryOrderService {
                 .filter(o -> o.getDeliveryType() == 0 && acceptDeliveryRepository.findByOrderId(o.getId().intValue()).isEmpty())
                 .map(o -> {
                     OrderStatusCode status = orderStatusService.codeFor(o.getOrderstatusId());
-                    return new OrderSummaryResponse(o.getId(), o.getUniqueOrderId(), status.name(),
+                    return new OrderSummaryResponse(o.getId(), o.getUniqueOrderId(), status.label(),
                             o.getRestaurantId().longValue(), null, null, o.getPayable(), o.getCreatedAt(), null);
                 }).toList();
     }
