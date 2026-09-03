@@ -42,9 +42,21 @@ public class OrderStatusLogService {
     @Transactional(readOnly = true)
     public List<OrderStatusLogResponse> journey(Long orderId) {
         return orderStatusLogRepository.findByOrderIdOrderByCreatedAtAsc(orderId).stream()
-                .map(entry -> new OrderStatusLogResponse(entry.getId(), entry.getFromStatus(), entry.getToStatus(),
+                .map(entry -> new OrderStatusLogResponse(entry.getId(), label(entry.getFromStatus()), label(entry.getToStatus()),
                         entry.getActorType(), entry.getActorUserId(), actorName(entry.getActorUserId()), entry.getNote(), entry.getCreatedAt()))
                 .toList();
+    }
+
+    /** Log rows store the raw {@link OrderStatusCode} name - shown to the admin as its friendlier {@link OrderStatusCode#label()} instead. */
+    private String label(String rawStatus) {
+        if (rawStatus == null) {
+            return null;
+        }
+        try {
+            return OrderStatusCode.valueOf(rawStatus).label();
+        } catch (IllegalArgumentException e) {
+            return rawStatus;
+        }
     }
 
     /**

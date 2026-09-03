@@ -39,7 +39,7 @@ public class OrderPricingService {
      */
     public DeliveryChargeResult computeDeliveryCharge(Restaurant restaurant, boolean isSelfPickup, boolean freeDelivery,
                                                         String customerLatitude, String customerLongitude) {
-        BigDecimal distanceKm = distanceBetween(restaurant.getLatitude(), restaurant.getLongitude(), customerLatitude, customerLongitude);
+        BigDecimal distanceKm = distanceKm(restaurant, customerLatitude, customerLongitude);
 
         if (isSelfPickup) {
             return new DeliveryChargeResult(BigDecimal.ZERO, distanceKm, "SELF_PICKUP");
@@ -64,13 +64,21 @@ public class OrderPricingService {
         return new DeliveryChargeResult(flat, distanceKm, "FIXED");
     }
 
+    /** Standalone distance lookup - lets a caller (e.g. cart-validation rules) know the distance before/independent of computing a delivery charge from it. Null customer coordinates (no address chosen yet) yield zero, same fallback {@link #computeDeliveryCharge} already had. */
+    public BigDecimal distanceKm(Restaurant restaurant, String customerLatitude, String customerLongitude) {
+        return distanceBetween(restaurant.getLatitude(), restaurant.getLongitude(), customerLatitude, customerLongitude);
+    }
+
     private BigDecimal distanceBetween(String lat1, String lng1, String lat2, String lng2) {
         try {
             double distance = haversineKm(Double.parseDouble(lat1), Double.parseDouble(lng1),
                     Double.parseDouble(lat2), Double.parseDouble(lng2));
             return BigDecimal.valueOf(distance).setScale(2, RoundingMode.HALF_UP);
         } catch (NumberFormatException | NullPointerException e) {
-            log.warn("Could not compute distance from ({}, {}) to ({}, {}), defaulting to zero", lat1, lng1, lat2, lng2, e);
+            // Expected and common (no address chosen yet, self-pickup, a guest with no saved
+            // address, ...) - debug-only, and without the exception object, so a missing address
+            // doesn't spam production logs with a stack trace for a completely normal case.
+            log.debug("Could not compute distance from ({}, {}) to ({}, {}), defaulting to zero", lat1, lng1, lat2, lng2);
             return BigDecimal.ZERO;
         }
     }

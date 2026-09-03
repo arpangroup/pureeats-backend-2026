@@ -53,6 +53,13 @@ pureeats:
     password: ${SUPER_ADMIN_PASSWORD:ChangeMe@SuperAdmin123}
   tax:
     percentage: ${TAX_PERCENTAGE:5}
+  order:
+    rate-limit:
+      # OrderFrequencyRule (cart-validation pipeline) - blocks placing another order once a
+      # customer has hit this many within the trailing window, alongside the first-order-only
+      # coupon check.
+      window-minutes: ${ORDER_RATE_LIMIT_WINDOW_MINUTES:10}
+      max-orders: ${ORDER_RATE_LIMIT_MAX_ORDERS:3}
   commission:
     basis: ${COMMISSION_BASIS:FULL_ORDER}
   # Image upload - local disk today; swap to an S3 implementation of MediaStorage/MediaUrlResolver

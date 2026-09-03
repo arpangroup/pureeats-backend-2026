@@ -1,7 +1,7 @@
 package com.pureeats.order.dto;
 
-import com.pureeats.domain.enums.OrderStatusCode;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
 
-public record UpdateOrderStatusRequest(@NotNull OrderStatusCode toStatus) {
+/** {@code toStatus} accepts either the raw {@code OrderStatusCode} name or its display label - see {@link com.pureeats.domain.enums.OrderStatusCode#fromValue}. */
+public record UpdateOrderStatusRequest(@NotBlank String toStatus) {
 }

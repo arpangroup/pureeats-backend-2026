@@ -2,6 +2,7 @@ package com.pureeats.order.controller;
 
 import com.pureeats.domain.common.response.ApiResponse;
 import com.pureeats.domain.common.response.PageResponse;
+import com.pureeats.domain.enums.OrderStatusCode;
 import com.pureeats.order.dto.AdminOrderSummaryResponse;
 import com.pureeats.order.dto.AssignDriverRequest;
 import com.pureeats.order.dto.OrderResponse;
@@ -73,8 +74,9 @@ public class AdminOrderController {
     @Operation(summary = "Override an order's status (validated against the same transition graph the UI uses to grey out illegal choices)")
     public ApiResponse<OrderResponse> updateStatus(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long id,
                                                     @Valid @RequestBody UpdateOrderStatusRequest request) {
-        log.info("Admin {} overriding status of order {} to {}", principal.userId(), id, request.toStatus());
-        return ApiResponse.success("Order status updated", orderService.adminUpdateStatus(principal.userId(), id, request.toStatus()));
+        OrderStatusCode toStatus = OrderStatusCode.fromValue(request.toStatus());
+        log.info("Admin {} overriding status of order {} to {}", principal.userId(), id, toStatus);
+        return ApiResponse.success("Order status updated", orderService.adminUpdateStatus(principal.userId(), id, toStatus));
     }
 
     @GetMapping("/api/v1/admin/orders/{id}/log")

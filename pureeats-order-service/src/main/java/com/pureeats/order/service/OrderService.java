@@ -72,10 +72,6 @@ public class OrderService {
         log.info("Placing order for user {} at restaurant {}", userId, request.restaurantId());
         Restaurant restaurant = restaurantRepository.findById(request.restaurantId())
                 .orElseThrow(() -> new ResourceNotFoundException("Restaurant not found: " + request.restaurantId()));
-        // Same rule pipeline (CartValidationRule beans) that backs the Cart page's live availability
-        // check (see CartController) - throws on the first issue (restaurant closed, item
-        // unavailable, out of stock, ...) instead of duplicating those checks inline here.
-        cartValidationService.assertPlaceable(restaurant.getId(), request.items());
 
         Address address = addressRepository.findById(request.addressId())
                 .orElseThrow(() -> new ResourceNotFoundException("Address not found: " + request.addressId()));
@@ -83,6 +79,15 @@ public class OrderService {
             log.warn("Rejected order for user {}: address {} does not belong to them", userId, request.addressId());
             throw new ForbiddenException("This address does not belong to you");
         }
+
+        boolean isSelfPickup = request.deliveryType() == DeliveryType.SELF_PICKUP;
+        BigDecimal distanceKm = isSelfPickup ? null : orderPricingService.distanceKm(restaurant, address.getLatitude(), address.getLongitude());
+        // Same rule pipeline (CartValidationRule beans) that backs the Cart page's live availability
+        // check (see CartController) - throws on the first issue (restaurant closed, item
+        // unavailable, out of stock, outside delivery radius, below minimum order, disallowed addon,
+        // COD not accepted here, ordering too frequently, ...) instead of duplicating those checks inline here.
+        cartValidationService.assertPlaceable(restaurant.getId(), request.items(), request.deliveryType(),
+                distanceKm, request.paymentMode().name(), userId);
 
         Order order = new Order();
         order.setUniqueOrderId(generateUniqueOrderId());
@@ -136,7 +141,6 @@ public class OrderService {
         BigDecimal amountAfterDiscount = itemTotal.subtract(discount);
         BigDecimal tax = orderPricingService.tax(amountAfterDiscount);
         BigDecimal restaurantCharge = orderPricingService.restaurantCharge(restaurant, amountAfterDiscount);
-        boolean isSelfPickup = request.deliveryType() == DeliveryType.SELF_PICKUP;
         DeliveryChargeResult deliveryChargeResult = orderPricingService.computeDeliveryCharge(
                 restaurant, isSelfPickup, freeDelivery, address.getLatitude(), address.getLongitude());
         BigDecimal deliveryCharge = deliveryChargeResult.amount();
@@ -237,7 +241,7 @@ public class OrderService {
             throw new ForbiddenException("This order does not belong to you");
         }
         OrderStatusCode current = orderStatusService.codeFor(order.getOrderstatusId());
-        if (current == OrderStatusCode.DELIVERED || current == OrderStatusCode.CANCELLED) {
+        if (isTerminal(current)) {
             log.warn("Rejected cancellation of order {}: already in terminal state {}", orderId, current);
             throw new BadRequestException("This order can no longer be cancelled");
         }
@@ -281,6 +285,13 @@ public class OrderService {
         return toResponse(order);
     }
 
+    /** No further transition is legal from these — mirrors {@link OrderStatusTransitions}' empty entries for them. */
+    private static boolean isTerminal(OrderStatusCode status) {
+        return status == OrderStatusCode.DELIVERED || status == OrderStatusCode.CANCELLED
+                || status == OrderStatusCode.REJECTED || status == OrderStatusCode.RETURNED
+                || status == OrderStatusCode.AUTO_CANCELLED || status == OrderStatusCode.SELF_PICKUP_COMPLETED;
+    }
+
     Order findOrThrow(Long orderId) {
         return orderRepository.findById(orderId)
                 .orElseThrow(() -> {
@@ -309,7 +320,7 @@ public class OrderService {
         String customerName = userRepository.findById(order.getUserId().longValue()).map(User::getName).orElse("Unknown");
         String restaurantName = restaurantRepository.findById(order.getRestaurantId().longValue()).map(Restaurant::getName).orElse("Unknown");
         int itemCount = orderItemRepository.findByOrderId(order.getId().intValue()).size();
-        return new AdminOrderSummaryResponse(order.getId(), order.getUniqueOrderId(), status != null ? status.name() : "UNKNOWN",
+        return new AdminOrderSummaryResponse(order.getId(), order.getUniqueOrderId(), status != null ? status.label() : "UNKNOWN",
                 order.getUserId().longValue(), order.getRestaurantId().longValue(), customerName, restaurantName, itemCount,
                 order.getTotal(), order.getPayable(), order.getPaymentMode(), order.getCouponCode(), order.getCreatedAt());
     }
@@ -326,7 +337,7 @@ public class OrderService {
         OrderStatusCode status = orderStatusService.codeFor(order.getOrderstatusId());
         User customer = userRepository.findById(order.getUserId().longValue()).orElse(null);
         Restaurant restaurant = restaurantRepository.findById(order.getRestaurantId().longValue()).orElse(null);
-        List<String> legalNextStatuses = OrderStatusTransitions.legalNext(status).stream().map(Enum::name).toList();
+        List<String> legalNextStatuses = OrderStatusTransitions.legalNext(status).stream().map(OrderStatusCode::label).toList();
 
         OrderCustomerSummary customerSummary = new OrderCustomerSummary(order.getUserId().longValue(),
                 customer != null ? customer.getName() : "Unknown", customer != null ? customer.getEmail() : null,
@@ -367,12 +378,12 @@ public class OrderService {
                     riderDetail != null ? riderDetail.getVehicleNumber() : null);
         }
 
-        return new OrderResponse(order.getId(), order.getUniqueOrderId(), status != null ? status.name() : "UNKNOWN",
+        return new OrderResponse(order.getId(), order.getUniqueOrderId(), status != null ? status.label() : "UNKNOWN",
                 order.getOrderstatusId(), customerSummary, restaurantSummary, couponSummary, itemResponses,
                 order.getAddress(), order.getTax(), order.getRestaurantCharge(),
                 order.getDeliveryCharge(), order.getDriverTipAmount(), order.getDiscountAmount(), order.getTotal(), order.getPayable(),
                 order.getPaymentMode(), order.getDeliveryPin(), order.getOrderComment(),
-                order.getTransactionId(), order.getDeliveryType(), order.getOrderFrom(), order.getCreatedAt(),
+                order.getTransactionId(), order.getDeliveryType(), order.getOrderFrom(), order.getCreatedAt(), order.getUpdatedAt(),
                 legalNextStatuses, deserializeBreakdown(order.getPricingBreakdown()), deliveryGuyId, deliveryGuyName, deliveryPartner);
     }
 
@@ -406,7 +417,7 @@ public class OrderService {
         String deliveryGuyName = acceptDeliveryRepository.findByOrderId(order.getId().intValue())
                 .map(ad -> userRepository.findById(ad.getUserId().longValue()).map(User::getName).orElse("Unknown"))
                 .orElse(null);
-        return new OrderSummaryResponse(order.getId(), order.getUniqueOrderId(), status != null ? status.name() : "UNKNOWN",
+        return new OrderSummaryResponse(order.getId(), order.getUniqueOrderId(), status != null ? status.label() : "UNKNOWN",
                 order.getRestaurantId().longValue(), restaurant != null ? restaurant.getName() : "Unknown", restaurantImage,
                 order.getPayable(), order.getCreatedAt(), deliveryGuyName);
     }

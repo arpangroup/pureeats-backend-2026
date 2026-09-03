@@ -48,6 +48,21 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     List<Order> findByRestaurantIdAndCreatedAtGreaterThanEqual(Integer restaurantId, LocalDateTime from);
 
+    // ---- Reports ----
+    // Four separate derived-query variants rather than one "(:from is null or ...)" JPQL query -
+    // Postgres' extended query protocol can't determine a bind parameter's type when its only
+    // occurrence in the SQL is inside an "IS NULL" check, and throws "could not determine data
+    // type of parameter $1" at execution time. Branching the null-ness of from/restaurantId in
+    // Java (see ReportService.fetchOrders) and calling one of these instead sidesteps that.
+
+    List<Order> findByCreatedAtLessThanEqual(LocalDateTime to);
+
+    List<Order> findByCreatedAtBetween(LocalDateTime from, LocalDateTime to);
+
+    List<Order> findByRestaurantIdAndCreatedAtLessThanEqual(Integer restaurantId, LocalDateTime to);
+
+    List<Order> findByRestaurantIdAndCreatedAtBetween(Integer restaurantId, LocalDateTime from, LocalDateTime to);
+
     interface OrderStatusCountProjection {
         Integer getStatusId();
         Long getCnt();

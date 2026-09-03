@@ -107,7 +107,8 @@ public class StoreOwnerOrderService {
         Order order = ownedOrder(ownerUserId, orderId);
         OrderStatusCode current = orderStatusService.codeFor(order.getOrderstatusId());
         if (current == OrderStatusCode.DELIVERED || current == OrderStatusCode.CANCELLED
-                || current == OrderStatusCode.SELF_PICKUP_COMPLETED) {
+                || current == OrderStatusCode.SELF_PICKUP_COMPLETED || current == OrderStatusCode.REJECTED
+                || current == OrderStatusCode.RETURNED || current == OrderStatusCode.AUTO_CANCELLED) {
             log.warn("Rejected cancellation of order {} by store owner {}: already in terminal state {}", orderId, ownerUserId, current);
             throw new BadRequestException("This order can no longer be cancelled");
         }
@@ -156,7 +157,7 @@ public class StoreOwnerOrderService {
     private List<OrderSummaryResponse> summarize(List<Order> orders) {
         return orders.stream().map(o -> {
             OrderStatusCode status = orderStatusService.codeFor(o.getOrderstatusId());
-            return new OrderSummaryResponse(o.getId(), o.getUniqueOrderId(), status != null ? status.name() : "UNKNOWN",
+            return new OrderSummaryResponse(o.getId(), o.getUniqueOrderId(), status != null ? status.label() : "UNKNOWN",
                     o.getRestaurantId().longValue(), null, null, o.getPayable(), o.getCreatedAt(), null);
         }).toList();
     }

@@ -43,10 +43,21 @@ public class OrderStatusService {
         return id;
     }
 
+    /** {@code name} is {@link OrderStatusCode#label()} - the friendly string the admin panel displays and round-trips back on status-update calls, not the raw lookup-row name. */
     @Transactional(readOnly = true)
     public List<OrderStatusResponse> listAll() {
         return orderStatusRepository.findAll().stream()
-                .map(s -> new OrderStatusResponse(s.getId(), s.getName())).toList();
+                .map(s -> new OrderStatusResponse(s.getId(), labelFor(s.getName())))
+                .toList();
+    }
+
+    private String labelFor(String rawName) {
+        try {
+            return OrderStatusCode.valueOf(rawName).label();
+        } catch (IllegalArgumentException e) {
+            log.warn("Order status lookup row {} does not match any known OrderStatusCode - showing raw name", rawName);
+            return rawName;
+        }
     }
 
     @Transactional(readOnly = true)
