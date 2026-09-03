@@ -2,6 +2,7 @@ package com.pureeats.user.security.geolocation;
 
 import com.pureeats.user.config.AuthSecurityProperties;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -14,12 +15,14 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Calls the free ip-api.com JSON endpoint (no API key, best-effort/rate-limited - fine for a
- * "nice to have" on login history, not a security control). Swap {@code provider} for a paid
- * service later by adding a sibling implementation of {@link IpGeolocationService}; nothing else
- * changes since callers only ever see the interface.
+ * "nice to have" on login history, not a security control). Swap to a paid service later by
+ * adding a sibling {@link IpGeolocationService} implementation and pointing
+ * {@code pureeats.security.geolocation.provider} at it - nothing else changes since callers only
+ * ever see the interface.
  */
 @Slf4j
 @Service
+@ConditionalOnProperty(prefix = "security.geolocation", name = "provider", havingValue = "ip-api", matchIfMissing = true)
 public class HttpIpGeolocationService implements IpGeolocationService {
 
     private final RestClient restClient;
@@ -91,8 +94,28 @@ public class HttpIpGeolocationService implements IpGeolocationService {
         if (ip == null) {
             return true;
         }
-        return ip.equals("127.0.0.1") || ip.equals("0:0:0:0:0:0:0:1") || ip.equals("::1")
-                || ip.startsWith("10.") || ip.startsWith("192.168.") || ip.startsWith("172.");
+        if (ip.equals("127.0.0.1") || ip.equals("0:0:0:0:0:0:0:1") || ip.equals("::1")
+                || ip.startsWith("10.") || ip.startsWith("192.168.")) {
+            return true;
+        }
+        return isInPrivate172Range(ip);
+    }
+
+    /** 172.16.0.0/12 covers 172.16.x.x-172.31.x.x only - a bare {@code startsWith("172.")} wrongly also blocked public addresses like 172.217.x.x (Google). */
+    private boolean isInPrivate172Range(String ip) {
+        if (!ip.startsWith("172.")) {
+            return false;
+        }
+        String[] parts = ip.split("\\.");
+        if (parts.length < 2) {
+            return false;
+        }
+        try {
+            int secondOctet = Integer.parseInt(parts[1]);
+            return secondOctet >= 16 && secondOctet <= 31;
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 
     private record CacheEntry(Optional<GeoLocation> value, Instant cachedAt) {

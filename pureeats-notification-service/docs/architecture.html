@@ -1,0 +1,712 @@
+<title>Notification Service Architecture</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --bg:#f2f3f7;
+    --surface:#ffffff;
+    --surface-alt:#e9ebf1;
+    --border:#d6d9e2;
+    --border-soft:#e3e5ec;
+    --ink:#171a24;
+    --ink-soft:#4c5165;
+    --ink-faint:#7d8296;
+    --accent:#0e7f8c;
+    --accent-strong:#0a5f69;
+    --accent-soft:#dcf1f1;
+    --accent-soft-border:#b7dede;
+    --ok:#2f8f5b;
+    --ok-soft:#e1f3e8;
+    --warn:#b8720a;
+    --warn-soft:#faeed9;
+    --crit:#c23b3b;
+    --crit-soft:#fbe6e6;
+    --code-bg:#171a24;
+    --code-ink:#e7e9f2;
+    --code-accent:#7fd6d6;
+    --shadow: 0 1px 2px rgba(23,26,36,0.04), 0 8px 24px -12px rgba(23,26,36,0.12);
+  }
+
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#10121a;
+      --surface:#171a24;
+      --surface-alt:#1e222f;
+      --border:#2c303f;
+      --border-soft:#252938;
+      --ink:#e9ebf3;
+      --ink-soft:#aeb2c4;
+      --ink-faint:#787d92;
+      --accent:#3fd0c9;
+      --accent-strong:#5fe0d9;
+      --accent-soft:#12302f;
+      --accent-soft-border:#1c4a48;
+      --ok:#5cc98c;
+      --ok-soft:#123023;
+      --warn:#e0a237;
+      --warn-soft:#332508;
+      --crit:#e2696c;
+      --crit-soft:#341717;
+      --code-bg:#0b0d13;
+      --code-ink:#dfe2ee;
+      --code-accent:#7fd6d6;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#10121a;
+    --surface:#171a24;
+    --surface-alt:#1e222f;
+    --border:#2c303f;
+    --border-soft:#252938;
+    --ink:#e9ebf3;
+    --ink-soft:#aeb2c4;
+    --ink-faint:#787d92;
+    --accent:#3fd0c9;
+    --accent-strong:#5fe0d9;
+    --accent-soft:#12302f;
+    --accent-soft-border:#1c4a48;
+    --ok:#5cc98c;
+    --ok-soft:#123023;
+    --warn:#e0a237;
+    --warn-soft:#332508;
+    --crit:#e2696c;
+    --crit-soft:#341717;
+    --code-bg:#0b0d13;
+    --code-ink:#dfe2ee;
+    --code-accent:#7fd6d6;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+    font-size:15px;
+    line-height:1.6;
+  }
+  h1,h2,h3,h4{ text-wrap:balance; font-family:'IBM Plex Sans', sans-serif; font-weight:700; color:var(--ink); margin:0; }
+  code, .mono, pre, .tbl-mono{ font-family:'IBM Plex Mono', ui-monospace, monospace; }
+  a{ color:var(--accent-strong); }
+  :root[data-theme="dark"] a, :root:not([data-theme="light"]) a { color: var(--accent); }
+
+  /* ---------- shell ---------- */
+  .shell{ max-width:1180px; margin:0 auto; padding: 28px 24px 80px; }
+
+  header.top{
+    display:flex; flex-direction:column; gap:14px;
+    padding-bottom:26px; margin-bottom:8px;
+    border-bottom:1px solid var(--border);
+  }
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px; letter-spacing:.05em; color:var(--accent-strong);
+    text-transform:uppercase;
+    display:flex; align-items:center; gap:8px;
+  }
+  :root[data-theme="dark"] .eyebrow, :root:not([data-theme="light"]) .eyebrow{ color:var(--accent); }
+  .eyebrow .sep{ color:var(--ink-faint); }
+  h1.title{ font-size:clamp(28px,4vw,38px); letter-spacing:-0.01em; }
+  .dek{ max-width:66ch; color:var(--ink-soft); font-size:16px; }
+
+  .chip-strip{ display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; }
+  .chip{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px; font-weight:500; letter-spacing:.02em;
+    padding:5px 10px; border-radius:5px;
+    border:1px solid var(--border);
+    background:var(--surface);
+    color:var(--ink-soft);
+  }
+  .chip.on{ color:var(--accent-strong); border-color:var(--accent-soft-border); background:var(--accent-soft); }
+  :root[data-theme="dark"] .chip.on, :root:not([data-theme="light"]) .chip.on{ color:var(--accent); }
+
+  /* ---------- layout: rail + main ---------- */
+  .layout{ display:grid; grid-template-columns: 216px minmax(0,1fr); gap:40px; margin-top:32px; align-items:start; }
+  @media (max-width: 900px){ .layout{ grid-template-columns: 1fr; } }
+
+  nav.rail{ position:sticky; top:20px; display:flex; flex-direction:column; gap:2px; align-self:start; }
+  @media (max-width:900px){
+    nav.rail{ position:static; flex-direction:row; flex-wrap:wrap; gap:6px; padding-bottom:14px; margin-bottom:8px; border-bottom:1px solid var(--border); }
+  }
+  nav.rail a{
+    text-decoration:none; color:var(--ink-soft); font-size:13.5px;
+    padding:6px 10px; border-radius:6px; border-left:2px solid transparent;
+  }
+  nav.rail a:hover{ color:var(--ink); background:var(--surface-alt); }
+  @media (max-width:900px){
+    nav.rail a{ border:1px solid var(--border); border-radius:14px; padding:5px 11px; }
+  }
+
+  main{ display:flex; flex-direction:column; gap:52px; min-width:0; }
+  section{ scroll-margin-top:20px; display:flex; flex-direction:column; gap:14px; }
+  .section-head{ display:flex; align-items:baseline; gap:10px; }
+  .section-num{ font-family:'IBM Plex Mono',monospace; color:var(--ink-faint); font-size:13px; }
+  h2{ font-size:21px; }
+  h3{ font-size:16px; margin-top:6px; }
+  p{ margin:0; color:var(--ink-soft); max-width:76ch; }
+  p.lead{ color:var(--ink); }
+
+  /* ---------- panels ---------- */
+  .panel{
+    background:var(--surface); border:1px solid var(--border); border-radius:10px;
+    box-shadow:var(--shadow);
+    overflow:hidden;
+  }
+  .panel > .panel-body{ padding:18px 20px; }
+  .panel-title{
+    font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.04em; text-transform:uppercase;
+    color:var(--ink-faint); padding:12px 20px; border-bottom:1px solid var(--border-soft); background:var(--surface-alt);
+  }
+
+  /* ---------- tables ---------- */
+  .tbl-wrap{ overflow-x:auto; }
+  table{ border-collapse:collapse; width:100%; font-size:13.5px; }
+  th{
+    text-align:left; font-family:'IBM Plex Mono',monospace; font-size:11.5px; letter-spacing:.04em; text-transform:uppercase;
+    color:var(--ink-faint); padding:10px 16px; border-bottom:1px solid var(--border);
+    white-space:nowrap;
+  }
+  td{ padding:10px 16px; border-bottom:1px solid var(--border-soft); color:var(--ink-soft); vertical-align:top; }
+  tr:last-child td{ border-bottom:none; }
+  td .mono, th .mono{ color:var(--ink); }
+  td code{ background:var(--surface-alt); border:1px solid var(--border-soft); border-radius:4px; padding:1px 6px; font-size:12.5px; color:var(--ink); }
+
+  /* ---------- code blocks ---------- */
+  pre.code{
+    background:var(--code-bg); color:var(--code-ink);
+    border-radius:8px; padding:16px 18px; overflow-x:auto;
+    font-size:12.8px; line-height:1.65; border:1px solid var(--border);
+  }
+  pre.code .k{ color:var(--code-accent); }
+  pre.code .s{ color:#e0b975; }
+
+  .tree{ font-family:'IBM Plex Mono',monospace; font-size:13px; line-height:1.85; white-space:pre; color:var(--ink-soft); }
+  .tree .pkg{ color:var(--ink); font-weight:600; }
+  .tree .note{ color:var(--ink-faint); }
+
+  /* ---------- ordered steps ---------- */
+  ol.steps{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:12px; counter-reset:step; }
+  ol.steps li{ display:grid; grid-template-columns:28px 1fr; gap:12px; counter-increment:step; }
+  ol.steps li::before{
+    content:counter(step); font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:12.5px;
+    width:28px; height:28px; border-radius:50%; background:var(--accent-soft); color:var(--accent-strong);
+    display:flex; align-items:center; justify-content:center; border:1px solid var(--accent-soft-border);
+  }
+  :root[data-theme="dark"] ol.steps li::before, :root:not([data-theme="light"]) ol.steps li::before{ color:var(--accent); }
+  ol.steps li .txt{ padding-top:3px; color:var(--ink-soft); }
+  ol.steps li .txt strong{ color:var(--ink); }
+
+  ul.plain{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px; }
+  ul.plain li{ display:grid; grid-template-columns:6px 1fr; gap:14px; align-items:start; }
+  ul.plain li::before{ content:""; width:6px; height:6px; border-radius:50%; background:var(--accent); margin-top:8px; }
+
+  /* ---------- enhancements list ---------- */
+  .enh-list{ display:flex; flex-direction:column; gap:0; }
+  .enh{ display:grid; grid-template-columns:44px 1fr; gap:14px; padding:14px 0; border-bottom:1px solid var(--border-soft); }
+  .enh:last-child{ border-bottom:none; }
+  .enh .rank{ font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:14px; color:var(--accent-strong); }
+  :root[data-theme="dark"] .enh .rank, :root:not([data-theme="light"]) .enh .rank{ color:var(--accent); }
+  .enh h4{ font-size:14.5px; margin-bottom:3px; }
+  .enh p{ font-size:13.5px; }
+
+  /* ---------- callout ---------- */
+  .callout{
+    border-radius:10px; border:1px solid var(--warn-soft); background:var(--warn-soft);
+    padding:16px 18px; display:flex; gap:12px; align-items:flex-start;
+  }
+  .callout .mark{ font-family:'IBM Plex Mono',monospace; font-weight:700; color:var(--warn); font-size:12px; letter-spacing:.05em; text-transform:uppercase; flex-shrink:0; padding-top:2px;}
+  .callout p{ color:var(--ink); font-size:13.8px; }
+
+  /* ---------- badges ---------- */
+  .badge{ display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:600; padding:2px 8px; border-radius:4px; letter-spacing:.03em; }
+  .badge.default{ background:var(--ok-soft); color:var(--ok); }
+  .badge.stub{ background:var(--warn-soft); color:var(--warn); }
+
+  /* ---------- mermaid containers ---------- */
+  .diagram-wrap{ overflow-x:auto; padding:20px; background:var(--surface); }
+  .diagram-caption{ font-size:12.5px; color:var(--ink-faint); padding:0 20px 16px; }
+
+  footer.foot{ margin-top:60px; padding-top:20px; border-top:1px solid var(--border); color:var(--ink-faint); font-size:12.5px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+  footer.foot .mono{ color:var(--ink-faint); }
+</style>
+
+<div class="shell">
+
+  <header class="top">
+    <div class="eyebrow">pureeats-backend-2026 <span class="sep">/</span> pureeats-notification-service</div>
+    <h1 class="title">Notification Service Architecture</h1>
+    <p class="dek">The single module every other service goes through to reach a user — by email, SMS, push,
+      WhatsApp, an in-app alert, or a console trace, on any combination of those at once. This page walks the
+      class layout, the two live request flows, the async dispatch pool every request-path send now runs on,
+      and the admin-configurable routing that decides which channel fires for whom.</p>
+    <div class="chip-strip">
+      <span class="chip on">EMAIL</span>
+      <span class="chip on">SMS</span>
+      <span class="chip on">PUSH</span>
+      <span class="chip on">WHATSAPP</span>
+      <span class="chip on">IN_APP</span>
+      <span class="chip on">CONSOLE</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="rail">
+      <a href="#overview">Overview</a>
+      <a href="#principles">Design principles</a>
+      <a href="#packages">Package map</a>
+      <a href="#matrix">Channel matrix</a>
+      <a href="#classdiagram">Class diagram</a>
+      <a href="#async">Async dispatch</a>
+      <a href="#flow-otp">Flow · OTP</a>
+      <a href="#flow-order">Flow · Order status</a>
+      <a href="#routing">Routing config</a>
+      <a href="#extend">Extending it</a>
+      <a href="#endpoints">Endpoints</a>
+      <a href="#config">Configuration</a>
+      <a href="#future">What's next</a>
+    </nav>
+
+    <main>
+
+      <section id="overview">
+        <div class="section-head"><span class="section-num">00</span><h2>Overview</h2></div>
+        <p class="lead">Before this existed, notification logic was split across two unconnected paths — one
+          hardcoded to alerts and Firebase push, one hardcoded to email/SMS OTP. Every module now depends on
+          exactly one interface, <code class="mono">NotificationService</code>, and gets six channels, three
+          swappable providers, and admin-editable routing for free.</p>
+        <div class="tbl-wrap panel">
+          <table>
+            <thead><tr><th>Property</th><th>How it's achieved</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">Multi-channel fan-out</td><td>one logical notification can hit several channels at once via <code>sendToChannels(...)</code></td></tr>
+              <tr><td class="mono">Provider-swappable</td><td>each channel's real backend is chosen by <code>@ConditionalOnProperty</code>, not by editing the sender</td></tr>
+              <tr><td class="mono">Admin-configurable routing</td><td>which channel(s) fire for which notification/role is a JSON blob in the <code>settings</code> table, editable at runtime</td></tr>
+              <tr><td class="mono">Zero-config safe</td><td>every provider defaults to a console/log stub — the whole stack works with no credentials configured</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="principles">
+        <div class="section-head"><span class="section-num">01</span><h2>Design principles</h2></div>
+        <ol class="steps">
+          <li><span class="txt"><strong>Two interfaces, full stop.</strong> Callers depend only on <code class="mono">NotificationService</code> (send one channel, or fan out to several) and channel senders depend only on <code class="mono">ChannelNotificationSender</code>. Nothing outside this module imports an SMTP client, an SMS SDK, or the Firebase Admin SDK directly.</span></li>
+          <li><span class="txt"><strong>Provider swap = one class + one bean.</strong> <code class="mono">EmailNotificationService</code>/<code class="mono">SmsNotificationService</code>/<code class="mono">WhatsAppNotificationSender</code> each hold a provider <em>interface</em>; which concrete provider is active is chosen purely by config in <code class="mono">NotificationProviderConfig</code>.</span></li>
+          <li><span class="txt"><strong>Fan-out, not one-channel-per-call.</strong> A login OTP or an order-status update can go out on several channels simultaneously — which ones is admin-configurable at runtime, not hardcoded per call site.</span></li>
+          <li><span class="txt"><strong>New channel = new enum value + new sender.</strong> <code class="mono">NotificationDispatcherService</code> auto-collects every <code class="mono">ChannelNotificationSender</code> bean at startup — a new implementation registers itself just by existing.</span></li>
+          <li><span class="txt"><strong>The provider round-trip never runs on a request thread.</strong> Every request-path call site uses <code class="mono">sendAsync</code>/<code class="mono">sendToChannelsAsync</code>, which hand off to a dedicated background pool. A slow SMTP relay adds to that pool's queue depth, never to the login or order-action response time.</span></li>
+        </ol>
+      </section>
+
+      <section id="packages">
+        <div class="section-head"><span class="section-num">02</span><h2>Package map</h2></div>
+        <p>Nine packages, each with one job. <span class="mono">service</span> and <span class="mono">provider</span> carry the actual pluggability.</p>
+        <div class="panel"><div class="panel-body">
+<div class="tree"><span class="pkg">com.pureeats.notification</span>
+├── <span class="pkg">enums</span>       <span class="note">NotificationChannel · NotificationType · NotificationRecipientRole · NotificationStatus</span>
+├── <span class="pkg">dto</span>         <span class="note">NotificationRequest · NotificationResult · NotificationRoutingConfig · AlertResponse</span>
+├── <span class="pkg">entity</span>      <span class="note">NotificationLog — delivery audit trail for EMAIL/SMS</span>
+├── <span class="pkg">repository</span>  <span class="note">AlertRepository · PushTokenRepository · NotificationLogRepository · NotificationSettingRepository</span>
+├── <span class="pkg">provider</span>    <span class="note">EmailProvider · SmsProvider · WhatsAppProvider + Console*/Smtp* impls</span>
+├── <span class="pkg">template</span>    <span class="note">TemplateRenderer · SimpleTemplateRenderer · NotificationTemplateResolver</span>
+├── <span class="pkg">service</span>     <span class="note">ChannelNotificationSender + 6 impls · NotificationDispatcherService · NotificationRoutingService · AlertService · PushTokenService · FcmSender</span>
+├── <span class="pkg">config</span>      <span class="note">NotificationProperties · NotificationProviderConfig · AsyncNotificationConfig</span>
+└── <span class="pkg">controller</span>  <span class="note">NotificationController (user) · NotificationRoutingController (admin)</span></div>
+        </div></div>
+      </section>
+
+      <section id="matrix">
+        <div class="section-head"><span class="section-num">03</span><h2>Channel → sender → provider matrix</h2></div>
+        <p>EMAIL/SMS/WHATSAPP render a template file (with a generic <code class="mono">otp.*</code> fallback for
+          OTP-shaped types); PUSH/IN_APP/CONSOLE use <code class="mono">title</code>/<code class="mono">body</code>
+          straight from the request params, since that copy is composed dynamically by the caller.</p>
+        <div class="tbl-wrap panel">
+          <table>
+            <thead><tr><th>Channel</th><th>Sender</th><th>Provider interface</th><th>Active today</th><th>Config key</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">EMAIL</td><td class="mono">EmailNotificationService</td><td class="mono">EmailProvider</td><td><span class="badge default">SmtpEmailProvider</span></td><td><code>notification.email-provider</code></td></tr>
+              <tr><td class="mono">SMS</td><td class="mono">SmsNotificationService</td><td class="mono">SmsProvider</td><td><span class="badge stub">ConsoleSmsProvider</span></td><td><code>notification.sms-provider</code></td></tr>
+              <tr><td class="mono">WHATSAPP</td><td class="mono">WhatsAppNotificationSender</td><td class="mono">WhatsAppProvider</td><td><span class="badge stub">ConsoleWhatsAppProvider</span></td><td><code>notification.whatsapp-provider</code></td></tr>
+              <tr><td class="mono">PUSH</td><td class="mono">PushNotificationSender</td><td class="mono">— (talks to FcmSender)</td><td><span class="badge stub">Firebase, stub-safe</span></td><td><code>pureeats.fcm.credentials-path</code></td></tr>
+              <tr><td class="mono">IN_APP</td><td class="mono">InAppNotificationSender</td><td class="mono">— (persists Alert)</td><td><span class="badge default">always active</span></td><td>—</td></tr>
+              <tr><td class="mono">CONSOLE</td><td class="mono">ConsoleNotificationSender</td><td class="mono">— (logs)</td><td><span class="badge default">always active</span></td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="classdiagram">
+        <div class="section-head"><span class="section-num">04</span><h2>Class diagram</h2></div>
+        <p>Split in two for legibility: the dispatch core (what every caller talks to), and the provider layer
+          each sender delegates to underneath.</p>
+
+        <h3>Dispatch core</h3>
+        <div class="panel">
+          <div class="diagram-wrap">
+<pre class="mermaid">
+classDiagram
+    class NotificationService {
+        &lt;&lt;interface&gt;&gt;
+        +send(NotificationRequest) NotificationResult
+        +sendAsync(NotificationRequest) CompletableFuture~NotificationResult~
+        +sendToChannels(type, destination, userId, params, channels) Map
+        +sendToChannelsAsync(type, destination, userId, params, channels) void
+    }
+    class NotificationDispatcherService {
+        -Map~NotificationChannel,ChannelNotificationSender~ sendersByChannel
+        +send(request) NotificationResult
+        +sendAsync(request) CompletableFuture~NotificationResult~
+        +sendToChannels(...) Map
+        +sendToChannelsAsync(...) void
+    }
+    NotificationService <|.. NotificationDispatcherService
+
+    class AsyncNotificationConfig {
+        &lt;&lt;configuration&gt;&gt;
+        +notificationTaskExecutor() Executor
+    }
+    AsyncNotificationConfig ..> NotificationDispatcherService : names the pool @Async(...) resolves to
+
+    class ChannelNotificationSender {
+        &lt;&lt;interface&gt;&gt;
+        +channel() NotificationChannel
+        +send(request) NotificationResult
+    }
+    class EmailNotificationService
+    class SmsNotificationService
+    class PushNotificationSender
+    class WhatsAppNotificationSender
+    class InAppNotificationSender
+    class ConsoleNotificationSender
+
+    ChannelNotificationSender <|.. EmailNotificationService
+    ChannelNotificationSender <|.. SmsNotificationService
+    ChannelNotificationSender <|.. PushNotificationSender
+    ChannelNotificationSender <|.. WhatsAppNotificationSender
+    ChannelNotificationSender <|.. InAppNotificationSender
+    ChannelNotificationSender <|.. ConsoleNotificationSender
+    NotificationDispatcherService o-- ChannelNotificationSender : autowired List, indexed by channel()
+
+    class NotificationRequest {
+        &lt;&lt;record&gt;&gt;
+        +NotificationType type
+        +NotificationChannel channel
+        +String destination
+        +Long userId
+        +Map params
+    }
+    class NotificationResult {
+        &lt;&lt;record&gt;&gt;
+        +boolean success
+        +String providerMessageId
+        +String failureReason
+    }
+    NotificationDispatcherService ..> NotificationRequest
+    NotificationDispatcherService ..> NotificationResult
+</pre>
+          </div>
+          <div class="diagram-caption">NotificationDispatcherService builds its channel map once, in the constructor, from every ChannelNotificationSender Spring finds on the classpath.</div>
+        </div>
+
+        <h3>Providers, push, and routing</h3>
+        <div class="panel">
+          <div class="diagram-wrap">
+<pre class="mermaid">
+classDiagram
+    class EmailProvider {
+        &lt;&lt;interface&gt;&gt;
+        +send(to, subject, htmlBody, textBody) NotificationResult
+    }
+    class SmtpEmailProvider
+    class ConsoleEmailProvider
+    EmailProvider <|.. SmtpEmailProvider
+    EmailProvider <|.. ConsoleEmailProvider
+    EmailNotificationService --> EmailProvider
+
+    class SmsProvider {
+        &lt;&lt;interface&gt;&gt;
+        +send(phoneNumber, message) NotificationResult
+    }
+    class ConsoleSmsProvider
+    SmsProvider <|.. ConsoleSmsProvider
+    SmsNotificationService --> SmsProvider
+
+    class WhatsAppProvider {
+        &lt;&lt;interface&gt;&gt;
+        +send(phoneNumber, message) NotificationResult
+    }
+    class ConsoleWhatsAppProvider
+    WhatsAppProvider <|.. ConsoleWhatsAppProvider
+    WhatsAppNotificationSender --> WhatsAppProvider
+
+    class FcmSender {
+        +send(token, title, body, type) void
+    }
+    class PushTokenRepository
+    PushNotificationSender --> FcmSender
+    PushNotificationSender --> PushTokenRepository
+
+    class AlertRepository
+    InAppNotificationSender --> AlertRepository
+
+    class NotificationRoutingService {
+        +extraChannelsFor(NotificationType) Set
+        +orderStatusChannelsFor(NotificationRecipientRole) Set
+        +getConfig() NotificationRoutingConfig
+        +update(NotificationRoutingConfig) NotificationRoutingConfig
+    }
+    class NotificationSettingRepository
+    class NotificationRoutingConfig {
+        &lt;&lt;record&gt;&gt;
+        +Map extraChannelsByNotificationType
+        +Map orderStatusChannelsByRole
+    }
+    NotificationRoutingService --> NotificationSettingRepository
+    NotificationRoutingService ..> NotificationRoutingConfig
+</pre>
+          </div>
+          <div class="diagram-caption">NotificationRoutingService stores its config as one JSON blob in the shared `settings` table — the same pattern catalog-service's AppConfigService uses.</div>
+        </div>
+      </section>
+
+      <section id="async">
+        <div class="section-head"><span class="section-num">05</span><h2>Async dispatch</h2></div>
+        <p>Every send method comes in two shapes — a blocking one for background jobs/tests, and an async
+          one every HTTP-request-handling call site should use instead.</p>
+        <div class="tbl-wrap panel">
+          <table>
+            <thead><tr><th>Method</th><th>Runs on</th><th>Use from</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">send / sendToChannels</td><td>the caller's own thread — blocks until the provider round-trip returns</td><td>background jobs, tests, anything already off the request thread</td></tr>
+              <tr><td class="mono">sendAsync / sendToChannelsAsync</td><td class="mono">notificationTaskExecutor</td><td>any HTTP-request-handling code path</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="panel">
+          <div class="diagram-wrap">
+<pre class="mermaid">
+flowchart LR
+    Req["Request thread<br/>e.g. login-challenge"] -->|sendAsync request| Pool[("notificationTaskExecutor<br/>4-16 threads, queue 200")]
+    Pool -->|runs on background thread| Send["send(request) — same<br/>synchronous logic, just off-thread"]
+    Send --> Result["CompletableFuture completes"]
+    Req -.->|"await up to send-timeout-ms,<br/>then respond either way"| Client["HTTP response"]
+</pre>
+          </div>
+          <div class="diagram-caption"><code class="mono">@Async</code> only takes effect through the Spring proxy — calling <code class="mono">this.sendAsync(...)</code> from inside NotificationDispatcherService itself would bypass it and run synchronously, same as any Spring AOP method. Every caller reaches it through the injected <code class="mono">NotificationService</code> bean, so that's never an issue in practice.</div>
+        </div>
+        <p><code class="mono">AsyncNotificationConfig</code> sizes and names the pool (<code class="mono">notification.async.*</code>), sets <code class="mono">CallerRunsPolicy</code> so a saturated queue degrades to synchronous-on-the-caller rather than dropping a notification, and calls <code class="mono">setWaitForTasksToCompleteOnShutdown(true)</code> so a deploy/restart doesn't kill a send that's mid-flight.</p>
+      </section>
+
+      <section id="flow-otp">
+        <div class="section-head"><span class="section-num">06</span><h2>Flow · OTP notification</h2></div>
+        <p>The primary channel still gates a hard failure if the provider responds within the timeout. What
+          changed: a <em>slow</em> provider no longer holds the login response hostage — past
+          <code class="mono">security.otp.send-timeout-ms</code> (default 2s), the flow responds optimistically
+          and the real send finishes in the background. Extra channels were already best-effort; they're now
+          also fully non-blocking.</p>
+        <div class="panel">
+          <div class="diagram-wrap">
+<pre class="mermaid">
+sequenceDiagram
+    participant U as User
+    participant Auth as AuthenticationService
+    participant Route as NotificationRoutingService
+    participant Disp as NotificationDispatcherService
+    participant Pool as notificationTaskExecutor
+    participant Prim as Primary sender (EMAIL or SMS)
+    participant Extra as Extra channel sender(s)
+
+    U->>Auth: POST /api/v1/auth/otp/send
+    Auth->>Auth: generate OTP, pick primary channel
+    Auth->>Disp: sendAsync(request) [primary]
+    Disp->>Pool: submit send(request)
+    Disp-->>Auth: CompletableFuture
+    Auth->>Auth: future.get(send-timeout-ms) — default 2s
+    Pool->>Prim: send(request), off the request thread
+    Prim-->>Pool: NotificationResult
+    alt provider responded in time
+        Pool-->>Auth: real result
+        alt primary failed
+            Auth-->>U: 502 NOTIFICATION_DELIVERY_FAILED
+        end
+    else provider still running past the timeout
+        Auth->>Auth: log + respond optimistically
+        Note over Pool,Prim: send completes independently,<br/>outcome still logged to NotificationLog
+    end
+    Auth->>Route: extraChannelsFor(LOGIN_OTP)
+    Route-->>Auth: e.g. {CONSOLE, PUSH}
+    Auth->>Disp: sendToChannelsAsync(..., extraChannels)
+    Disp->>Pool: submit sendToChannels(...) — no wait at all
+    Pool->>Extra: send(request) per channel
+    Auth-->>U: 200 OTP sent
+</pre>
+          </div>
+        </div>
+      </section>
+
+      <section id="flow-order">
+        <div class="section-head"><span class="section-num">07</span><h2>Flow · Order-status notification</h2></div>
+        <p><code class="mono">OrderNotificationService</code> lives in <strong>order-service</strong>, not
+          notification-service — order-service already depends on notification-service, catalog-service
+          and user-service, so it resolves routing, senders, and the recipient's email/phone without a
+          circular module dependency. Every channel here goes through <code class="mono">sendAsync</code>
+          with no bounded wait at all — an order-status update was already a side effect of the state
+          transition, never something the accept/cancel/deliver response depended on.</p>
+        <div class="panel">
+          <div class="diagram-wrap">
+<pre class="mermaid">
+sequenceDiagram
+    participant Order as Order*Service (order-service)
+    participant ONS as OrderNotificationService
+    participant Route as NotificationRoutingService
+    participant Disp as NotificationService
+    participant Pool as notificationTaskExecutor
+    participant Senders as Channel sender(s)
+
+    Order->>ONS: notify(role, userId, title, body)
+    ONS->>Route: orderStatusChannelsFor(role)
+    Route-->>ONS: e.g. CUSTOMER -> {IN_APP, PUSH}
+    alt no channels configured
+        ONS-->>Order: no-op (logged)
+    else channels configured
+        ONS->>ONS: resolve destination per channel
+        loop each channel
+            ONS->>Disp: sendAsync(NotificationRequest)
+            Disp->>Pool: submit send(request)
+            ONS->>ONS: .whenComplete(log outcome) — not awaited
+        end
+        ONS-->>Order: returns immediately
+        Pool->>Senders: dispatch, independently, per channel
+    end
+</pre>
+          </div>
+          <div class="diagram-caption">All 8 order-lifecycle call sites (accept · cancel · assign-rider · deliver · admin-override · new-order-to-owner) go through this one method instead of a hardcoded notifyUser().</div>
+        </div>
+      </section>
+
+      <section id="routing">
+        <div class="section-head"><span class="section-num">08</span><h2>Admin-configurable routing</h2></div>
+        <p>One JSON blob, key <code class="mono">notification_routing</code>, in the shared <code class="mono">settings</code> table.</p>
+        <pre class="code">{
+  <span class="k">"extraChannelsByNotificationType"</span>: {
+    <span class="s">"LOGIN_OTP"</span>: [<span class="s">"CONSOLE"</span>, <span class="s">"PUSH"</span>]
+  },
+  <span class="k">"orderStatusChannelsByRole"</span>: {
+    <span class="s">"CUSTOMER"</span>:          [<span class="s">"IN_APP"</span>, <span class="s">"PUSH"</span>],
+    <span class="s">"STORE_OWNER"</span>:       [<span class="s">"IN_APP"</span>],
+    <span class="s">"DELIVERY_PARTNER"</span>:  [<span class="s">"IN_APP"</span>, <span class="s">"PUSH"</span>],
+    <span class="s">"ADMIN"</span>:             [<span class="s">"IN_APP"</span>]
+  }
+}</pre>
+        <div class="tbl-wrap panel">
+          <table>
+            <thead><tr><th>Method</th><th>Path</th><th>Access</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">GET</td><td class="mono">/api/v1/admin/notification-routing</td><td>ADMIN, SUPER_ADMIN</td></tr>
+              <tr><td class="mono">PUT</td><td class="mono">/api/v1/admin/notification-routing</td><td>ADMIN, SUPER_ADMIN</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>An unknown channel or role string is ignored with a warning, not a hard failure — a typo in the
+          admin panel never bricks the whole config.</p>
+      </section>
+
+      <section id="extend">
+        <div class="section-head"><span class="section-num">09</span><h2>Extending it</h2></div>
+
+        <h3>Add a new channel (e.g. Slack)</h3>
+        <ol class="steps">
+          <li><span class="txt">Add the constant to <strong>NotificationChannel</strong>.</span></li>
+          <li><span class="txt">Write a <strong>ChannelNotificationSender</strong> implementation (<code class="mono">@Service</code>), returning that channel from <code class="mono">channel()</code>. Add a provider interface + config-selected bean(s) if it needs a swappable backend.</span></li>
+          <li><span class="txt">Nothing else changes — the dispatcher picks it up automatically, and it's immediately valid inside <strong>NotificationRoutingConfig</strong>.</span></li>
+        </ol>
+
+        <h3>Add a new email/SMS provider (e.g. SendGrid, Twilio)</h3>
+        <ol class="steps">
+          <li><span class="txt">Implement <strong>EmailProvider</strong> (or <strong>SmsProvider</strong>).</span></li>
+          <li><span class="txt">Add one <code class="mono">@Bean</code> in <strong>NotificationProviderConfig</strong>, guarded by <code class="mono">@ConditionalOnProperty(havingValue = "sendgrid")</code>.</span></li>
+          <li><span class="txt">Set <code class="mono">notification.email-provider=sendgrid</code>. <strong>EmailNotificationService</strong> and every caller never change.</span></li>
+        </ol>
+      </section>
+
+      <section id="endpoints">
+        <div class="section-head"><span class="section-num">10</span><h2>User-facing endpoints</h2></div>
+        <div class="tbl-wrap panel">
+          <table>
+            <thead><tr><th>Method</th><th>Path</th><th>Purpose</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">POST</td><td class="mono">/api/v1/notifications/push-token</td><td>Register/refresh this device's FCM token</td></tr>
+              <tr><td class="mono">GET</td><td class="mono">/api/v1/notifications</td><td>List recent alerts — last 7 days, max 20</td></tr>
+              <tr><td class="mono">PATCH</td><td class="mono">/api/v1/notifications/read-all</td><td>Mark all as read</td></tr>
+              <tr><td class="mono">PATCH</td><td class="mono">/api/v1/notifications/{id}/read</td><td>Mark one as read</td></tr>
+              <tr><td class="mono">DELETE</td><td class="mono">/api/v1/notifications/{id}</td><td>Delete one</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="config">
+        <div class="section-head"><span class="section-num">11</span><h2>Configuration reference</h2></div>
+        <div class="tbl-wrap panel">
+          <table>
+            <thead><tr><th>Key</th><th>Default</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">notification.email-provider</td><td class="mono">console</td><td><code>smtp</code> | <code>console</code></td></tr>
+              <tr><td class="mono">notification.sms-provider</td><td class="mono">console</td><td><code>console</code> today</td></tr>
+              <tr><td class="mono">notification.whatsapp-provider</td><td class="mono">console</td><td><code>console</code> today</td></tr>
+              <tr><td class="mono">notification.from-address / from-name</td><td class="mono">no-reply@pureeats.local / PureEats</td><td>SMTP sender identity</td></tr>
+              <tr><td class="mono">pureeats.fcm.credentials-path</td><td class="mono">(unset)</td><td>Firebase service-account JSON path — unset means push logs only, never throws</td></tr>
+              <tr><td class="mono">notification.async.core-pool-size / max-pool-size / queue-capacity</td><td class="mono">4 / 16 / 200</td><td>Sizing for <code>notificationTaskExecutor</code></td></tr>
+              <tr><td class="mono">notification.async.await-termination-seconds</td><td class="mono">20</td><td>How long shutdown waits for in-flight async sends</td></tr>
+              <tr><td class="mono">security.otp.send-timeout-ms</td><td class="mono">2000</td><td>How long OTP-send waits for the primary channel's real result before responding optimistically</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout">
+          <span class="mark">Known limitations</span>
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            <p><strong>Destination reuse:</strong> extra-channel fan-out reuses one <code>destination</code> string
+              per request. An EMAIL-primary OTP with an SMS/WHATSAPP extra channel configured would target an
+              email address as a phone number — <code class="mono">OrderNotificationService</code> already
+              resolves destinations per-channel correctly; the OTP fan-out in
+              <code class="mono">AuthenticationService</code> does not yet.</p>
+            <p><strong>Optimistic response:</strong> if the primary OTP channel takes
+              longer than <code class="mono">send-timeout-ms</code>, the login flow says "OTP sent" before
+              delivery is confirmed. A failure past that point is only visible in <code class="mono">NotificationLog</code>
+              and the app logs, not to the user — a resend still works independently either way.</p>
+            <p><strong>No durable queue:</strong> <code class="mono">notificationTaskExecutor</code>
+              is in-memory. Graceful shutdown drains it, but a hard crash between "kicked off" and "actually sent"
+              loses that notification with no retry.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="future">
+        <div class="section-head"><span class="section-num">12</span><h2>What's next</h2></div>
+        <p>Ranked by what would matter most for a production rollout — now that request-path sends are off the
+          caller's thread, the next tier is mostly about reliability and observability of that background pool.</p>
+        <div class="panel"><div class="panel-body enh-list">
+          <div class="enh"><span class="rank">01</span><div><h4>Real provider implementations</h4><p>SendGrid/SES, Twilio/MSG91, and the real WhatsApp Business Cloud API — the architecture supports them today, nobody's written them yet.</p></div></div>
+          <div class="enh"><span class="rank">02</span><div><h4>Durable queue / message broker</h4><p><code class="mono">notificationTaskExecutor</code> is in-memory. Moving to SQS/RabbitMQ/Kafka means a notification survives a crash, not just a graceful shutdown.</p></div></div>
+          <div class="enh"><span class="rank">03</span><div><h4>Circuit breaker on slow/unhealthy providers</h4><p>Right now every request pays the full <code class="mono">send-timeout-ms</code> wait even when a provider is known to be down. Fail fast after repeated timeouts instead.</p></div></div>
+          <div class="enh"><span class="rank">04</span><div><h4>Retry + dead-letter handling</h4><p>A failed send just logs today. Exponential backoff for transient failures, a dead-letter table for exhausted ones.</p></div></div>
+          <div class="enh"><span class="rank">05</span><div><h4>Async pool observability</h4><p>Queue depth, active/rejected counts, and per-send latency for <code class="mono">notificationTaskExecutor</code> aren't exposed to Actuator/Micrometer yet — right now the only signal is application logs.</p></div></div>
+          <div class="enh"><span class="rank">06</span><div><h4>Per-user notification preferences</h4><p>Routing is currently admin-global per role — letting a customer opt out of PUSH/SMS per type, layered on top.</p></div></div>
+          <div class="enh"><span class="rank">07</span><div><h4>Stale push-token cleanup</h4><p><code class="mono">FcmSender</code> logs a warning on failure but never deactivates the token. FCM's "unregistered" response should flip <code class="mono">isActive=false</code>.</p></div></div>
+          <div class="enh"><span class="rank">08</span><div><h4>Uniform delivery logging</h4><p><code class="mono">NotificationLog</code> only covers EMAIL/SMS today — extending it to every channel gives one audit trail for "did this actually go out."</p></div></div>
+          <div class="enh"><span class="rank">09</span><div><h4>Admin template editor</h4><p>Templates are classpath files today. Moving them into the Setting-backed config (like routing) lets admins edit copy without a redeploy.</p></div></div>
+          <div class="enh"><span class="rank">10</span><div><h4>Fix known edge cases + broaden test coverage</h4><p>The destination-reuse mismatch above, plus none of the senders, the dispatcher, the routing service, or the new async/timeout paths have unit tests yet.</p></div></div>
+        </div></div>
+      </section>
+
+    </main>
+  </div>
+
+  <footer class="foot">
+    <span class="mono">pureeats-notification-service · see also <a href="../README.md">README.md</a> · <a href="dispatch-map.html">dispatch-map.html</a> for the single-page schematic</span>
+    <span class="mono">generated from source, September 2026 · rev. 2 — async dispatch</span>
+  </footer>
+
+</div>

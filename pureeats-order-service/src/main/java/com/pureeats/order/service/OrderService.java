@@ -14,7 +14,7 @@ import com.pureeats.domain.entity.*;
 import com.pureeats.domain.common.response.PageResponse;
 import com.pureeats.domain.enums.DeliveryType;
 import com.pureeats.domain.enums.OrderStatusCode;
-import com.pureeats.notification.service.NotificationDispatchService;
+import com.pureeats.notification.enums.NotificationRecipientRole;
 import com.pureeats.media.storage.MediaUrlResolver;
 import com.pureeats.order.dto.*;
 import com.pureeats.order.service.cartvalidation.CartValidationService;
@@ -58,7 +58,7 @@ public class OrderService {
     private final RestaurantUserRepository restaurantUserRepository;
     private final CouponService couponService;
     private final AddressRepository addressRepository;
-    private final NotificationDispatchService notificationDispatchService;
+    private final OrderNotificationService orderNotificationService;
     private final UserRepository userRepository;
     private final OrderStatusLogService orderStatusLogService;
     private final ObjectMapper objectMapper;
@@ -279,8 +279,8 @@ public class OrderService {
         }
 
         orderStatusLogService.record(order.getId(), from, toStatus, "ADMIN", adminUserId, "Updated by admin");
-        notificationDispatchService.notifyUser(order.getUserId().longValue(), "Order status updated",
-                "Your order #" + order.getUniqueOrderId() + " is now " + toStatus.name(), "ORDER_UPDATE");
+        orderNotificationService.notify(NotificationRecipientRole.CUSTOMER, order.getUserId().longValue(), "Order status updated",
+                "Your order #" + order.getUniqueOrderId() + " is now " + toStatus.name());
         log.info("Order {} transitioned {} -> {} by admin {}", orderId, from, toStatus, adminUserId);
         return toResponse(order);
     }
@@ -426,8 +426,8 @@ public class OrderService {
         restaurantUserRepository.findByRestaurantId(restaurantId).stream()
                 .map(RestaurantUser::getUserId)
                 .distinct()
-                .forEach(ownerId -> notificationDispatchService.notifyUser(ownerId, "New order received",
-                        "Order #" + uniqueOrderId + " has been placed", "ORDER_UPDATE"));
+                .forEach(ownerId -> orderNotificationService.notify(NotificationRecipientRole.STORE_OWNER, ownerId, "New order received",
+                        "Order #" + uniqueOrderId + " has been placed"));
     }
 
     private static String generateUniqueOrderId() {

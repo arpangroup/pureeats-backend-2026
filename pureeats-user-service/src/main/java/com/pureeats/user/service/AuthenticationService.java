@@ -18,6 +18,7 @@ import com.pureeats.domain.enums.Role;
 import com.pureeats.user.enums.SecurityEventType;
 import com.pureeats.notification.dto.NotificationRequest;
 import com.pureeats.notification.dto.NotificationResult;
+import com.pureeats.notification.service.NotificationRoutingService;
 import com.pureeats.notification.service.NotificationService;
 import com.pureeats.user.config.AuthSecurityProperties;
 import com.pureeats.user.dto.AuthTokenResponse;
@@ -66,6 +67,7 @@ public class AuthenticationService {
     private final UserProvisioningService userProvisioningService;
     private final OtpChallengeService otpChallengeService;
     private final NotificationService notificationService;
+    private final NotificationRoutingService notificationRoutingService;
     private final BlocklistService blocklistService;
     private final RateLimiter rateLimiter;
     private final DeviceService deviceService;
@@ -230,16 +232,67 @@ public class AuthenticationService {
                 PiiMaskUtil.maskDestination(destination), Math.max(0, expiresIn), properties.getOtp().getResendCooldownSeconds());
     }
 
+    /**
+     * Sends the OTP itself on the one channel that matches the destination type (SMS for a phone,
+     * EMAIL for an address) via {@link NotificationService#sendAsync} - the actual SMTP/SMS
+     * round-trip runs on the notification module's own background pool, not this request's thread.
+     * We still want to know whether it actually went out before telling the user "OTP sent", so we
+     * wait up to {@code security.otp.send-timeout-ms} (default 2s) for the real result; a provider
+     * that's slower than that no longer holds the login response hostage - we respond optimistically
+     * and let delivery finish in the background (its outcome is still logged and recorded in
+     * {@code NotificationLog} either way). On top of that, fires any admin-configured "extra"
+     * channels for this {@link NotificationType} (e.g. a CONSOLE trace, or a PUSH heads-up) fully
+     * fire-and-forget: those never block or fail the login/signup flow, since they're supplementary,
+     * not the credential itself.
+     */
     private NotificationResult sendOtpNotification(OtpChallenge challenge, String plainOtp, String userName) {
-        NotificationChannel channel = challenge.getAuthenticationMethod() == AuthenticationMethod.PHONE
+        NotificationChannel primaryChannel = challenge.getAuthenticationMethod() == AuthenticationMethod.PHONE
                 ? NotificationChannel.SMS : NotificationChannel.EMAIL;
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("otp", plainOtp);
         params.put("expiryMinutes", properties.getOtp().getExpiryMinutes());
         params.put("userName", userName != null && !userName.isBlank() ? userName : "there");
 
-        return notificationService.send(new NotificationRequest(
-                challenge.getPurpose(), channel, challenge.getDestination(), challenge.getUserId(), params));
+        java.util.concurrent.CompletableFuture<NotificationResult> future = notificationService.sendAsync(new NotificationRequest(
+                challenge.getPurpose(), primaryChannel, challenge.getDestination(), challenge.getUserId(), params));
+        NotificationResult result = awaitPrimaryChannel(future, primaryChannel, challenge.getPurpose());
+
+        sendExtraChannels(challenge, primaryChannel, params);
+        return result;
+    }
+
+    private NotificationResult awaitPrimaryChannel(java.util.concurrent.CompletableFuture<NotificationResult> future,
+                                                     NotificationChannel channel, NotificationType purpose) {
+        try {
+            return future.get(properties.getOtp().getSendTimeoutMs(), java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (java.util.concurrent.TimeoutException e) {
+            log.info("{} notification on channel {} is taking longer than {}ms - responding to the login request now, delivery continues in the background",
+                    purpose, channel, properties.getOtp().getSendTimeoutMs());
+            return NotificationResult.success("pending-async");
+        } catch (Exception e) {
+            log.warn("{} notification dispatch on channel {} failed: {}", purpose, channel, e.getMessage());
+            return NotificationResult.failure(e.getMessage());
+        }
+    }
+
+    /**
+     * Note: {@code challenge.getDestination()} is reused as-is for every extra channel, so an
+     * EMAIL-primary OTP with WHATSAPP/SMS configured as an extra channel would (incorrectly) target
+     * an email address as a phone number. In practice extra channels are meant for
+     * destination-agnostic ones (CONSOLE, PUSH, IN_APP); mixing phone-shaped and email-shaped
+     * channels for the same OTP is an admin misconfiguration this doesn't yet guard against.
+     */
+    private void sendExtraChannels(OtpChallenge challenge, NotificationChannel primaryChannel, Map<String, Object> params) {
+        java.util.Set<NotificationChannel> extraChannels = new java.util.HashSet<>(notificationRoutingService.extraChannelsFor(challenge.getPurpose()));
+        extraChannels.remove(primaryChannel);
+        if (extraChannels.isEmpty()) {
+            return;
+        }
+        try {
+            notificationService.sendToChannelsAsync(challenge.getPurpose(), challenge.getDestination(), challenge.getUserId(), params, extraChannels);
+        } catch (Exception e) {
+            log.warn("Best-effort extra OTP notification channels {} failed for purpose {}: {}", extraChannels, challenge.getPurpose(), e.getMessage());
+        }
     }
 
     private User resolveOrProvisionUser(OtpChallenge challenge) {

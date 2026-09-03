@@ -1,0 +1,345 @@
+<title>Notification Dispatch Map</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --bg:#f2f3f7;
+    --surface:#ffffff;
+    --surface-alt:#e9ebf1;
+    --border:#d6d9e2;
+    --ink:#171a24;
+    --ink-soft:#4c5165;
+    --ink-faint:#7d8296;
+    --accent:#0e7f8c;
+    --accent-strong:#0a5f69;
+    --accent-soft:#dcf1f1;
+    --accent-soft-border:#a9d9d9;
+    --core-fill:#123a41;
+    --core-ink:#eafbfa;
+    --ok:#2f8f5b;
+    --ok-fill:#e1f3e8;
+    --ok-border:#9bcfb0;
+    --warn:#a8650a;
+    --warn-fill:#fbf0dc;
+    --warn-border:#e3c07f;
+    --line:#8a90a6;
+    --line-dashed:#a9aebd;
+    --shadow: 0 1px 2px rgba(23,26,36,0.05), 0 10px 26px -14px rgba(23,26,36,0.16);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0e1017;
+      --surface:#171a24;
+      --surface-alt:#1e222f;
+      --border:#2c303f;
+      --ink:#e9ebf3;
+      --ink-soft:#aeb2c4;
+      --ink-faint:#787d92;
+      --accent:#3fd0c9;
+      --accent-strong:#5fe0d9;
+      --accent-soft:#123632;
+      --accent-soft-border:#245a54;
+      --core-fill:#0e2e33;
+      --core-ink:#c9f5f1;
+      --ok:#5cc98c;
+      --ok-fill:#12271e;
+      --ok-border:#2f6b48;
+      --warn:#e0a545;
+      --warn-fill:#2c2210;
+      --warn-border:#5c481f;
+      --line:#565c72;
+      --line-dashed:#454a5e;
+      --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 10px 26px -14px rgba(0,0,0,0.55);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0e1017; --surface:#171a24; --surface-alt:#1e222f; --border:#2c303f;
+    --ink:#e9ebf3; --ink-soft:#aeb2c4; --ink-faint:#787d92;
+    --accent:#3fd0c9; --accent-strong:#5fe0d9; --accent-soft:#123632; --accent-soft-border:#245a54;
+    --core-fill:#0e2e33; --core-ink:#c9f5f1;
+    --ok:#5cc98c; --ok-fill:#12271e; --ok-border:#2f6b48;
+    --warn:#e0a545; --warn-fill:#2c2210; --warn-border:#5c481f;
+    --line:#565c72; --line-dashed:#454a5e;
+    --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 10px 26px -14px rgba(0,0,0,0.55);
+  }
+
+  *{box-sizing:border-box;}
+  body{ background:var(--bg); color:var(--ink); font-family:'IBM Plex Sans', system-ui, sans-serif; }
+  a{ color:var(--accent-strong); }
+  :root[data-theme="dark"] a, :root:not([data-theme="light"]) a{ color:var(--accent); }
+  .shell{ max-width:1680px; margin:0 auto; padding:28px 24px 60px; }
+
+  header{ display:flex; flex-direction:column; gap:8px; padding-bottom:20px; margin-bottom:20px; border-bottom:1px solid var(--border); }
+  .eyebrow{ font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.05em; text-transform:uppercase; color:var(--accent-strong); }
+  :root[data-theme="dark"] .eyebrow, :root:not([data-theme="light"]) .eyebrow{ color:var(--accent); }
+  h1{ font-size:clamp(24px,3.4vw,32px); margin:0; letter-spacing:-0.01em; text-wrap:balance; }
+  p.dek{ margin:0; color:var(--ink-soft); font-size:14.5px; max-width:82ch; }
+  code{ font-family:'IBM Plex Mono',monospace; background:var(--surface-alt); border:1px solid var(--border); border-radius:4px; padding:1px 6px; font-size:12.5px; color:var(--ink); }
+
+  .diagram-frame{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    box-shadow:var(--shadow); overflow-x:auto; padding:8px;
+  }
+  .diagram-frame svg{ display:block; min-width:1400px; width:100%; height:auto; }
+
+  /* legend */
+  .legend{ display:flex; flex-wrap:wrap; gap:24px; margin-top:18px; padding:16px 20px; background:var(--surface); border:1px solid var(--border); border-radius:10px; box-shadow:var(--shadow); }
+  .legend-group{ display:flex; flex-direction:column; gap:8px; }
+  .legend-title{ font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); }
+  .legend-row{ display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--ink-soft); }
+  .swatch{ width:16px; height:12px; border-radius:3px; flex-shrink:0; }
+  .sw-caller{ background:var(--surface-alt); border:1.5px solid var(--ink-faint); }
+  .sw-core{ background:var(--core-fill); border:1.5px solid var(--core-fill); }
+  .sw-sender{ background:var(--accent-soft); border:1.5px solid var(--accent-soft-border); }
+  .sw-impl{ background:var(--surface); border:1.5px solid var(--border); }
+  .sw-ext{ background:var(--warn-fill); border:1.5px dashed var(--warn-border); }
+  .sw-store{ background:var(--ok-fill); border:1.5px solid var(--ok-border); }
+  .line-sample{ width:22px; height:0; border-top:2px solid var(--line); }
+  .line-sample.dashed{ border-top:2px dashed var(--line-dashed); }
+
+  footer{ margin-top:26px; padding-top:16px; border-top:1px solid var(--border); font-size:12px; color:var(--ink-faint); font-family:'IBM Plex Mono',monospace; display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+
+  /* SVG text/box styling via classes */
+  .box{ fill:var(--surface); stroke:var(--border); stroke-width:1.5; }
+  .box-caller{ fill:var(--surface-alt); stroke:var(--ink-faint); stroke-width:1.5; }
+  .box-core{ fill:var(--core-fill); stroke:var(--core-fill); }
+  .box-iface{ fill:var(--surface); stroke:var(--accent-strong); stroke-width:1.5; stroke-dasharray:5,4; }
+  .box-sender{ fill:var(--accent-soft); stroke:var(--accent-soft-border); stroke-width:1.5; }
+  .box-ext{ fill:var(--warn-fill); stroke:var(--warn-border); stroke-width:1.5; stroke-dasharray:5,4; }
+  .box-store{ fill:var(--ok-fill); stroke:var(--ok-border); stroke-width:1.5; }
+
+  .lbl{ font-family:'IBM Plex Sans',sans-serif; font-weight:600; fill:var(--ink); font-size:13.5px; }
+  .lbl-core{ font-family:'IBM Plex Sans',sans-serif; font-weight:600; fill:var(--core-ink); font-size:13.5px; }
+  .lbl-mono{ font-family:'IBM Plex Mono',monospace; font-weight:600; fill:var(--ink); font-size:13px; }
+  .sub{ font-family:'IBM Plex Mono',monospace; fill:var(--ink-soft); font-size:10.7px; }
+  .sub-core{ font-family:'IBM Plex Mono',monospace; fill:#9fd8d3; font-size:10.7px; }
+  .zone{ font-family:'IBM Plex Mono',monospace; font-weight:600; letter-spacing:.08em; fill:var(--ink-faint); font-size:11px; text-transform:uppercase; }
+
+  .conn{ stroke:var(--line); stroke-width:1.6; fill:none; marker-end:url(#arrow); }
+  .conn-dash{ stroke:var(--line-dashed); stroke-width:1.6; fill:none; stroke-dasharray:5,4; marker-end:url(#arrowDash); }
+  .conn-label{ font-family:'IBM Plex Mono',monospace; fill:var(--ink-faint); font-size:9.6px; }
+</style>
+
+<div class="shell">
+  <header>
+    <div class="eyebrow">pureeats-notification-service &nbsp;/&nbsp; architecture</div>
+    <h1>Notification Dispatch Map</h1>
+    <p class="dek">Every box below is a real class or table in <code>pureeats-notification-service</code>
+      (plus the two current callers in user-service and order-service). Solid lines are synchronous
+      calls/implements relationships; dashed lines are async hand-offs, config lookups, or audit-log
+      writes. Trace any channel top-to-bottom to see its exact path from HTTP request to delivery.</p>
+  </header>
+
+  <div class="diagram-frame">
+<svg viewBox="0 0 1620 770" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Notification service architecture diagram">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"></path>
+    </marker>
+    <marker id="arrowDash" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--line-dashed)"></path>
+    </marker>
+  </defs>
+
+  <!-- ============ ZONE LABELS ============ -->
+  <text class="zone" x="40" y="16">Callers · request threads</text>
+  <text class="zone" x="560" y="182">Async dispatch core</text>
+  <text class="zone" x="40" y="378">Channel senders · ChannelNotificationSender</text>
+  <text class="zone" x="40" y="484">Providers · concrete implementation</text>
+  <text class="zone" x="40" y="590">External systems &amp; persistence</text>
+
+  <!-- ============ ROW: CALLERS ============ -->
+  <rect class="box box-caller" x="170" y="30" width="390" height="60" rx="8"></rect>
+  <text class="lbl" x="365" y="55" text-anchor="middle">AuthenticationService</text>
+  <text class="sub" x="365" y="74" text-anchor="middle">user-service · POST /api/v1/auth/otp/send</text>
+
+  <rect class="box box-caller" x="790" y="30" width="390" height="60" rx="8"></rect>
+  <text class="lbl" x="985" y="55" text-anchor="middle">OrderNotificationService</text>
+  <text class="sub" x="985" y="74" text-anchor="middle">order-service · accept · cancel · assign · deliver · admin-override</text>
+
+  <rect class="box box-core" x="1340" y="30" width="240" height="70" rx="8"></rect>
+  <text class="lbl-core" x="1460" y="55" text-anchor="middle">NotificationRoutingService</text>
+  <text class="sub-core" x="1460" y="70" text-anchor="middle">extraChannelsFor(type)</text>
+  <text class="sub-core" x="1460" y="83" text-anchor="middle">orderStatusChannelsFor(role)</text>
+
+  <rect class="box box-store" x="1340" y="120" width="240" height="46" rx="8"></rect>
+  <text class="lbl" x="1460" y="139" text-anchor="middle" font-size="12.5">settings table</text>
+  <text class="sub" x="1460" y="154" text-anchor="middle">key: notification_routing (JSON)</text>
+
+  <!-- caller -> routing (dashed, config lookup) -->
+  <polyline class="conn-dash" points="560,58 1300,58 1300,55 1340,55"></polyline>
+  <polyline class="conn-dash" points="1180,45 1260,45 1260,42 1340,42"></polyline>
+  <text class="conn-label" x="900" y="52">consult routing config</text>
+  <line class="conn" x1="1460" y1="100" x2="1460" y2="120"></line>
+
+  <!-- callers converge into NotificationService -->
+  <polyline class="conn" points="365,90 365,176 792,176 792,196"></polyline>
+  <polyline class="conn" points="985,90 985,176 830,176 830,196"></polyline>
+  <text class="conn-label" x="440" y="170">sendAsync(request)</text>
+  <text class="conn-label" x="895" y="170">sendAsync(request) per channel</text>
+
+  <!-- ============ ROW: DISPATCH CORE ============ -->
+  <rect class="box box-iface" x="560" y="196" width="500" height="54" rx="8"></rect>
+  <text class="lbl-mono" x="810" y="217" text-anchor="middle">«interface» NotificationService</text>
+  <text class="sub" x="810" y="235" text-anchor="middle">send · sendAsync · sendToChannels · sendToChannelsAsync</text>
+
+  <line class="conn" x1="810" y1="250" x2="810" y2="268"></line>
+  <text class="conn-label" x="822" y="262">implements</text>
+
+  <rect class="box box-core" x="520" y="268" width="580" height="64" rx="8"></rect>
+  <text class="lbl-core" x="810" y="292" text-anchor="middle">NotificationDispatcherService</text>
+  <text class="sub-core" x="810" y="309" text-anchor="middle">sendersByChannel: Map&lt;Channel,Sender&gt; — built once, in the constructor</text>
+  <text class="sub-core" x="810" y="323" text-anchor="middle">@Async(notificationTaskExecutor) on sendAsync / sendToChannelsAsync</text>
+
+  <rect class="box box-core" x="1150" y="268" width="430" height="64" rx="8"></rect>
+  <text class="lbl-core" x="1365" y="292" text-anchor="middle">notificationTaskExecutor</text>
+  <text class="sub-core" x="1365" y="309" text-anchor="middle">4–16 threads · queue 200 · CallerRunsPolicy</text>
+  <text class="sub-core" x="1365" y="323" text-anchor="middle">waits up to 20s for in-flight sends on shutdown</text>
+
+  <line class="conn-dash" x1="1100" y1="300" x2="1150" y2="300"></line>
+  <text class="conn-label" x="1096" y="292" text-anchor="end">submits to</text>
+
+  <!-- bus: dispatcher fans out to all 6 senders -->
+  <line class="conn" x1="810" y1="332" x2="810" y2="366"></line>
+  <line x1="160" y1="366" x2="1460" y2="366" stroke="var(--line)" stroke-width="1.6"></line>
+  <line class="conn" x1="160" y1="366" x2="160" y2="392"></line>
+  <line class="conn" x1="420" y1="366" x2="420" y2="392"></line>
+  <line class="conn" x1="680" y1="366" x2="680" y2="392"></line>
+  <line class="conn" x1="940" y1="366" x2="940" y2="392"></line>
+  <line class="conn" x1="1200" y1="366" x2="1200" y2="392"></line>
+  <line class="conn" x1="1460" y1="366" x2="1460" y2="392"></line>
+
+  <!-- ============ ROW: CHANNEL SENDERS ============ -->
+  <rect class="box box-sender" x="40"   y="392" width="240" height="62" rx="8"></rect>
+  <rect class="box box-sender" x="300"  y="392" width="240" height="62" rx="8"></rect>
+  <rect class="box box-sender" x="560"  y="392" width="240" height="62" rx="8"></rect>
+  <rect class="box box-sender" x="820"  y="392" width="240" height="62" rx="8"></rect>
+  <rect class="box box-sender" x="1080" y="392" width="240" height="62" rx="8"></rect>
+  <rect class="box box-sender" x="1340" y="392" width="240" height="62" rx="8"></rect>
+
+  <text class="lbl" x="160"  y="418" text-anchor="middle">EmailNotificationService</text>
+  <text class="lbl" x="420"  y="418" text-anchor="middle">SmsNotificationService</text>
+  <text class="lbl" x="680"  y="418" text-anchor="middle">PushNotificationSender</text>
+  <text class="lbl" x="940"  y="418" text-anchor="middle">WhatsAppNotificationSender</text>
+  <text class="lbl" x="1200" y="418" text-anchor="middle">InAppNotificationSender</text>
+  <text class="lbl" x="1460" y="418" text-anchor="middle">ConsoleNotificationSender</text>
+
+  <text class="sub" x="160"  y="438" text-anchor="middle">channel() = EMAIL</text>
+  <text class="sub" x="420"  y="438" text-anchor="middle">channel() = SMS</text>
+  <text class="sub" x="680"  y="438" text-anchor="middle">channel() = PUSH</text>
+  <text class="sub" x="940"  y="438" text-anchor="middle">channel() = WHATSAPP</text>
+  <text class="sub" x="1200" y="438" text-anchor="middle">channel() = IN_APP</text>
+  <text class="sub" x="1460" y="438" text-anchor="middle">channel() = CONSOLE</text>
+  <text class="sub" x="160" y="450" text-anchor="middle" opacity="0.85">renders templates/email/*</text>
+  <text class="sub" x="420" y="450" text-anchor="middle" opacity="0.85">renders templates/sms/*</text>
+  <text class="sub" x="680" y="450" text-anchor="middle" opacity="0.85">title/body straight from params</text>
+  <text class="sub" x="940" y="450" text-anchor="middle" opacity="0.85">renders templates/whatsapp/*</text>
+  <text class="sub" x="1200" y="450" text-anchor="middle" opacity="0.85">title/body straight from params</text>
+  <text class="sub" x="1460" y="450" text-anchor="middle" opacity="0.85">title/body straight from params</text>
+
+  <!-- senders -> impl row -->
+  <line class="conn" x1="160"  y1="454" x2="160"  y2="496"></line>
+  <line class="conn" x1="420"  y1="454" x2="420"  y2="496"></line>
+  <line class="conn" x1="680"  y1="454" x2="680"  y2="496"></line>
+  <line class="conn" x1="940"  y1="454" x2="940"  y2="496"></line>
+  <line class="conn" x1="1200" y1="454" x2="1200" y2="496"></line>
+  <line class="conn" x1="1460" y1="454" x2="1460" y2="496"></line>
+
+  <!-- push sender also feeds PushToken table directly, routed through the gutter -->
+  <polyline class="conn-dash" points="800,423 806,423 806,696"></polyline>
+
+  <!-- ============ ROW: PROVIDERS / IMPL ============ -->
+  <rect class="box" x="40"   y="496" width="240" height="66" rx="8"></rect>
+  <rect class="box" x="300"  y="496" width="240" height="66" rx="8"></rect>
+  <rect class="box" x="560"  y="496" width="240" height="66" rx="8"></rect>
+  <rect class="box" x="820"  y="496" width="240" height="66" rx="8"></rect>
+  <rect class="box" x="1080" y="496" width="240" height="66" rx="8"></rect>
+  <rect class="box" x="1340" y="496" width="240" height="66" rx="8"></rect>
+
+  <text class="lbl-mono" x="160"  y="521" text-anchor="middle">SmtpEmailProvider</text>
+  <text class="lbl-mono" x="420"  y="521" text-anchor="middle">ConsoleSmsProvider</text>
+  <text class="lbl-mono" x="680"  y="521" text-anchor="middle">FcmSender</text>
+  <text class="lbl-mono" x="940"  y="521" text-anchor="middle">ConsoleWhatsAppProvider</text>
+  <text class="lbl-mono" x="1200" y="521" text-anchor="middle">AlertRepository</text>
+  <text class="lbl-mono" x="1460" y="521" text-anchor="middle">logger.info(...)</text>
+
+  <text class="sub" x="160"  y="539" text-anchor="middle">implements EmailProvider · active</text>
+  <text class="sub" x="420"  y="539" text-anchor="middle">implements SmsProvider</text>
+  <text class="sub" x="680"  y="539" text-anchor="middle">Firebase Admin SDK</text>
+  <text class="sub" x="940"  y="539" text-anchor="middle">implements WhatsAppProvider</text>
+  <text class="sub" x="1200" y="539" text-anchor="middle">persists the Alert row</text>
+  <text class="sub" x="1460" y="539" text-anchor="middle">no dependency</text>
+  <text class="sub" x="160" y="553" text-anchor="middle" opacity="0.8">(or ConsoleEmailProvider)</text>
+  <text class="sub" x="680" y="553" text-anchor="middle" opacity="0.8">stub-safe, no creds needed</text>
+  <text class="sub" x="1460" y="553" text-anchor="middle" opacity="0.8">always active</text>
+
+  <!-- impl -> external/store row -->
+  <line class="conn" x1="160"  y1="562" x2="160"  y2="602"></line>
+  <line class="conn" x1="680"  y1="562" x2="680"  y2="602"></line>
+  <line class="conn" x1="940"  y1="562" x2="940"  y2="602"></line>
+  <line class="conn" x1="1200" y1="562" x2="1200" y2="602"></line>
+  <line class="conn" x1="1460" y1="562" x2="1460" y2="602"></line>
+  <line class="conn-dash" x1="420" y1="562" x2="420" y2="602"></line>
+
+  <!-- email + sms impl -> shared NotificationLog table, through the gutter -->
+  <polyline class="conn-dash" points="220,562 290,562 290,696"></polyline>
+  <polyline class="conn-dash" points="360,562 290,562 290,696"></polyline>
+
+  <!-- ============ ROW: EXTERNAL / STORE ============ -->
+  <rect class="box box-ext"   x="40"   y="602" width="240" height="64" rx="8"></rect>
+  <rect class="box box-ext"   x="300"  y="602" width="240" height="64" rx="8" opacity="0.7"></rect>
+  <rect class="box box-ext"   x="560"  y="602" width="240" height="64" rx="8"></rect>
+  <rect class="box box-ext"   x="820"  y="602" width="240" height="64" rx="8" opacity="0.7"></rect>
+  <rect class="box box-store" x="1080" y="602" width="240" height="64" rx="8"></rect>
+  <rect class="box box-ext"   x="1340" y="602" width="240" height="64" rx="8"></rect>
+
+  <text class="lbl" x="160"  y="628" text-anchor="middle">SMTP Relay</text>
+  <text class="lbl" x="420"  y="628" text-anchor="middle" opacity="0.75">No gateway configured</text>
+  <text class="lbl" x="680"  y="628" text-anchor="middle">Firebase Cloud Messaging</text>
+  <text class="lbl" x="940"  y="628" text-anchor="middle" opacity="0.75">WhatsApp Business API</text>
+  <text class="lbl" x="1200" y="628" text-anchor="middle">Alert table</text>
+  <text class="lbl" x="1460" y="628" text-anchor="middle">stdout / app log</text>
+
+  <text class="sub" x="160"  y="646" text-anchor="middle">external — real mail server</text>
+  <text class="sub" x="420"  y="646" text-anchor="middle">console-only today</text>
+  <text class="sub" x="680"  y="646" text-anchor="middle">external — real push delivery</text>
+  <text class="sub" x="940"  y="646" text-anchor="middle">not wired yet</text>
+  <text class="sub" x="1200" y="646" text-anchor="middle">powers the notification bell</text>
+  <text class="sub" x="1460" y="646" text-anchor="middle">dev-visible trace</text>
+
+  <!-- ============ ROW: SHARED PERSISTENCE ============ -->
+  <rect class="box box-store" x="170" y="696" width="390" height="52" rx="8"></rect>
+  <text class="lbl" x="365" y="717" text-anchor="middle" font-size="12.5">NotificationLog table</text>
+  <text class="sub" x="365" y="734" text-anchor="middle">one row per EMAIL/SMS attempt — status, provider, failure reason (never the message body)</text>
+
+  <rect class="box box-store" x="620" y="696" width="390" height="52" rx="8"></rect>
+  <text class="lbl" x="815" y="717" text-anchor="middle" font-size="12.5">PushToken table</text>
+  <text class="sub" x="815" y="734" text-anchor="middle">active device tokens per user — read directly by PushNotificationSender</text>
+</svg>
+  </div>
+
+  <div class="legend">
+    <div class="legend-group">
+      <span class="legend-title">Box kind</span>
+      <div class="legend-row"><span class="swatch sw-caller"></span> Caller (request thread)</div>
+      <div class="legend-row"><span class="swatch sw-core"></span> Async dispatch core</div>
+      <div class="legend-row"><span class="swatch sw-sender"></span> ChannelNotificationSender</div>
+    </div>
+    <div class="legend-group">
+      <span class="legend-title">&nbsp;</span>
+      <div class="legend-row"><span class="swatch sw-impl"></span> Provider / concrete impl</div>
+      <div class="legend-row"><span class="swatch sw-ext"></span> External system (dashed = not wired yet)</div>
+      <div class="legend-row"><span class="swatch sw-store"></span> Our own table</div>
+    </div>
+    <div class="legend-group">
+      <span class="legend-title">Line style</span>
+      <div class="legend-row"><span class="line-sample"></span> Synchronous call / implements</div>
+      <div class="legend-row"><span class="line-sample dashed"></span> Async hand-off, config lookup, or log write</div>
+    </div>
+  </div>
+
+  <footer>
+    <span>pureeats-notification-service · see also <a href="../README.md">README.md</a> · <a href="architecture.html">architecture.html</a> for the full reference page</span>
+    <span>generated from source, September 2026</span>
+  </footer>
+</div>
