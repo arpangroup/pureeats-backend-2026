@@ -14,7 +14,7 @@ public record RestaurantDetailResponse(
         LocalTime closingTime,
         String image,
         String rating,
-        String deliveryTime,
+        Integer deliveryTime,
         String priceRange,
         boolean isPureveg,
         String address,
@@ -42,6 +42,8 @@ public record RestaurantDetailResponse(
         boolean isFeatured,
         boolean isAcceptCod,
         boolean autoAcceptable,
-        List<DayScheduleDto> weeklySchedule
+        BigDecimal commissionRate,
+        List<DayScheduleDto> weeklySchedule,
+        List<Long> categoryIds
 ) {
 }

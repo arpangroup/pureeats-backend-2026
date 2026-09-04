@@ -2,12 +2,15 @@ package com.pureeats.catalog.service;
 
 import com.pureeats.catalog.dto.*;
 import com.pureeats.catalog.geo.DistanceCalculator;
+import com.pureeats.catalog.repository.RestaurantCategoryRepository;
+import com.pureeats.catalog.repository.RestaurantCategoryRestaurantRepository;
 import com.pureeats.catalog.repository.RestaurantRepository;
 import com.pureeats.catalog.repository.RestaurantUserRepository;
 import com.pureeats.domain.common.exception.ForbiddenException;
 import com.pureeats.domain.common.exception.ResourceNotFoundException;
 import com.pureeats.domain.common.response.PageResponse;
 import com.pureeats.domain.entity.Restaurant;
+import com.pureeats.domain.entity.RestaurantCategoryRestaurant;
 import com.pureeats.domain.entity.RestaurantUser;
 import com.pureeats.domain.common.exception.BadRequestException;
 import com.pureeats.domain.enums.Role;
@@ -50,6 +53,8 @@ public class RestaurantService {
     private final MediaAssetService mediaAssetService;
     private final DistanceCalculator distanceCalculator;
     private final RestaurantScheduleCodec scheduleCodec;
+    private final RestaurantCategoryRestaurantRepository restaurantCategoryRestaurantRepository;
+    private final RestaurantCategoryRepository restaurantCategoryRepository;
 
     /** Name of the cache backing every {@code @Cacheable} method below - see {@code CacheConfig} in pureeats-app for the (in-memory now, Redis-ready later) {@code CacheManager}. */
     static final String RESTAURANTS_CACHE = "restaurants";
@@ -166,7 +171,10 @@ public class RestaurantService {
     @CacheEvict(cacheNames = RESTAURANTS_CACHE, allEntries = true)
     public RestaurantDetailResponse create(Long ownerUserId, RestaurantCreateRequest request) {
         log.info("Owner {} registering restaurant '{}' (pending acceptance)", ownerUserId, request.name());
-        Restaurant restaurant = restaurantRepository.save(buildRestaurant(request, false));
+        Restaurant restaurant = restaurantRepository.save(buildRestaurant(request, false, false));
+        if (request.categoryIds() != null) {
+            replaceCategoryLinks(restaurant.getId(), request.categoryIds());
+        }
 
         RestaurantUser link = new RestaurantUser();
         link.setUserId(ownerUserId);
@@ -186,12 +194,20 @@ public class RestaurantService {
     @CacheEvict(cacheNames = RESTAURANTS_CACHE, allEntries = true)
     public RestaurantDetailResponse createAsAdmin(RestaurantCreateRequest request) {
         log.info("Admin creating restaurant '{}' (accepted immediately)", request.name());
-        Restaurant restaurant = restaurantRepository.save(buildRestaurant(request, true));
+        Restaurant restaurant = restaurantRepository.save(buildRestaurant(request, true, true));
+        if (request.categoryIds() != null) {
+            replaceCategoryLinks(restaurant.getId(), request.categoryIds());
+        }
         log.info("Restaurant {} created by admin", restaurant.getId());
         return toDetail(restaurant);
     }
 
-    private Restaurant buildRestaurant(RestaurantCreateRequest request, boolean isAccepted) {
+    /**
+     * {@code isAdminCreate} gates {@code commissionRate}: {@link #create} (store-owner
+     * self-onboarding) always ignores whatever the request carries there and uses the 10%
+     * default, so a submitted value can never let an owner set their own commission rate.
+     */
+    private Restaurant buildRestaurant(RestaurantCreateRequest request, boolean isAccepted, boolean isAdminCreate) {
         Restaurant restaurant = new Restaurant();
         restaurant.setName(request.name());
         restaurant.setDescription(request.description());
@@ -209,6 +225,7 @@ public class RestaurantService {
         restaurant.setDeliveryRadius(request.deliveryRadius());
         restaurant.setMinOrderPrice(request.minOrderPrice());
         restaurant.setIsAcceptCod(request.isAcceptCod());
+        restaurant.setDeliveryTime(formatDeliveryTime(request.deliveryTime()));
         if (request.weeklySchedule() != null) {
             restaurant.setScheduleData(scheduleCodec.validateAndSerialize(request.weeklySchedule()));
         }
@@ -218,7 +235,7 @@ public class RestaurantService {
         restaurant.setIsActive(true);
         restaurant.setIsAccepted(isAccepted);
         restaurant.setIsFeatured(false);
-        restaurant.setCommissionRate(BigDecimal.TEN);
+        restaurant.setCommissionRate(isAdminCreate && request.commissionRate() != null ? request.commissionRate() : BigDecimal.TEN);
         restaurant.setRestaurantCharges(BigDecimal.ZERO);
         restaurant.setDeliveryType(0);
         restaurant.setDeliveryChargeType("FIXED");
@@ -284,6 +301,7 @@ public class RestaurantService {
         applyField(restaurant.getId(), "deliveryCharges", restaurant.getDeliveryCharges(), request.deliveryCharges(), isPrivileged, callerUserId, restaurant::setDeliveryCharges);
         applyField(restaurant.getId(), "deliveryRadius", restaurant.getDeliveryRadius(), request.deliveryRadius(), isPrivileged, callerUserId, restaurant::setDeliveryRadius);
         applyField(restaurant.getId(), "minOrderPrice", restaurant.getMinOrderPrice(), request.minOrderPrice(), isPrivileged, callerUserId, restaurant::setMinOrderPrice);
+        applyField(restaurant.getId(), "deliveryTime", parseDeliveryTime(restaurant.getDeliveryTime()), request.deliveryTime(), isPrivileged, callerUserId, v -> restaurant.setDeliveryTime(formatDeliveryTime(v)));
         if (request.deliveryType() != null) {
             applyField(restaurant.getId(), "deliveryType", deliveryTypeLabel(restaurant.getDeliveryType()), request.deliveryType(),
                     isPrivileged, callerUserId, label -> restaurant.setDeliveryType(deliveryTypeCode(label)));
@@ -305,6 +323,9 @@ public class RestaurantService {
             String newScheduleJson = scheduleCodec.validateAndSerialize(request.weeklySchedule());
             applyField(restaurant.getId(), "weeklySchedule", restaurant.getScheduleData(), newScheduleJson, isPrivileged, callerUserId, restaurant::setScheduleData);
         }
+        if (request.categoryIds() != null) {
+            applyCategoryIds(restaurant.getId(), request.categoryIds(), callerUserId);
+        }
 
         restaurant.setUpdatedAt(LocalDateTime.now());
         restaurantRepository.save(restaurant);
@@ -323,6 +344,61 @@ public class RestaurantService {
         }
         setter.accept(newValue);
         restaurantAuditLogService.record(restaurantId, fieldName, oldValue, newValue, callerUserId);
+    }
+
+    /** Diffs against the restaurant's current category links and, if changed, replaces them wholesale + audit-logs the before/after id sets. */
+    private void applyCategoryIds(Long restaurantId, List<Long> newCategoryIds, Long callerUserId) {
+        List<Long> oldCategoryIds = categoryIdsFor(restaurantId);
+        Set<Long> oldSet = Set.copyOf(oldCategoryIds);
+        Set<Long> newSet = Set.copyOf(newCategoryIds);
+        if (oldSet.equals(newSet)) {
+            return;
+        }
+        replaceCategoryLinks(restaurantId, newCategoryIds);
+        restaurantAuditLogService.record(restaurantId, "categoryIds", oldCategoryIds, newCategoryIds, callerUserId);
+    }
+
+    /** Validates every id refers to a real category, then swaps the restaurant's category links for exactly this set. */
+    private void replaceCategoryLinks(Long restaurantId, List<Long> categoryIds) {
+        List<Long> distinctIds = categoryIds.stream().distinct().toList();
+        for (Long categoryId : distinctIds) {
+            if (!restaurantCategoryRepository.existsById(categoryId)) {
+                throw new BadRequestException("categoryIds: no such restaurant category " + categoryId);
+            }
+        }
+        restaurantCategoryRestaurantRepository.deleteAll(restaurantCategoryRestaurantRepository.findByRestaurantId(restaurantId));
+        LocalDateTime now = LocalDateTime.now();
+        List<RestaurantCategoryRestaurant> links = distinctIds.stream().map(categoryId -> {
+            RestaurantCategoryRestaurant link = new RestaurantCategoryRestaurant();
+            link.setRestaurantId(restaurantId);
+            link.setRestaurantCategoryId(categoryId);
+            link.setCreatedAt(now);
+            link.setUpdatedAt(now);
+            return link;
+        }).toList();
+        restaurantCategoryRestaurantRepository.saveAll(links);
+    }
+
+    private List<Long> categoryIdsFor(Long restaurantId) {
+        return restaurantCategoryRestaurantRepository.findByRestaurantId(restaurantId).stream()
+                .map(RestaurantCategoryRestaurant::getRestaurantCategoryId)
+                .toList();
+    }
+
+    /** {@code Restaurant.deliveryTime} is a legacy free-text column - stored as a string, exposed to the API as the minutes it actually holds. */
+    private static Integer parseDeliveryTime(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static String formatDeliveryTime(Integer value) {
+        return value == null ? null : String.valueOf(value);
     }
 
     @Transactional
@@ -429,7 +505,7 @@ public class RestaurantService {
 
     RestaurantSummaryResponse toSummary(Restaurant r) {
         return new RestaurantSummaryResponse(r.getId(), r.getName(), r.getSlug(), mediaUrlResolver.resolve(r.getImage()), r.getRating(),
-                r.getDeliveryTime(), r.getPriceRange(), Boolean.TRUE.equals(r.getIsPureveg()),
+                parseDeliveryTime(r.getDeliveryTime()), r.getPriceRange(), Boolean.TRUE.equals(r.getIsPureveg()),
                 Boolean.TRUE.equals(r.getIsActive()), Boolean.TRUE.equals(r.getIsAccepted()),
                 r.getMinOrderPrice(), r.getDeliveryCharges(),
                 r.getOpeningTime(), r.getClosingTime(), Boolean.TRUE.equals(r.getIsFeatured()));
@@ -438,14 +514,15 @@ public class RestaurantService {
     private RestaurantDetailResponse toDetail(Restaurant r) {
         return new RestaurantDetailResponse(r.getId(), r.getName(), r.getDescription(), r.getSlug(),
                 r.getContactNumber(), r.getOpeningTime(), r.getClosingTime(), mediaUrlResolver.resolve(r.getImage()), r.getRating(),
-                r.getDeliveryTime(), r.getPriceRange(), Boolean.TRUE.equals(r.getIsPureveg()), r.getAddress(),
+                parseDeliveryTime(r.getDeliveryTime()), r.getPriceRange(), Boolean.TRUE.equals(r.getIsPureveg()), r.getAddress(),
                 r.getPincode(), r.getLandmark(), r.getCertificate(), r.getLocationId(), r.getLatitude(), r.getLongitude(), r.getRestaurantCharges(),
                 r.getDeliveryCharges(), r.getDeliveryRadius(), r.getMinOrderPrice(), deliveryTypeLabel(r.getDeliveryType()),
                 r.getDeliveryChargeType(), r.getBaseDeliveryCharge(), r.getBaseDeliveryDistance(),
                 r.getExtraDeliveryCharge(), r.getExtraDeliveryDistance(), Boolean.TRUE.equals(r.getIsSchedulable()),
                 Boolean.TRUE.equals(r.getIsNotifiable()), Boolean.TRUE.equals(r.getIsActive()), Boolean.TRUE.equals(r.getIsAccepted()),
                 Boolean.TRUE.equals(r.getIsFeatured()), Boolean.TRUE.equals(r.getIsAcceptCod()),
-                Boolean.TRUE.equals(r.getAutoAcceptable()), scheduleCodec.deserialize(r.getScheduleData()));
+                Boolean.TRUE.equals(r.getAutoAcceptable()), r.getCommissionRate(),
+                scheduleCodec.deserialize(r.getScheduleData()), categoryIdsFor(r.getId()));
     }
 
     private static final Map<String, Integer> DELIVERY_TYPE_TO_INT = Map.of("self-pickup", 0, "delivery", 1, "both", 2);

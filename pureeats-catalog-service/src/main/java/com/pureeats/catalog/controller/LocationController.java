@@ -21,6 +21,12 @@ public class LocationController {
 
     private final LocationService locationService;
 
+    @GetMapping
+    @Operation(summary = "List every active serviceable location")
+    public ApiResponse<List<LocationResponse>> active() {
+        return ApiResponse.success(locationService.active());
+    }
+
     @GetMapping("/search")
     @Operation(summary = "Search locations by name")
     public ApiResponse<List<LocationResponse>> search(@RequestParam("q") String query) {
