@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 public record ItemRequest(
         @NotNull Long itemCategoryId,
@@ -14,6 +15,8 @@ public record ItemRequest(
         String desc,
         boolean isRecommended,
         boolean isPopular,
-        boolean isVeg
+        boolean isVeg,
+        /** Optional - omit to leave the item's addon categories unchanged. */
+        List<Long> addonCategoryIds
 ) {
 }

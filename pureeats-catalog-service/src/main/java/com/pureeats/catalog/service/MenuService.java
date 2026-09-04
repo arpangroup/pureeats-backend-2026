@@ -11,10 +11,14 @@ import com.pureeats.catalog.dto.ItemRequest;
 import com.pureeats.catalog.dto.ItemResponse;
 import com.pureeats.catalog.dto.RecommendedItemResponse;
 import com.pureeats.catalog.dto.RestaurantSummaryResponse;
+import com.pureeats.catalog.repository.AddonCategoryItemRepository;
+import com.pureeats.catalog.repository.AddonCategoryRepository;
 import com.pureeats.catalog.repository.ItemCategoryRepository;
 import com.pureeats.catalog.repository.ItemRepository;
+import com.pureeats.domain.common.exception.BadRequestException;
 import com.pureeats.domain.common.exception.ResourceNotFoundException;
 import com.pureeats.domain.common.response.PageResponse;
+import com.pureeats.domain.entity.AddonCategoryItem;
 import com.pureeats.domain.entity.Item;
 import com.pureeats.domain.entity.ItemCategory;
 import com.pureeats.media.service.MediaAssetService;
@@ -51,6 +55,8 @@ public class MenuService {
     private final RestaurantService restaurantService;
     private final MediaUrlResolver mediaUrlResolver;
     private final MediaAssetService mediaAssetService;
+    private final AddonCategoryRepository addonCategoryRepository;
+    private final AddonCategoryItemRepository addonCategoryItemRepository;
 
     @Transactional(readOnly = true)
     @Cacheable(cacheNames = MENU_CACHE, key = "#restaurantId")
@@ -192,7 +198,11 @@ public class MenuService {
         item.setIsActive(true);
         item.setCreatedAt(LocalDateTime.now());
         item.setUpdatedAt(LocalDateTime.now());
-        ItemResponse response = toItemResponse(itemRepository.save(item));
+        Item saved = itemRepository.save(item);
+        if (request.addonCategoryIds() != null) {
+            replaceAddonCategoryLinks(saved.getId(), request.addonCategoryIds());
+        }
+        ItemResponse response = toItemResponse(saved);
         log.info("Item {} created for restaurant {}", response.id(), restaurantId);
         return response;
     }
@@ -219,7 +229,11 @@ public class MenuService {
         item.setIsPopular(request.isPopular());
         item.setIsVeg(request.isVeg());
         item.setUpdatedAt(LocalDateTime.now());
-        return toItemResponse(itemRepository.save(item));
+        Item saved = itemRepository.save(item);
+        if (request.addonCategoryIds() != null) {
+            replaceAddonCategoryLinks(saved.getId(), request.addonCategoryIds());
+        }
+        return toItemResponse(saved);
     }
 
     @Transactional
@@ -255,7 +269,11 @@ public class MenuService {
         item.setIsActive(true);
         item.setCreatedAt(LocalDateTime.now());
         item.setUpdatedAt(LocalDateTime.now());
-        return toItemResponse(itemRepository.save(item));
+        Item saved = itemRepository.save(item);
+        if (request.addonCategoryIds() != null) {
+            replaceAddonCategoryLinks(saved.getId(), request.addonCategoryIds());
+        }
+        return toItemResponse(saved);
     }
 
     /** Admin partial update - only non-null fields are applied, no ownership check. */
@@ -275,7 +293,11 @@ public class MenuService {
         if (request.isVeg() != null) item.setIsVeg(request.isVeg());
         if (request.isActive() != null) item.setIsActive(request.isActive());
         item.setUpdatedAt(LocalDateTime.now());
-        return toItemResponse(itemRepository.save(item));
+        Item saved = itemRepository.save(item);
+        if (request.addonCategoryIds() != null) {
+            replaceAddonCategoryLinks(saved.getId(), request.addonCategoryIds());
+        }
+        return toItemResponse(saved);
     }
 
     @Transactional
@@ -354,6 +376,33 @@ public class MenuService {
                 });
     }
 
+    /** Validates every id refers to a real addon category, then swaps the item's addon-category links for exactly this set. */
+    private void replaceAddonCategoryLinks(Long itemId, List<Long> addonCategoryIds) {
+        List<Long> distinctIds = addonCategoryIds.stream().distinct().toList();
+        for (Long addonCategoryId : distinctIds) {
+            if (!addonCategoryRepository.existsById(addonCategoryId)) {
+                throw new BadRequestException("addonCategoryIds: no such addon category " + addonCategoryId);
+            }
+        }
+        addonCategoryItemRepository.deleteAll(addonCategoryItemRepository.findByItemId(itemId));
+        LocalDateTime now = LocalDateTime.now();
+        List<AddonCategoryItem> links = distinctIds.stream().map(addonCategoryId -> {
+            AddonCategoryItem link = new AddonCategoryItem();
+            link.setItemId(itemId);
+            link.setAddonCategoryId(addonCategoryId);
+            link.setCreatedAt(now);
+            link.setUpdatedAt(now);
+            return link;
+        }).toList();
+        addonCategoryItemRepository.saveAll(links);
+    }
+
+    private List<Long> addonCategoryIdsFor(Long itemId) {
+        return addonCategoryItemRepository.findByItemId(itemId).stream()
+                .map(AddonCategoryItem::getAddonCategoryId)
+                .toList();
+    }
+
     private ItemCategoryResponse toCategoryResponse(ItemCategory c) {
         return new ItemCategoryResponse(c.getId(), c.getName(), Boolean.TRUE.equals(c.getIsEnabled()));
     }
@@ -368,6 +417,7 @@ public class MenuService {
         return new ItemResponse(i.getId(), i.getRestaurantId().longValue(), i.getItemCategoryId().longValue(),
                 i.getName(), i.getPrice(), i.getOldPrice(), mediaUrlResolver.resolve(i.getImage()), i.getDesc(),
                 Boolean.TRUE.equals(i.getIsRecommended()), Boolean.TRUE.equals(i.getIsPopular()),
-                Boolean.TRUE.equals(i.getIsNew()), Boolean.TRUE.equals(i.getIsVeg()), Boolean.TRUE.equals(i.getIsActive()));
+                Boolean.TRUE.equals(i.getIsNew()), Boolean.TRUE.equals(i.getIsVeg()), Boolean.TRUE.equals(i.getIsActive()),
+                addonCategoryIdsFor(i.getId()));
     }
 }

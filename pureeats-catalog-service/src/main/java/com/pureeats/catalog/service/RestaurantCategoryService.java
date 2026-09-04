@@ -6,6 +6,7 @@ import com.pureeats.catalog.dto.RestaurantSummaryResponse;
 import com.pureeats.catalog.repository.RestaurantCategoryRepository;
 import com.pureeats.catalog.repository.RestaurantCategoryRestaurantRepository;
 import com.pureeats.catalog.repository.RestaurantRepository;
+import com.pureeats.domain.common.exception.BadRequestException;
 import com.pureeats.domain.common.exception.ResourceNotFoundException;
 import com.pureeats.domain.common.response.PageResponse;
 import com.pureeats.domain.entity.Restaurant;
@@ -47,8 +48,13 @@ public class RestaurantCategoryService {
     @Transactional
     public RestaurantCategoryResponse create(RestaurantCategoryRequest request) {
         log.info("Creating restaurant category '{}'", request.name());
+        String name = request.name().trim();
+        if (restaurantCategoryRepository.existsByNameIgnoreCase(name)) {
+            log.warn("Rejected duplicate restaurant category name '{}'", name);
+            throw new BadRequestException("A cuisine category named '" + name + "' already exists");
+        }
         RestaurantCategory category = new RestaurantCategory();
-        category.setName(request.name());
+        category.setName(name);
         category.setIsActive(request.isActive() == null || request.isActive());
         category.setCreatedAt(LocalDateTime.now());
         category.setUpdatedAt(LocalDateTime.now());
@@ -61,7 +67,12 @@ public class RestaurantCategoryService {
     public RestaurantCategoryResponse update(Long id, RestaurantCategoryRequest request) {
         log.info("Updating restaurant category {}", id);
         RestaurantCategory category = findOrThrow(id);
-        category.setName(request.name());
+        String name = request.name().trim();
+        if (restaurantCategoryRepository.existsByNameIgnoreCaseAndIdNot(name, id)) {
+            log.warn("Rejected duplicate restaurant category name '{}' on update of {}", name, id);
+            throw new BadRequestException("A cuisine category named '" + name + "' already exists");
+        }
+        category.setName(name);
         if (request.isActive() != null) {
             category.setIsActive(request.isActive());
         }
