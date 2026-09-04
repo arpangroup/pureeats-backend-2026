@@ -44,6 +44,8 @@ public record RestaurantDetailResponse(
         boolean autoAcceptable,
         BigDecimal commissionRate,
         List<DayScheduleDto> weeklySchedule,
-        List<Long> categoryIds
+        List<Long> categoryIds,
+        /** The real-time, day-aware open/closed answer — computed server-side from weeklySchedule. openingTime/closingTime above are legacy and not day-aware; use this instead. */
+        RestaurantOpenStatus openStatus
 ) {
 }

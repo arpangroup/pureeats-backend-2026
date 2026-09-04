@@ -7,6 +7,9 @@ import com.pureeats.catalog.repository.AddonRepository;
 import com.pureeats.catalog.repository.ItemRepository;
 import com.pureeats.catalog.repository.RestaurantRepository;
 import com.pureeats.catalog.service.CouponService;
+import com.pureeats.catalog.service.RestaurantOpenStatusService;
+import com.pureeats.catalog.service.RestaurantScheduleCodec;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pureeats.domain.common.exception.BadRequestException;
 import com.pureeats.domain.entity.Addon;
 import com.pureeats.domain.entity.Item;
@@ -76,7 +79,8 @@ class CartValidationServiceTest {
         lenient().when(orderRepository.findByUserIdOrderByCreatedAtDesc(anyInt())).thenReturn(List.of());
 
         List<CartValidationRule> rules = List.of(
-                new RestaurantAvailabilityRule(), new ItemAvailabilityRule(), new ItemStockRule(),
+                new RestaurantAvailabilityRule(new RestaurantScheduleCodec(new ObjectMapper()), new RestaurantOpenStatusService()),
+                new ItemAvailabilityRule(), new ItemStockRule(),
                 new AddonSelectionRule(addonRepository, addonCategoryItemRepository),
                 new DeliveryRadiusRule(), new MinimumOrderAmountRule(), new PaymentMethodRule(), orderFrequencyRule);
         cartValidationService = new CartValidationService(restaurantRepository, itemRepository, addonRepository,
