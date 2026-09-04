@@ -1,7 +1,9 @@
 package com.pureeats.order.service;
 
+import com.pureeats.catalog.geo.DistanceCalculator;
 import com.pureeats.domain.entity.Restaurant;
 import com.pureeats.order.dto.DeliveryChargeResult;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -12,9 +14,10 @@ import java.math.RoundingMode;
 /** Centralizes the tax/restaurant-charge/delivery-charge math that Laravel had copy-pasted per-controller. */
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class OrderPricingService {
 
-    private static final double EARTH_RADIUS_KM = 6371.0;
+    private final DistanceCalculator distanceCalculator;
 
     @Value("${pureeats.tax.percentage:5}")
     private BigDecimal taxPercentage;
@@ -64,33 +67,9 @@ public class OrderPricingService {
         return new DeliveryChargeResult(flat, distanceKm, "FIXED");
     }
 
-    /** Standalone distance lookup - lets a caller (e.g. cart-validation rules) know the distance before/independent of computing a delivery charge from it. Null customer coordinates (no address chosen yet) yield zero, same fallback {@link #computeDeliveryCharge} already had. */
+    /** Standalone distance lookup - lets a caller (e.g. cart-validation rules) know the distance before/independent of computing a delivery charge from it. Null customer coordinates (no address chosen yet) yield zero, same fallback {@link #computeDeliveryCharge} already had, since every {@link DistanceCalculator} implementation guarantees that on unparseable input. */
     public BigDecimal distanceKm(Restaurant restaurant, String customerLatitude, String customerLongitude) {
-        return distanceBetween(restaurant.getLatitude(), restaurant.getLongitude(), customerLatitude, customerLongitude);
-    }
-
-    private BigDecimal distanceBetween(String lat1, String lng1, String lat2, String lng2) {
-        try {
-            double distance = haversineKm(Double.parseDouble(lat1), Double.parseDouble(lng1),
-                    Double.parseDouble(lat2), Double.parseDouble(lng2));
-            return BigDecimal.valueOf(distance).setScale(2, RoundingMode.HALF_UP);
-        } catch (NumberFormatException | NullPointerException e) {
-            // Expected and common (no address chosen yet, self-pickup, a guest with no saved
-            // address, ...) - debug-only, and without the exception object, so a missing address
-            // doesn't spam production logs with a stack trace for a completely normal case.
-            log.debug("Could not compute distance from ({}, {}) to ({}, {}), defaulting to zero", lat1, lng1, lat2, lng2);
-            return BigDecimal.ZERO;
-        }
-    }
-
-    private static double haversineKm(double lat1, double lon1, double lat2, double lon2) {
-        double dLat = Math.toRadians(lat2 - lat1);
-        double dLon = Math.toRadians(lon2 - lon1);
-        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
-                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
-                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return EARTH_RADIUS_KM * c;
+        return distanceCalculator.distanceKm(restaurant.getLatitude(), restaurant.getLongitude(), customerLatitude, customerLongitude);
     }
 
     private BigDecimal percentOf(BigDecimal amount, BigDecimal percentage) {

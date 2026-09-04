@@ -39,6 +39,8 @@ public class AuthSecurityProperties {
         private int maxResends = 3;
         private int maxRequestsPerDestinationPerHour = 10;
         private int maxRequestsPerIpPerHour = 20;
+        /** How long the login-challenge request waits for the real provider result before responding optimistically and letting delivery finish in the background - see AuthenticationService#awaitPrimaryChannel. A slow SMTP relay no longer means a slow login response. */
+        private int sendTimeoutMs = 2000;
 
         public int getLength() {
             return length;
@@ -94,6 +96,14 @@ public class AuthSecurityProperties {
 
         public void setMaxRequestsPerIpPerHour(int maxRequestsPerIpPerHour) {
             this.maxRequestsPerIpPerHour = maxRequestsPerIpPerHour;
+        }
+
+        public int getSendTimeoutMs() {
+            return sendTimeoutMs;
+        }
+
+        public void setSendTimeoutMs(int sendTimeoutMs) {
+            this.sendTimeoutMs = sendTimeoutMs;
         }
     }
 

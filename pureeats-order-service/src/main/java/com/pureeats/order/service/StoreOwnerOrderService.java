@@ -4,7 +4,7 @@ import com.pureeats.catalog.service.RestaurantService;
 import com.pureeats.domain.common.exception.BadRequestException;
 import com.pureeats.domain.entity.Order;
 import com.pureeats.domain.enums.OrderStatusCode;
-import com.pureeats.notification.service.NotificationDispatchService;
+import com.pureeats.notification.enums.NotificationRecipientRole;
 import com.pureeats.order.dto.OrderResponse;
 import com.pureeats.order.dto.OrderSummaryResponse;
 import com.pureeats.order.repository.OrderRepository;
@@ -30,7 +30,7 @@ public class StoreOwnerOrderService {
     private final RestaurantService restaurantService;
     private final RestaurantPayoutService restaurantPayoutService;
     private final WalletService walletService;
-    private final NotificationDispatchService notificationDispatchService;
+    private final OrderNotificationService orderNotificationService;
     private final OrderStatusLogService orderStatusLogService;
 
     @Transactional(readOnly = true)
@@ -65,8 +65,8 @@ public class StoreOwnerOrderService {
         orderStatusLogService.record(order.getId(), OrderStatusCode.PLACED, OrderStatusCode.RESTAURANT_ACCEPTED, "STORE_OWNER", ownerUserId, null);
         log.info("Order {} transitioned PLACED -> RESTAURANT_ACCEPTED by store owner {}", orderId, ownerUserId);
 
-        notificationDispatchService.notifyUser(order.getUserId().longValue(), "Order accepted",
-                "Your order #" + order.getUniqueOrderId() + " has been accepted by the restaurant", "ORDER_UPDATE");
+        orderNotificationService.notify(NotificationRecipientRole.CUSTOMER, order.getUserId().longValue(), "Order accepted",
+                "Your order #" + order.getUniqueOrderId() + " has been accepted by the restaurant");
         return orderService.toResponse(order);
     }
 
@@ -123,8 +123,8 @@ public class StoreOwnerOrderService {
         }
         orderStatusLogService.record(order.getId(), current, OrderStatusCode.CANCELLED, "STORE_OWNER", ownerUserId, null);
         log.info("Order {} transitioned {} -> CANCELLED by store owner {}", orderId, current, ownerUserId);
-        notificationDispatchService.notifyUser(order.getUserId().longValue(), "Order cancelled",
-                "Your order #" + order.getUniqueOrderId() + " was cancelled by the restaurant", "ORDER_UPDATE");
+        orderNotificationService.notify(NotificationRecipientRole.CUSTOMER, order.getUserId().longValue(), "Order cancelled",
+                "Your order #" + order.getUniqueOrderId() + " was cancelled by the restaurant");
         return orderService.toResponse(order);
     }
 

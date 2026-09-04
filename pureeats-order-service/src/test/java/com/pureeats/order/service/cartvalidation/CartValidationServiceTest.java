@@ -1,6 +1,7 @@
 package com.pureeats.order.service.cartvalidation;
 
 import com.pureeats.catalog.dto.CouponApplyResponse;
+import com.pureeats.catalog.geo.HaversineDistanceCalculator;
 import com.pureeats.catalog.repository.AddonCategoryItemRepository;
 import com.pureeats.catalog.repository.AddonRepository;
 import com.pureeats.catalog.repository.ItemRepository;
@@ -64,7 +65,7 @@ class CartValidationServiceTest {
     @BeforeEach
     void setUp() {
         couponService = mock(CouponService.class);
-        orderPricingService = new OrderPricingService();
+        orderPricingService = new OrderPricingService(new HaversineDistanceCalculator());
         ReflectionTestUtils.setField(orderPricingService, "taxPercentage", BigDecimal.valueOf(5));
 
         // Every rule the real pipeline runs (see CartValidationRule beans), same set the Spring

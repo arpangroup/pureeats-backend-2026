@@ -19,7 +19,7 @@ import java.io.IOException;
  * at a valid service-account JSON; otherwise (no property set - the default, since no Firebase
  * project exists yet - or the file is missing/invalid) every {@link #send} call just logs what it
  * would have sent, same as the stub this replaced. Never throws back to the caller
- * ({@link NotificationDispatchService}) - a push failure must never block persisting the in-app
+ * ({@link PushNotificationSender}) - a push failure must never block persisting the in-app
  * {@code Alert} or the caller's own transaction (order acceptance, delivery assignment, ...).
  */
 @Slf4j

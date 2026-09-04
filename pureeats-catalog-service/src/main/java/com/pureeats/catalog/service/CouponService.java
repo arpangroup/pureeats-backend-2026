@@ -22,6 +22,8 @@ import com.pureeats.user.repository.UserRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -41,6 +43,16 @@ public class CouponService {
 
     private static final int GLOBAL_RESTAURANT_ID = 0;
 
+    /**
+     * Cache name for the customer-facing "which coupons can I use" browse ({@link #listAvailable}).
+     * Deliberately NOT applied to {@link #validate}/{@link #recordUsage} (the order-placement redemption
+     * path) - those must always see the coupon's live {@code count} against its usage limit, and
+     * evicting on every redemption would defeat the point of caching a "rarely changes" list for a
+     * "frequently redeemed" coupon. Only coupon *configuration* changes ({@link #create}, {@link #update},
+     * {@link #delete}, ...) evict this cache.
+     */
+    static final String COUPONS_CACHE = "availableCoupons";
+
     private final CouponRepository couponRepository;
     private final CouponUsageRepository couponUsageRepository;
     private final UserRepository userRepository;
@@ -57,6 +69,7 @@ public class CouponService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = COUPONS_CACHE, key = "#restaurantId")
     public List<CouponResponse> listAvailable(Integer restaurantId) {
         return couponRepository.findByIsActiveTrueAndRestaurantIdIn(List.of(GLOBAL_RESTAURANT_ID, restaurantId))
                 .stream().map(this::toResponse).toList();
@@ -94,6 +107,7 @@ public class CouponService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = COUPONS_CACHE, allEntries = true)
     public CouponResponse create(CouponCreateRequest request, Long createdBy) {
         log.info("Creating coupon '{}' (code {}) for restaurant {} by user {}", request.name(), request.code(),
                 request.restaurantId(), createdBy);
@@ -122,6 +136,7 @@ public class CouponService {
 
     /** Admin-facing full update - not ownership-scoped (an admin may edit anyone's coupon), and lets the caller set {@code maxCount}/{@code isActive} directly. */
     @Transactional
+    @CacheEvict(cacheNames = COUPONS_CACHE, allEntries = true)
     public CouponResponse update(Long id, CouponUpdateRequest request) {
         log.info("Admin updating coupon {}", id);
         Coupon coupon = couponRepository.findById(id)
@@ -135,6 +150,7 @@ public class CouponService {
 
     /** Store-owner update - only the coupon's creator may edit it. */
     @Transactional
+    @CacheEvict(cacheNames = COUPONS_CACHE, allEntries = true)
     public CouponResponse updateAsOwner(Long ownerUserId, Long id, CouponUpdateRequest request) {
         log.info("Owner {} updating coupon {}", ownerUserId, id);
         Coupon coupon = findOwnedOrThrow(ownerUserId, id);
@@ -171,6 +187,7 @@ public class CouponService {
 
     /** Admin-only delete - the caller already had to hold ADMIN/SUPER_ADMIN to reach this (enforced at the URL/controller layer). */
     @Transactional
+    @CacheEvict(cacheNames = COUPONS_CACHE, allEntries = true)
     public void delete(Long id) {
         log.info("Admin deleting coupon {}", id);
         Coupon coupon = couponRepository.findById(id)
@@ -183,6 +200,7 @@ public class CouponService {
 
     /** Store-owner delete - only the coupon's creator may delete it. */
     @Transactional
+    @CacheEvict(cacheNames = COUPONS_CACHE, allEntries = true)
     public void deleteAsOwner(Long ownerUserId, Long id) {
         log.info("Owner {} deleting coupon {}", ownerUserId, id);
         couponRepository.delete(findOwnedOrThrow(ownerUserId, id));

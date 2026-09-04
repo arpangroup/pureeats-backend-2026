@@ -10,6 +10,8 @@ import com.pureeats.user.repository.DeliveryGuyDetailRepository;
 import com.pureeats.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,7 +32,11 @@ public class RiderService {
     private final DeliveryGuyDetailRepository deliveryGuyDetailRepository;
     private final RoleService roleService;
 
+    /** Cache name for rider/driver-detail lookups - see {@code CacheConfig} in pureeats-app for the swappable (in-memory now, Redis-ready later) {@code CacheManager}. */
+    static final String RIDER_PROFILES_CACHE = "riderProfiles";
+
     @Transactional
+    @CacheEvict(cacheNames = RIDER_PROFILES_CACHE, key = "#userId")
     public RiderProfileResponse registerAsRider(Long userId, RiderProfileRequest request) {
         log.info("Registering user {} as a delivery rider", userId);
         User user = userService.findUserOrThrow(userId);
@@ -64,7 +70,9 @@ public class RiderService {
         return toResponse(detail);
     }
 
+    /** Driver details don't change often (rating updates aside, which are a separate rating-service concern) so this is cached per-rider; {@link #registerAsRider} evicts on (re-)creation. */
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = RIDER_PROFILES_CACHE, key = "#userId")
     public RiderProfileResponse getProfile(Long userId) {
         User user = userService.findUserOrThrow(userId);
         if (user.getDeliveryGuyDetailId() == null) {

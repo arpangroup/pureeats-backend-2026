@@ -21,6 +21,8 @@ import com.pureeats.media.service.MediaAssetService;
 import com.pureeats.media.storage.MediaUrlResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -41,6 +43,9 @@ public class MenuService {
 
     private static final String ITEM_IMAGE_OWNER_TYPE = "ITEM";
 
+    /** Cache name for the customer-facing dish menu ({@link #getMenu}) - dishes change rarely relative to how often they're browsed. Every write path below evicts the whole cache rather than surgically patching one restaurant's entry, same simple all-entries approach {@code RestaurantService} uses for the restaurant list. */
+    static final String MENU_CACHE = "restaurantMenus";
+
     private final ItemCategoryRepository itemCategoryRepository;
     private final ItemRepository itemRepository;
     private final RestaurantService restaurantService;
@@ -48,6 +53,7 @@ public class MenuService {
     private final MediaAssetService mediaAssetService;
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = MENU_CACHE, key = "#restaurantId")
     public List<ItemResponse> getMenu(Long restaurantId) {
         return itemRepository.findByRestaurantIdAndIsActiveTrue(restaurantId.intValue()).stream()
                 .map(this::toItemResponse).toList();
@@ -166,6 +172,7 @@ public class MenuService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = MENU_CACHE, allEntries = true)
     public ItemResponse createItem(Long ownerUserId, Long restaurantId, ItemRequest request) {
         log.info("Creating item '{}' for restaurant {} by owner {}", request.name(), restaurantId, ownerUserId);
         restaurantService.assertOwnership(ownerUserId, restaurantId);
@@ -191,6 +198,7 @@ public class MenuService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = MENU_CACHE, allEntries = true)
     public ItemResponse updateItem(Long ownerUserId, Long itemId, ItemRequest request) {
         log.info("Owner {} updating item {}", ownerUserId, itemId);
         Item item = findItemOrThrow(itemId);
@@ -215,6 +223,7 @@ public class MenuService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = MENU_CACHE, allEntries = true)
     public void setItemEnabled(Long ownerUserId, Long itemId, boolean enabled) {
         Item item = findItemOrThrow(itemId);
         restaurantService.assertOwnership(ownerUserId, item.getRestaurantId().longValue());
@@ -226,6 +235,7 @@ public class MenuService {
 
     /** Admin create - no ownership check, restaurantId comes from the request itself. */
     @Transactional
+    @CacheEvict(cacheNames = MENU_CACHE, allEntries = true)
     public ItemResponse createItemAsAdmin(AdminItemCreateRequest request) {
         log.info("Admin creating item '{}' for restaurant {}", request.name(), request.restaurantId());
         validateRestaurantAndCategory(request.restaurantId(), request.itemCategoryId());
@@ -250,6 +260,7 @@ public class MenuService {
 
     /** Admin partial update - only non-null fields are applied, no ownership check. */
     @Transactional
+    @CacheEvict(cacheNames = MENU_CACHE, allEntries = true)
     public ItemResponse patchItemAsAdmin(Long itemId, ItemPatchRequest request) {
         log.info("Admin patching item {}", itemId);
         Item item = findItemOrThrow(itemId);
@@ -268,13 +279,19 @@ public class MenuService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = MENU_CACHE, allEntries = true)
     public void deleteItemAsAdmin(Long itemId) {
         log.info("Admin deleting item {}", itemId);
         itemRepository.delete(findItemOrThrow(itemId));
     }
 
-    /** Verifies each row's restaurantId/itemCategoryId before saving it; a bad row is skipped, not fatal to the batch. */
+    /**
+     * Verifies each row's restaurantId/itemCategoryId before saving it; a bad row is skipped, not fatal to the batch.
+     * Evicts the menu cache itself, in addition to {@link #createItemAsAdmin} doing the same per-row - the per-row
+     * eviction never actually fires here since it's a same-class method call, invisible to Spring's proxy-based AOP.
+     */
     @Transactional
+    @CacheEvict(cacheNames = MENU_CACHE, allEntries = true)
     public ItemBulkUploadResponse bulkCreateItems(List<AdminItemCreateRequest> rows) {
         log.info("Bulk-creating {} items", rows.size());
         List<ItemBulkRowResult> results = new ArrayList<>();
@@ -294,6 +311,7 @@ public class MenuService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = MENU_CACHE, allEntries = true)
     public ItemImageResponse uploadItemImage(Long itemId, MultipartFile file, Long uploadedBy) {
         log.info("Uploading image for item {} by user {}", itemId, uploadedBy);
         Item item = findItemOrThrow(itemId);

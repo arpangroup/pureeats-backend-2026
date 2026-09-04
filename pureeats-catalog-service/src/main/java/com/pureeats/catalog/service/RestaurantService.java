@@ -1,12 +1,16 @@
 package com.pureeats.catalog.service;
 
 import com.pureeats.catalog.dto.*;
+import com.pureeats.catalog.geo.DistanceCalculator;
+import com.pureeats.catalog.repository.RestaurantCategoryRepository;
+import com.pureeats.catalog.repository.RestaurantCategoryRestaurantRepository;
 import com.pureeats.catalog.repository.RestaurantRepository;
 import com.pureeats.catalog.repository.RestaurantUserRepository;
 import com.pureeats.domain.common.exception.ForbiddenException;
 import com.pureeats.domain.common.exception.ResourceNotFoundException;
 import com.pureeats.domain.common.response.PageResponse;
 import com.pureeats.domain.entity.Restaurant;
+import com.pureeats.domain.entity.RestaurantCategoryRestaurant;
 import com.pureeats.domain.entity.RestaurantUser;
 import com.pureeats.domain.common.exception.BadRequestException;
 import com.pureeats.domain.enums.Role;
@@ -15,6 +19,8 @@ import com.pureeats.media.storage.MediaUrlResolver;
 import com.pureeats.user.service.RoleService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -23,6 +29,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -44,6 +51,14 @@ public class RestaurantService {
     private final MediaUrlResolver mediaUrlResolver;
     private final RestaurantAuditLogService restaurantAuditLogService;
     private final MediaAssetService mediaAssetService;
+    private final DistanceCalculator distanceCalculator;
+    private final RestaurantScheduleCodec scheduleCodec;
+    private final RestaurantCategoryRestaurantRepository restaurantCategoryRestaurantRepository;
+    private final RestaurantCategoryRepository restaurantCategoryRepository;
+
+    /** Name of the cache backing every {@code @Cacheable} method below - see {@code CacheConfig} in pureeats-app for the (in-memory now, Redis-ready later) {@code CacheManager}. */
+    static final String RESTAURANTS_CACHE = "restaurants";
+    private static final double KM_PER_DEGREE_LAT = 111.32;
 
     private static final String IMAGE_OWNER_TYPE = "RESTAURANT";
     private static final String COVER_IMAGE_OWNER_TYPE = "RESTAURANT_COVER";
@@ -52,7 +67,73 @@ public class RestaurantService {
 
     @Transactional(readOnly = true)
     public List<RestaurantSummaryResponse> listActive() {
-        return restaurantRepository.findByIsActiveTrueAndIsAcceptedTrue().stream().map(this::toSummary).toList();
+        return cachedActiveRestaurants().stream().map(this::toSummary).toList();
+    }
+
+    /**
+     * Active+accepted restaurants rarely change (a store owner toggling availability, or admin
+     * acceptance/edit, are the only writers) so the raw entity list is cached whole here - both
+     * {@link #listActive} and {@link #findNearby} reuse this exact cached list rather than
+     * re-querying per request; {@link #findNearby} then filters/sorts by distance in-process
+     * against the cached rows. Every write path that could affect this set ({@link #patchAsAdmin},
+     * {@link #setEnabled}, {@link #createAsAdmin}, ...) evicts the whole {@value #RESTAURANTS_CACHE}
+     * cache rather than trying to surgically patch one entry.
+     */
+    @Transactional(readOnly = true)
+    @Cacheable(cacheNames = RESTAURANTS_CACHE, key = "'active'")
+    public List<Restaurant> cachedActiveRestaurants() {
+        return restaurantRepository.findByIsActiveTrueAndIsAcceptedTrue();
+    }
+
+    /**
+     * Nearby-restaurant search: reuses the cached active-restaurant list (see
+     * {@link #cachedActiveRestaurants}) instead of hitting the DB per request, applies a cheap
+     * bounding-box pre-filter (avoids running the full {@link DistanceCalculator} - potentially a
+     * paid API call under the "google" provider - against restaurants that are obviously out of
+     * range), then computes the exact distance only for the survivors and filters/sorts by it.
+     * Each restaurant's own {@code deliveryRadius} is the range check unless the caller passes an
+     * explicit {@code radiusKm} override.
+     */
+    @Transactional(readOnly = true)
+    public List<RestaurantSummaryResponse> findNearby(String customerLat, String customerLng, BigDecimal radiusKmOverride) {
+        double lat;
+        double lng;
+        try {
+            lat = Double.parseDouble(customerLat);
+            lng = Double.parseDouble(customerLng);
+        } catch (NumberFormatException | NullPointerException e) {
+            throw new BadRequestException("Valid latitude and longitude are required");
+        }
+
+        double maxRadiusKm = radiusKmOverride != null ? radiusKmOverride.doubleValue() : maxKnownDeliveryRadiusKm();
+        double latDeltaDeg = maxRadiusKm / KM_PER_DEGREE_LAT;
+        double lngDeltaDeg = maxRadiusKm / (KM_PER_DEGREE_LAT * Math.max(Math.cos(Math.toRadians(lat)), 0.1));
+
+        return cachedActiveRestaurants().stream()
+                .filter(r -> withinBoundingBox(r, lat, lng, latDeltaDeg, lngDeltaDeg))
+                .map(r -> Map.entry(r, distanceCalculator.distanceKm(r.getLatitude(), r.getLongitude(), customerLat, customerLng)))
+                .filter(entry -> {
+                    BigDecimal effectiveRadius = radiusKmOverride != null ? radiusKmOverride : entry.getKey().getDeliveryRadius();
+                    return effectiveRadius == null || entry.getValue().compareTo(effectiveRadius) <= 0;
+                })
+                .sorted(Comparator.comparing(Map.Entry::getValue))
+                .map(entry -> toSummary(entry.getKey()))
+                .toList();
+    }
+
+    private boolean withinBoundingBox(Restaurant r, double lat, double lng, double latDeltaDeg, double lngDeltaDeg) {
+        try {
+            double rLat = Double.parseDouble(r.getLatitude());
+            double rLng = Double.parseDouble(r.getLongitude());
+            return Math.abs(rLat - lat) <= latDeltaDeg && Math.abs(rLng - lng) <= lngDeltaDeg;
+        } catch (NumberFormatException | NullPointerException e) {
+            return false;
+        }
+    }
+
+    /** Bounding-box sizing fallback for a plain "nearby" search with no explicit radius override - wide enough that no restaurant's own (typically much smaller) delivery radius is pre-filtered away, capped so a bad/missing radius on one row can't blow up the box for everyone. */
+    private double maxKnownDeliveryRadiusKm() {
+        return 30.0;
     }
 
     @Transactional(readOnly = true)
@@ -87,9 +168,13 @@ public class RestaurantService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = RESTAURANTS_CACHE, allEntries = true)
     public RestaurantDetailResponse create(Long ownerUserId, RestaurantCreateRequest request) {
         log.info("Owner {} registering restaurant '{}' (pending acceptance)", ownerUserId, request.name());
-        Restaurant restaurant = restaurantRepository.save(buildRestaurant(request, false));
+        Restaurant restaurant = restaurantRepository.save(buildRestaurant(request, false, false));
+        if (request.categoryIds() != null) {
+            replaceCategoryLinks(restaurant.getId(), request.categoryIds());
+        }
 
         RestaurantUser link = new RestaurantUser();
         link.setUserId(ownerUserId);
@@ -106,14 +191,23 @@ public class RestaurantService {
 
     /** Admin-created restaurants have no self-onboarding owner to link and are accepted immediately, unlike store-owner self-onboarding. */
     @Transactional
+    @CacheEvict(cacheNames = RESTAURANTS_CACHE, allEntries = true)
     public RestaurantDetailResponse createAsAdmin(RestaurantCreateRequest request) {
         log.info("Admin creating restaurant '{}' (accepted immediately)", request.name());
-        Restaurant restaurant = restaurantRepository.save(buildRestaurant(request, true));
+        Restaurant restaurant = restaurantRepository.save(buildRestaurant(request, true, true));
+        if (request.categoryIds() != null) {
+            replaceCategoryLinks(restaurant.getId(), request.categoryIds());
+        }
         log.info("Restaurant {} created by admin", restaurant.getId());
         return toDetail(restaurant);
     }
 
-    private Restaurant buildRestaurant(RestaurantCreateRequest request, boolean isAccepted) {
+    /**
+     * {@code isAdminCreate} gates {@code commissionRate}: {@link #create} (store-owner
+     * self-onboarding) always ignores whatever the request carries there and uses the 10%
+     * default, so a submitted value can never let an owner set their own commission rate.
+     */
+    private Restaurant buildRestaurant(RestaurantCreateRequest request, boolean isAccepted, boolean isAdminCreate) {
         Restaurant restaurant = new Restaurant();
         restaurant.setName(request.name());
         restaurant.setDescription(request.description());
@@ -131,13 +225,17 @@ public class RestaurantService {
         restaurant.setDeliveryRadius(request.deliveryRadius());
         restaurant.setMinOrderPrice(request.minOrderPrice());
         restaurant.setIsAcceptCod(request.isAcceptCod());
+        restaurant.setDeliveryTime(formatDeliveryTime(request.deliveryTime()));
+        if (request.weeklySchedule() != null) {
+            restaurant.setScheduleData(scheduleCodec.validateAndSerialize(request.weeklySchedule()));
+        }
 
         restaurant.setSlug(slugify(request.name()) + "-" + UUID.randomUUID().toString().substring(0, 6));
         restaurant.setSku(UUID.randomUUID().toString().substring(0, 12).toUpperCase());
         restaurant.setIsActive(true);
         restaurant.setIsAccepted(isAccepted);
         restaurant.setIsFeatured(false);
-        restaurant.setCommissionRate(BigDecimal.TEN);
+        restaurant.setCommissionRate(isAdminCreate && request.commissionRate() != null ? request.commissionRate() : BigDecimal.TEN);
         restaurant.setRestaurantCharges(BigDecimal.ZERO);
         restaurant.setDeliveryType(0);
         restaurant.setDeliveryChargeType("FIXED");
@@ -150,6 +248,7 @@ public class RestaurantService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = RESTAURANTS_CACHE, allEntries = true)
     public RestaurantDetailResponse update(Long ownerUserId, Long restaurantId, RestaurantUpdateRequest request) {
         log.info("Owner {} updating restaurant {}", ownerUserId, restaurantId);
         Restaurant restaurant = assertOwnership(ownerUserId, restaurantId);
@@ -179,6 +278,7 @@ public class RestaurantService {
      * recorded via {@link RestaurantAuditLogService}.
      */
     @Transactional
+    @CacheEvict(cacheNames = RESTAURANTS_CACHE, allEntries = true)
     public RestaurantDetailResponse patchAsAdmin(Long callerUserId, Long restaurantId, RestaurantPatchRequest request, Role callerRole) {
         log.info("User {} (role {}) patching restaurant {}", callerUserId, callerRole, restaurantId);
         Restaurant restaurant = findOrThrow(restaurantId);
@@ -201,6 +301,7 @@ public class RestaurantService {
         applyField(restaurant.getId(), "deliveryCharges", restaurant.getDeliveryCharges(), request.deliveryCharges(), isPrivileged, callerUserId, restaurant::setDeliveryCharges);
         applyField(restaurant.getId(), "deliveryRadius", restaurant.getDeliveryRadius(), request.deliveryRadius(), isPrivileged, callerUserId, restaurant::setDeliveryRadius);
         applyField(restaurant.getId(), "minOrderPrice", restaurant.getMinOrderPrice(), request.minOrderPrice(), isPrivileged, callerUserId, restaurant::setMinOrderPrice);
+        applyField(restaurant.getId(), "deliveryTime", parseDeliveryTime(restaurant.getDeliveryTime()), request.deliveryTime(), isPrivileged, callerUserId, v -> restaurant.setDeliveryTime(formatDeliveryTime(v)));
         if (request.deliveryType() != null) {
             applyField(restaurant.getId(), "deliveryType", deliveryTypeLabel(restaurant.getDeliveryType()), request.deliveryType(),
                     isPrivileged, callerUserId, label -> restaurant.setDeliveryType(deliveryTypeCode(label)));
@@ -218,6 +319,13 @@ public class RestaurantService {
         applyField(restaurant.getId(), "isAccepted", restaurant.getIsAccepted(), request.isAccepted(), isPrivileged, callerUserId, restaurant::setIsAccepted);
         applyField(restaurant.getId(), "isFeatured", restaurant.getIsFeatured(), request.isFeatured(), isPrivileged, callerUserId, restaurant::setIsFeatured);
         applyField(restaurant.getId(), "commissionRate", restaurant.getCommissionRate(), request.commissionRate(), isPrivileged, callerUserId, restaurant::setCommissionRate);
+        if (request.weeklySchedule() != null) {
+            String newScheduleJson = scheduleCodec.validateAndSerialize(request.weeklySchedule());
+            applyField(restaurant.getId(), "weeklySchedule", restaurant.getScheduleData(), newScheduleJson, isPrivileged, callerUserId, restaurant::setScheduleData);
+        }
+        if (request.categoryIds() != null) {
+            applyCategoryIds(restaurant.getId(), request.categoryIds(), callerUserId);
+        }
 
         restaurant.setUpdatedAt(LocalDateTime.now());
         restaurantRepository.save(restaurant);
@@ -238,7 +346,63 @@ public class RestaurantService {
         restaurantAuditLogService.record(restaurantId, fieldName, oldValue, newValue, callerUserId);
     }
 
+    /** Diffs against the restaurant's current category links and, if changed, replaces them wholesale + audit-logs the before/after id sets. */
+    private void applyCategoryIds(Long restaurantId, List<Long> newCategoryIds, Long callerUserId) {
+        List<Long> oldCategoryIds = categoryIdsFor(restaurantId);
+        Set<Long> oldSet = Set.copyOf(oldCategoryIds);
+        Set<Long> newSet = Set.copyOf(newCategoryIds);
+        if (oldSet.equals(newSet)) {
+            return;
+        }
+        replaceCategoryLinks(restaurantId, newCategoryIds);
+        restaurantAuditLogService.record(restaurantId, "categoryIds", oldCategoryIds, newCategoryIds, callerUserId);
+    }
+
+    /** Validates every id refers to a real category, then swaps the restaurant's category links for exactly this set. */
+    private void replaceCategoryLinks(Long restaurantId, List<Long> categoryIds) {
+        List<Long> distinctIds = categoryIds.stream().distinct().toList();
+        for (Long categoryId : distinctIds) {
+            if (!restaurantCategoryRepository.existsById(categoryId)) {
+                throw new BadRequestException("categoryIds: no such restaurant category " + categoryId);
+            }
+        }
+        restaurantCategoryRestaurantRepository.deleteAll(restaurantCategoryRestaurantRepository.findByRestaurantId(restaurantId));
+        LocalDateTime now = LocalDateTime.now();
+        List<RestaurantCategoryRestaurant> links = distinctIds.stream().map(categoryId -> {
+            RestaurantCategoryRestaurant link = new RestaurantCategoryRestaurant();
+            link.setRestaurantId(restaurantId);
+            link.setRestaurantCategoryId(categoryId);
+            link.setCreatedAt(now);
+            link.setUpdatedAt(now);
+            return link;
+        }).toList();
+        restaurantCategoryRestaurantRepository.saveAll(links);
+    }
+
+    private List<Long> categoryIdsFor(Long restaurantId) {
+        return restaurantCategoryRestaurantRepository.findByRestaurantId(restaurantId).stream()
+                .map(RestaurantCategoryRestaurant::getRestaurantCategoryId)
+                .toList();
+    }
+
+    /** {@code Restaurant.deliveryTime} is a legacy free-text column - stored as a string, exposed to the API as the minutes it actually holds. */
+    private static Integer parseDeliveryTime(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static String formatDeliveryTime(Integer value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
     @Transactional
+    @CacheEvict(cacheNames = RESTAURANTS_CACHE, allEntries = true)
     public void deleteAsAdmin(Long restaurantId) {
         log.info("Admin deleting restaurant {}", restaurantId);
         restaurantRepository.delete(findOrThrow(restaurantId));
@@ -246,6 +410,7 @@ public class RestaurantService {
 
     /** Replaces the restaurant's single main/cover image (distinct from the gallery - separate owner type, no 5-image cap). */
     @Transactional
+    @CacheEvict(cacheNames = RESTAURANTS_CACHE, allEntries = true)
     public RestaurantImageResponse uploadCoverImage(Long restaurantId, MultipartFile file, Long uploadedBy) {
         log.info("Uploading cover image for restaurant {} by user {}", restaurantId, uploadedBy);
         Restaurant restaurant = findOrThrow(restaurantId);
@@ -285,6 +450,7 @@ public class RestaurantService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = RESTAURANTS_CACHE, allEntries = true)
     public void setEnabled(Long ownerUserId, Long restaurantId, boolean enabled) {
         Restaurant restaurant = assertOwnership(ownerUserId, restaurantId);
         restaurant.setIsActive(enabled);
@@ -296,13 +462,11 @@ public class RestaurantService {
     @Transactional(readOnly = true)
     public DeliveryAreaCheckResponse checkDeliveryArea(Long restaurantId, String latitude, String longitude) {
         Restaurant restaurant = findOrThrow(restaurantId);
-        double distanceKm = haversineKm(
-                Double.parseDouble(restaurant.getLatitude()), Double.parseDouble(restaurant.getLongitude()),
-                Double.parseDouble(latitude), Double.parseDouble(longitude));
+        BigDecimal distanceKm = distanceCalculator.distanceKm(restaurant.getLatitude(), restaurant.getLongitude(), latitude, longitude);
         boolean isOperational = restaurant.getIsActive() && restaurant.getIsAccepted()
-                && distanceKm <= restaurant.getDeliveryRadius().doubleValue();
+                && distanceKm.compareTo(restaurant.getDeliveryRadius()) <= 0;
         log.debug("Delivery area check for restaurant {}: distance {} km, operational {}", restaurantId, distanceKm, isOperational);
-        return new DeliveryAreaCheckResponse(isOperational, distanceKm);
+        return new DeliveryAreaCheckResponse(isOperational, distanceKm.doubleValue());
     }
 
     /** Restaurant ownership is many-to-many via {@code restaurant_user} - an owner may run several restaurants. */
@@ -335,24 +499,13 @@ public class RestaurantService {
                 .collect(java.util.stream.Collectors.toMap(Restaurant::getId, this::toSummary));
     }
 
-    private static double haversineKm(double lat1, double lon1, double lat2, double lon2) {
-        double earthRadiusKm = 6371.0;
-        double dLat = Math.toRadians(lat2 - lat1);
-        double dLon = Math.toRadians(lon2 - lon1);
-        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
-                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
-                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return earthRadiusKm * c;
-    }
-
     private static String slugify(String name) {
         return name.trim().toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", "");
     }
 
     RestaurantSummaryResponse toSummary(Restaurant r) {
         return new RestaurantSummaryResponse(r.getId(), r.getName(), r.getSlug(), mediaUrlResolver.resolve(r.getImage()), r.getRating(),
-                r.getDeliveryTime(), r.getPriceRange(), Boolean.TRUE.equals(r.getIsPureveg()),
+                parseDeliveryTime(r.getDeliveryTime()), r.getPriceRange(), Boolean.TRUE.equals(r.getIsPureveg()),
                 Boolean.TRUE.equals(r.getIsActive()), Boolean.TRUE.equals(r.getIsAccepted()),
                 r.getMinOrderPrice(), r.getDeliveryCharges(),
                 r.getOpeningTime(), r.getClosingTime(), Boolean.TRUE.equals(r.getIsFeatured()));
@@ -361,14 +514,15 @@ public class RestaurantService {
     private RestaurantDetailResponse toDetail(Restaurant r) {
         return new RestaurantDetailResponse(r.getId(), r.getName(), r.getDescription(), r.getSlug(),
                 r.getContactNumber(), r.getOpeningTime(), r.getClosingTime(), mediaUrlResolver.resolve(r.getImage()), r.getRating(),
-                r.getDeliveryTime(), r.getPriceRange(), Boolean.TRUE.equals(r.getIsPureveg()), r.getAddress(),
+                parseDeliveryTime(r.getDeliveryTime()), r.getPriceRange(), Boolean.TRUE.equals(r.getIsPureveg()), r.getAddress(),
                 r.getPincode(), r.getLandmark(), r.getCertificate(), r.getLocationId(), r.getLatitude(), r.getLongitude(), r.getRestaurantCharges(),
                 r.getDeliveryCharges(), r.getDeliveryRadius(), r.getMinOrderPrice(), deliveryTypeLabel(r.getDeliveryType()),
                 r.getDeliveryChargeType(), r.getBaseDeliveryCharge(), r.getBaseDeliveryDistance(),
                 r.getExtraDeliveryCharge(), r.getExtraDeliveryDistance(), Boolean.TRUE.equals(r.getIsSchedulable()),
                 Boolean.TRUE.equals(r.getIsNotifiable()), Boolean.TRUE.equals(r.getIsActive()), Boolean.TRUE.equals(r.getIsAccepted()),
                 Boolean.TRUE.equals(r.getIsFeatured()), Boolean.TRUE.equals(r.getIsAcceptCod()),
-                Boolean.TRUE.equals(r.getAutoAcceptable()));
+                Boolean.TRUE.equals(r.getAutoAcceptable()), r.getCommissionRate(),
+                scheduleCodec.deserialize(r.getScheduleData()), categoryIdsFor(r.getId()));
     }
 
     private static final Map<String, Integer> DELIVERY_TYPE_TO_INT = Map.of("self-pickup", 0, "delivery", 1, "both", 2);

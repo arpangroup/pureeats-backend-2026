@@ -87,6 +87,10 @@ security:
     max-resends: ${OTP_MAX_RESENDS:3}
     max-requests-per-destination-per-hour: ${OTP_MAX_REQUESTS_PER_DESTINATION_PER_HOUR:10}
     max-requests-per-ip-per-hour: ${OTP_MAX_REQUESTS_PER_IP_PER_HOUR:20}
+    # How long the login-challenge request waits for the real EMAIL/SMS send result before responding
+    # optimistically and letting delivery finish on the notification module's async pool - see
+    # AuthenticationService#awaitPrimaryChannel. Keeps a slow SMTP relay from slowing down login.
+    send-timeout-ms: ${OTP_SEND_TIMEOUT_MS:2000}
   session:
     access-token-expiry-minutes: ${ACCESS_TOKEN_EXPIRY_MINUTES:15}
     refresh-token-expiry-days: ${REFRESH_TOKEN_EXPIRY_DAYS:30}
@@ -114,6 +118,14 @@ notification:
   sms-provider: ${NOTIFICATION_SMS_PROVIDER:console}  # console, smtp
   from-address: ${NOTIFICATION_FROM_ADDRESS:no-reply@pureeats.local}
   from-name: ${NOTIFICATION_FROM_NAME:PureEats}
+  # Background pool every NotificationService#sendAsync/#sendToChannelsAsync call runs on - kept
+  # separate from Tomcat's request threads so a slow SMTP/SMS/push provider never adds to request latency.
+  async:
+    core-pool-size: ${NOTIFICATION_ASYNC_CORE_POOL_SIZE:4}
+    max-pool-size: ${NOTIFICATION_ASYNC_MAX_POOL_SIZE:16}
+    queue-capacity: ${NOTIFICATION_ASYNC_QUEUE_CAPACITY:200}
+    # On shutdown, give in-flight sends this long to finish rather than killing them mid-SMTP-call.
+    await-termination-seconds: ${NOTIFICATION_ASYNC_AWAIT_TERMINATION_SECONDS:20}
 
 springdoc:
   swagger-ui:

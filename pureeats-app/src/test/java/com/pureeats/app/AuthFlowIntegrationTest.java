@@ -48,7 +48,7 @@ class AuthFlowIntegrationTest {
 
     @Test
     void signupThenVerifyIssuesAccessAndRefreshTokens() throws Exception {
-        when(notificationService.send(any())).thenReturn(NotificationResult.success("mock-1"));
+        when(notificationService.sendAsync(any())).thenReturn(java.util.concurrent.CompletableFuture.completedFuture(NotificationResult.success("mock-1")));
 
         MvcResult signupResult = mockMvc.perform(post("/api/v1/auth/register")
                         .contentType("application/json")
@@ -107,7 +107,7 @@ class AuthFlowIntegrationTest {
 
     @Test
     void wrongOtpReportsAttemptsRemainingThenLocksAfterMaxAttempts() throws Exception {
-        when(notificationService.send(any())).thenReturn(NotificationResult.success("mock-2"));
+        when(notificationService.sendAsync(any())).thenReturn(java.util.concurrent.CompletableFuture.completedFuture(NotificationResult.success("mock-2")));
 
         MvcResult initiateResult = mockMvc.perform(post("/api/v1/auth/otp/send")
                         .contentType("application/json")
@@ -141,7 +141,7 @@ class AuthFlowIntegrationTest {
 
     @Test
     void resendIssuesAWorkingReplacementOtpAndInvalidatesThePrevious() throws Exception {
-        when(notificationService.send(any())).thenReturn(NotificationResult.success("mock-3"));
+        when(notificationService.sendAsync(any())).thenReturn(java.util.concurrent.CompletableFuture.completedFuture(NotificationResult.success("mock-3")));
 
         MvcResult initiateResult = mockMvc.perform(post("/api/v1/auth/otp/send")
                         .contentType("application/json")
@@ -154,7 +154,7 @@ class AuthFlowIntegrationTest {
         String firstOtp = capturedOtp();
 
         reset(notificationService);
-        when(notificationService.send(any())).thenReturn(NotificationResult.success("mock-4"));
+        when(notificationService.sendAsync(any())).thenReturn(java.util.concurrent.CompletableFuture.completedFuture(NotificationResult.success("mock-4")));
 
         mockMvc.perform(post("/api/v1/auth/otp/resend")
                         .contentType("application/json")
@@ -178,7 +178,7 @@ class AuthFlowIntegrationTest {
 
     private String capturedOtp() {
         ArgumentCaptor<NotificationRequest> captor = ArgumentCaptor.forClass(NotificationRequest.class);
-        org.mockito.Mockito.verify(notificationService, org.mockito.Mockito.atLeastOnce()).send(captor.capture());
+        org.mockito.Mockito.verify(notificationService, org.mockito.Mockito.atLeastOnce()).sendAsync(captor.capture());
         return String.valueOf(captor.getValue().params().get("otp"));
     }
 

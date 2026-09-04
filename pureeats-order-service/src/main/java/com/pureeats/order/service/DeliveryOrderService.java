@@ -6,7 +6,7 @@ import com.pureeats.domain.common.exception.ResourceNotFoundException;
 import com.pureeats.domain.entity.*;
 import com.pureeats.domain.enums.CommissionBasis;
 import com.pureeats.domain.enums.OrderStatusCode;
-import com.pureeats.notification.service.NotificationDispatchService;
+import com.pureeats.notification.enums.NotificationRecipientRole;
 import com.pureeats.order.dto.*;
 import com.pureeats.order.repository.*;
 import com.pureeats.user.repository.DeliveryGuyDetailRepository;
@@ -37,7 +37,7 @@ public class DeliveryOrderService {
     private final DeliveryCollectionLogRepository deliveryCollectionLogRepository;
     private final RestaurantPayoutService restaurantPayoutService;
     private final WalletService walletService;
-    private final NotificationDispatchService notificationDispatchService;
+    private final OrderNotificationService orderNotificationService;
     private final UserRepository userRepository;
     private final DeliveryGuyDetailRepository deliveryGuyDetailRepository;
     private final OrderStatusLogService orderStatusLogService;
@@ -89,8 +89,8 @@ public class DeliveryOrderService {
         orderStatusLogService.record(order.getId(), from, OrderStatusCode.RIDER_ASSIGNED, "DELIVERY", riderUserId, null);
         log.info("Order {} transitioned {} -> RIDER_ASSIGNED (rider {} self-accepted)", orderId, from, riderUserId);
 
-        notificationDispatchService.notifyUser(order.getUserId().longValue(), "Rider assigned",
-                "A delivery partner has been assigned to order #" + order.getUniqueOrderId(), "ORDER_UPDATE");
+        orderNotificationService.notify(NotificationRecipientRole.CUSTOMER, order.getUserId().longValue(), "Rider assigned",
+                "A delivery partner has been assigned to order #" + order.getUniqueOrderId());
         return orderService.toResponse(order);
     }
 
@@ -119,10 +119,10 @@ public class DeliveryOrderService {
         orderStatusLogService.record(order.getId(), from, OrderStatusCode.RIDER_ASSIGNED, "ADMIN", adminUserId, "Driver assigned by admin");
         log.info("Order {} transitioned {} -> RIDER_ASSIGNED (rider {} assigned by admin {})", orderId, from, riderUserId, adminUserId);
 
-        notificationDispatchService.notifyUser(order.getUserId().longValue(), "Rider assigned",
-                "A delivery partner has been assigned to order #" + order.getUniqueOrderId(), "ORDER_UPDATE");
-        notificationDispatchService.notifyUser(riderUserId, "New delivery assigned",
-                "You've been assigned to deliver order #" + order.getUniqueOrderId(), "ORDER_UPDATE");
+        orderNotificationService.notify(NotificationRecipientRole.CUSTOMER, order.getUserId().longValue(), "Rider assigned",
+                "A delivery partner has been assigned to order #" + order.getUniqueOrderId());
+        orderNotificationService.notify(NotificationRecipientRole.DELIVERY_PARTNER, riderUserId, "New delivery assigned",
+                "You've been assigned to deliver order #" + order.getUniqueOrderId());
         return orderService.toResponse(order);
     }
 
@@ -184,8 +184,8 @@ public class DeliveryOrderService {
             log.debug("Order {} delivered with no rider assignment on record (likely self-pickup)", order.getId());
         }
 
-        notificationDispatchService.notifyUser(order.getUserId().longValue(), "Order delivered",
-                "Your order #" + order.getUniqueOrderId() + " has been delivered. Enjoy your meal!", "ORDER_UPDATE");
+        orderNotificationService.notify(NotificationRecipientRole.CUSTOMER, order.getUserId().longValue(), "Order delivered",
+                "Your order #" + order.getUniqueOrderId() + " has been delivered. Enjoy your meal!");
         return orderService.toResponse(order);
     }
 

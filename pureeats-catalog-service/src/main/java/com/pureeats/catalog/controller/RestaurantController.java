@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Slf4j
@@ -27,6 +28,16 @@ public class RestaurantController {
     @Operation(summary = "List active, accepted restaurants")
     public ApiResponse<List<RestaurantSummaryResponse>> list() {
         return ApiResponse.success(restaurantService.listActive());
+    }
+
+    @GetMapping("/nearby")
+    @Operation(summary = "Find active restaurants within delivery range of a lat/lng, nearest first",
+            description = "Serves off the cached active-restaurant list (see RestaurantService#cachedActiveRestaurants) rather than a fresh DB query per call. "
+                    + "Without radiusKm, each restaurant's own configured delivery radius is the cutoff; with it, that override applies to every restaurant instead.")
+    public ApiResponse<List<RestaurantSummaryResponse>> nearby(@RequestParam String lat, @RequestParam String lng,
+                                                                 @RequestParam(required = false) BigDecimal radiusKm) {
+        log.debug("Finding restaurants near ({}, {}) radiusKm={}", lat, lng, radiusKm);
+        return ApiResponse.success(restaurantService.findNearby(lat, lng, radiusKm));
     }
 
     @GetMapping("/search")

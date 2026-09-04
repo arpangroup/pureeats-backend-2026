@@ -2,6 +2,7 @@ package com.pureeats.catalog.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalTime;
+import java.util.List;
 
 public record RestaurantDetailResponse(
         Long id,
@@ -13,7 +14,7 @@ public record RestaurantDetailResponse(
         LocalTime closingTime,
         String image,
         String rating,
-        String deliveryTime,
+        Integer deliveryTime,
         String priceRange,
         boolean isPureveg,
         String address,
@@ -40,6 +41,9 @@ public record RestaurantDetailResponse(
         boolean isAccepted,
         boolean isFeatured,
         boolean isAcceptCod,
-        boolean autoAcceptable
+        boolean autoAcceptable,
+        BigDecimal commissionRate,
+        List<DayScheduleDto> weeklySchedule,
+        List<Long> categoryIds
 ) {
 }

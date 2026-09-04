@@ -9,7 +9,7 @@ public record RestaurantSummaryResponse(
         String slug,
         String image,
         String rating,
-        String deliveryTime,
+        Integer deliveryTime,
         String priceRange,
         boolean isPureveg,
         boolean isActive,
