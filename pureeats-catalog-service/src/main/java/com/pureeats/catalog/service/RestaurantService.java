@@ -55,6 +55,7 @@ public class RestaurantService {
     private final RestaurantScheduleCodec scheduleCodec;
     private final RestaurantCategoryRestaurantRepository restaurantCategoryRestaurantRepository;
     private final RestaurantCategoryRepository restaurantCategoryRepository;
+    private final RestaurantOpenStatusService openStatusService;
 
     /** Name of the cache backing every {@code @Cacheable} method below - see {@code CacheConfig} in pureeats-app for the (in-memory now, Redis-ready later) {@code CacheManager}. */
     static final String RESTAURANTS_CACHE = "restaurants";
@@ -504,14 +505,18 @@ public class RestaurantService {
     }
 
     RestaurantSummaryResponse toSummary(Restaurant r) {
+        List<DayScheduleDto> weeklySchedule = scheduleCodec.deserialize(r.getScheduleData());
+        RestaurantOpenStatus openStatus = openStatusService.compute(r, weeklySchedule, LocalDateTime.now());
         return new RestaurantSummaryResponse(r.getId(), r.getName(), r.getSlug(), mediaUrlResolver.resolve(r.getImage()), r.getRating(),
                 parseDeliveryTime(r.getDeliveryTime()), r.getPriceRange(), Boolean.TRUE.equals(r.getIsPureveg()),
                 Boolean.TRUE.equals(r.getIsActive()), Boolean.TRUE.equals(r.getIsAccepted()),
                 r.getMinOrderPrice(), r.getDeliveryCharges(),
-                r.getOpeningTime(), r.getClosingTime(), Boolean.TRUE.equals(r.getIsFeatured()));
+                r.getOpeningTime(), r.getClosingTime(), Boolean.TRUE.equals(r.getIsFeatured()), openStatus);
     }
 
     private RestaurantDetailResponse toDetail(Restaurant r) {
+        List<DayScheduleDto> weeklySchedule = scheduleCodec.deserialize(r.getScheduleData());
+        RestaurantOpenStatus openStatus = openStatusService.compute(r, weeklySchedule, LocalDateTime.now());
         return new RestaurantDetailResponse(r.getId(), r.getName(), r.getDescription(), r.getSlug(),
                 r.getContactNumber(), r.getOpeningTime(), r.getClosingTime(), mediaUrlResolver.resolve(r.getImage()), r.getRating(),
                 parseDeliveryTime(r.getDeliveryTime()), r.getPriceRange(), Boolean.TRUE.equals(r.getIsPureveg()), r.getAddress(),
@@ -522,7 +527,7 @@ public class RestaurantService {
                 Boolean.TRUE.equals(r.getIsNotifiable()), Boolean.TRUE.equals(r.getIsActive()), Boolean.TRUE.equals(r.getIsAccepted()),
                 Boolean.TRUE.equals(r.getIsFeatured()), Boolean.TRUE.equals(r.getIsAcceptCod()),
                 Boolean.TRUE.equals(r.getAutoAcceptable()), r.getCommissionRate(),
-                scheduleCodec.deserialize(r.getScheduleData()), categoryIdsFor(r.getId()));
+                weeklySchedule, categoryIdsFor(r.getId()), openStatus);
     }
 
     private static final Map<String, Integer> DELIVERY_TYPE_TO_INT = Map.of("self-pickup", 0, "delivery", 1, "both", 2);

@@ -16,9 +16,16 @@ public record RestaurantSummaryResponse(
         boolean isAccepted,
         BigDecimal minOrderPrice,
         BigDecimal deliveryCharges,
-        /** Needed on card grids (Home/Search/category listing/Top Picks), not just the detail page, so a closed-right-now restaurant can be grayed out everywhere it's shown — see isRestaurantOrderable on the client. */
+        /**
+         * Legacy single-window fields - kept for backward compatibility, but superseded by
+         * {@code openStatus} below for actually deciding open/closed. Never day-aware: derived
+         * client-side from "whichever day comes first in the week", not "today" (see
+         * RESTAURANT_DOMAIN_ARCHITECTURE.md §4-5). Do not use these two to compute open/closed.
+         */
         LocalTime openingTime,
         LocalTime closingTime,
-        boolean isFeatured
+        boolean isFeatured,
+        /** The real-time, day-aware answer — computed server-side from the restaurant's actual weeklySchedule. Use this, not openingTime/closingTime, for any "is it open" / grey-out logic. */
+        RestaurantOpenStatus openStatus
 ) {
 }
