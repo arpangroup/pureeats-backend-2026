@@ -7,7 +7,6 @@ import com.pureeats.domain.entity.Restaurant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -33,7 +32,7 @@ public class RestaurantAvailabilityRule implements CartValidationRule {
             return List.of(CartIssue.restaurantLevel("This restaurant is not accepting orders right now"));
         }
         RestaurantOpenStatus status = openStatusService.compute(
-                restaurant, scheduleCodec.deserialize(restaurant.getScheduleData()), LocalDateTime.now());
+                restaurant, scheduleCodec.deserialize(restaurant.getScheduleData()));
         if (!status.isOpenNow()) {
             String reopens = status.nextOpensAt() == null
                     ? ""

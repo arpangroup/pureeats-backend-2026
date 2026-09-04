@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.List;
@@ -33,10 +34,25 @@ import java.util.stream.Collectors;
 @Component
 public class RestaurantOpenStatusService {
 
+    /**
+     * All restaurant hours/schedules in this app are India-local wall-clock times, regardless of
+     * the server's own deployment/JVM default zone (which may well be UTC). Callers MUST anchor
+     * "now" to this zone rather than {@code LocalDateTime.now()} on the system default - using the
+     * server's default zone silently picks the wrong calendar day for roughly 5.5 hours out of every
+     * 24 (00:00-05:29 IST, while UTC is still on the previous date), which flips the day-of-week
+     * lookup below to yesterday and returns a wrong/stale open-status.
+     */
+    public static final ZoneId RESTAURANT_ZONE = ZoneId.of("Asia/Kolkata");
+
     /** How close to a slot's close time counts as "closing soon". */
     private static final long CLOSING_SOON_MINUTES = 30;
 
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
+
+    /** Convenience overload anchored to {@link #RESTAURANT_ZONE} - prefer this over passing your own {@code now}. */
+    public RestaurantOpenStatus compute(Restaurant restaurant, List<DayScheduleDto> weeklySchedule) {
+        return compute(restaurant, weeklySchedule, LocalDateTime.now(RESTAURANT_ZONE));
+    }
 
     public RestaurantOpenStatus compute(Restaurant restaurant, List<DayScheduleDto> weeklySchedule, LocalDateTime now) {
         if (!Boolean.TRUE.equals(restaurant.getIsActive()) || !Boolean.TRUE.equals(restaurant.getIsAccepted())) {
