@@ -1,6 +1,7 @@
 package com.pureeats.catalog.dto;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 public record ItemResponse(
         Long id,
@@ -15,6 +16,7 @@ public record ItemResponse(
         boolean isPopular,
         boolean isNew,
         boolean isVeg,
-        boolean isActive
+        boolean isActive,
+        List<Long> addonCategoryIds
 ) {
 }

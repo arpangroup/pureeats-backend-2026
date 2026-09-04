@@ -1,0 +1,689 @@
+<meta charset="utf-8">
+<title>Restaurant Domain Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F5F6F1;
+    --surface:#FFFFFF;
+    --surface-2:#EBEEE5;
+    --ink:#181B15;
+    --ink-2:#4B5245;
+    --ink-3:#7A8172;
+    --border:#DCE1D4;
+    --accent:#1F6F5C;
+    --accent-ink:#0E3A30;
+    --accent-soft:#E1F0E9;
+    --warm:#C97A2E;
+    --warm-soft:#FBEEDD;
+    --warm-ink:#7A4413;
+    --code-bg:#EBEEE3;
+    --danger:#A6432A;
+    --danger-soft:#F6E4DD;
+    --good:#2C7A4B;
+    --good-soft:#E4F3E9;
+    --diagram-bg:#101A16;
+    --diagram-surface:#17251F;
+    --diagram-line:#3F8A73;
+    --diagram-ink:#EAF3EE;
+    --diagram-ink-dim:#93A89D;
+    --diagram-accent:#E3A05C;
+    --diagram-danger:#E38A6E;
+    --shadow:0 1px 2px rgba(20,30,20,.04), 0 8px 24px -12px rgba(20,30,20,.12);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0D110E;
+      --surface:#141914;
+      --surface-2:#1B221C;
+      --ink:#E9ECE4;
+      --ink-2:#B7BEAF;
+      --ink-3:#828A7B;
+      --border:#28312A;
+      --accent:#55BFA1;
+      --accent-ink:#C6EEDF;
+      --accent-soft:#152922;
+      --warm:#E3A05C;
+      --warm-soft:#2C2013;
+      --warm-ink:#F2CB9B;
+      --code-bg:#1B221C;
+      --danger:#E38A6E;
+      --danger-soft:#301C15;
+      --good:#7ACB9A;
+      --good-soft:#132A1C;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0D110E;
+    --surface:#141914;
+    --surface-2:#1B221C;
+    --ink:#E9ECE4;
+    --ink-2:#B7BEAF;
+    --ink-3:#828A7B;
+    --border:#28312A;
+    --accent:#55BFA1;
+    --accent-ink:#C6EEDF;
+    --accent-soft:#152922;
+    --warm:#E3A05C;
+    --warm-soft:#2C2013;
+    --warm-ink:#F2CB9B;
+    --code-bg:#1B221C;
+    --danger:#E38A6E;
+    --danger-soft:#301C15;
+    --good:#7ACB9A;
+    --good-soft:#132A1C;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'IBM Plex Sans',-apple-system,'Segoe UI',Roboto,sans-serif;
+    font-size:16px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--accent);}
+  a:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  ::selection{background:var(--accent-soft); color:var(--accent-ink);}
+
+  h1,h2,h3,h4{font-family:'Fraunces',Georgia,'Times New Roman',serif; font-weight:600; text-wrap:balance; color:var(--ink); margin:0;}
+  code, .mono{font-family:'IBM Plex Mono',SFMono-Regular,Consolas,monospace;}
+  code{background:var(--code-bg); padding:.12em .4em; border-radius:4px; font-size:.86em;}
+
+  .shell{max-width:1360px; margin:0 auto; padding:3.2rem 2rem 6rem;}
+  .layout{display:flex; gap:3.2rem; align-items:flex-start;}
+
+  .doc-header{max-width:780px; margin-bottom:3.4rem;}
+  .kicker{font-family:'IBM Plex Mono',monospace; font-size:.78rem; letter-spacing:.11em; text-transform:uppercase; color:var(--accent); font-weight:600; margin-bottom:.9rem; display:flex; gap:.6rem; align-items:center;}
+  .kicker::before{content:""; width:1.6rem; height:1px; background:var(--accent);}
+  h1.title{font-size:clamp(2.3rem,4.4vw,3.1rem); line-height:1.08; letter-spacing:-.01em;}
+  .lead{font-size:1.12rem; color:var(--ink-2); margin-top:1.1rem; max-width:68ch;}
+  .meta-row{display:flex; flex-wrap:wrap; gap:1.6rem; margin-top:1.6rem; padding-top:1.4rem; border-top:1px solid var(--border);}
+  .meta-item{font-size:.82rem;}
+  .meta-item .k{color:var(--ink-3); text-transform:uppercase; letter-spacing:.07em; font-size:.7rem; display:block; margin-bottom:.2rem;}
+
+  .legend{display:flex; gap:1.4rem; flex-wrap:wrap; margin-top:1.4rem;}
+  .legend-item{display:flex; align-items:center; gap:.5rem; font-size:.82rem; color:var(--ink-2);}
+  .swatch{width:1.1rem; height:.6rem; border-radius:2px; flex:none;}
+  .swatch.live{background:var(--diagram-line);}
+  .swatch.gap{background:transparent; border:1.5px dashed var(--diagram-danger);}
+
+  .status-pill{display:inline-flex; align-items:center; gap:.4em; font-family:'IBM Plex Mono',monospace; font-size:.68rem; letter-spacing:.05em; text-transform:uppercase; font-weight:600; padding:.28em .65em; border-radius:99px; vertical-align:middle;}
+  .status-pill.live{background:var(--accent-soft); color:var(--accent-ink);}
+  .status-pill.gap{background:var(--danger-soft); color:var(--danger);}
+  .status-pill.note{background:var(--surface-2); color:var(--ink-2);}
+
+  .toc{width:236px; flex:none; position:sticky; top:2.4rem; align-self:flex-start;}
+  .toc-title{font-size:.7rem; text-transform:uppercase; letter-spacing:.1em; color:var(--ink-3); margin-bottom:.9rem; font-weight:600;}
+  .toc ol{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.15rem;}
+  .toc li a{display:block; padding:.4rem .6rem; border-radius:6px; color:var(--ink-2); text-decoration:none; font-size:.87rem; border-left:2px solid transparent;}
+  .toc li a:hover{background:var(--surface-2); color:var(--ink);}
+  .toc li.sub a{padding-left:1.3rem; font-size:.81rem; color:var(--ink-3);}
+  .toc-num{font-family:'IBM Plex Mono',monospace; color:var(--ink-3); margin-right:.5em; font-size:.8em;}
+
+  .content{flex:1; min-width:0; max-width:860px;}
+  section.chapter{padding-top:2.6rem; margin-top:2.6rem; border-top:1px solid var(--border);}
+  section.chapter:first-of-type{border-top:none; margin-top:0;}
+  .chapter-head{display:flex; align-items:baseline; gap:.9rem; margin-bottom:.5rem;}
+  .chapter-num{font-family:'IBM Plex Mono',monospace; color:var(--ink-3); font-size:1rem;}
+  h2{font-size:1.6rem;}
+  h3{font-size:1.18rem; margin-top:2rem; margin-bottom:.7rem; display:flex; align-items:center; gap:.6rem; flex-wrap:wrap;}
+  .subhead-note{font-weight:400; font-family:'IBM Plex Sans',sans-serif; font-size:.78rem; color:var(--ink-3);}
+  p{margin:.85rem 0; color:var(--ink-2); max-width:72ch;}
+  p strong{color:var(--ink); font-weight:600;}
+  ul,ol{color:var(--ink-2); padding-left:1.3rem;}
+  li{margin:.35rem 0;}
+  .chapter-dek{color:var(--ink-2); font-size:1.02rem; margin-top:.6rem;}
+
+  .panel{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1.4rem 1.6rem; margin:1.3rem 0; box-shadow:var(--shadow);}
+  .panel.note{background:var(--surface-2); border-color:var(--border);}
+  .panel.gap{background:var(--danger-soft); border-color:var(--danger); color:var(--danger);}
+  .panel.gap p, .panel.gap li{color:var(--warm-ink,inherit); color:#7A4413;}
+  :root[data-theme="dark"] .panel.gap p, :root[data-theme="dark"] .panel.gap li{color:#F2CB9B;}
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .panel.gap p, :root:not([data-theme="light"]) .panel.gap li{color:#F2CB9B;} }
+  .panel.gap h4{font-family:'IBM Plex Sans',sans-serif; font-size:.85rem; text-transform:uppercase; letter-spacing:.06em; margin-bottom:.5rem; color:var(--danger);}
+
+  .diagram-panel{background:var(--diagram-bg); border-radius:12px; padding:1.5rem 1.6rem 1.2rem; margin:1.4rem 0; box-shadow:var(--shadow); overflow-x:auto;}
+  .diagram-panel svg{display:block; width:100%; height:auto; max-width:100%;}
+  figcaption{color:var(--diagram-ink-dim); font-size:.82rem; margin-top:.8rem; padding-top:.8rem; border-top:1px solid rgba(255,255,255,.08); line-height:1.55;}
+  figure{margin:0;}
+
+  .table-wrap{overflow-x:auto; margin:1.3rem 0;}
+  table{border-collapse:collapse; width:100%; font-size:.87rem; min-width:560px;}
+  th,td{text-align:left; padding:.6rem .8rem; border-bottom:1px solid var(--border); vertical-align:top;}
+  th{font-family:'IBM Plex Mono',monospace; font-size:.68rem; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-3); font-weight:600; background:var(--surface-2);}
+  td{color:var(--ink-2);}
+  td code{white-space:nowrap;}
+  tr:last-child td{border-bottom:none;}
+
+  .code-block{font-family:'IBM Plex Mono',monospace; background:var(--diagram-bg); color:var(--diagram-ink); border-radius:10px; padding:1.1rem 1.4rem; font-size:.86rem; margin:1.2rem 0; overflow-x:auto; line-height:1.65; white-space:pre;}
+  .code-block .cm{color:var(--diagram-ink-dim);}
+  .code-block .kw{color:var(--diagram-accent);}
+  .code-block .fn{color:var(--diagram-line);}
+
+  footer{max-width:860px; margin-left:auto; margin-right:auto; padding-top:2.4rem; margin-top:3rem; border-top:1px solid var(--border); color:var(--ink-3); font-size:.85rem;}
+
+  details.toc-mobile{display:none;}
+  @media (max-width:980px){
+    .layout{flex-direction:column;}
+    .toc{display:none;}
+    details.toc-mobile{display:block; margin-bottom:2rem; border:1px solid var(--border); border-radius:10px; background:var(--surface);}
+    details.toc-mobile summary{padding:.9rem 1.1rem; font-family:'IBM Plex Mono',monospace; font-size:.75rem; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-2); cursor:pointer;}
+    details.toc-mobile ol{list-style:none; margin:0; padding:0 1.1rem 1rem;}
+    details.toc-mobile li a{display:block; padding:.3rem 0; color:var(--ink-2); text-decoration:none; font-size:.87rem;}
+    .content{max-width:100%;}
+  }
+  @media (prefers-reduced-motion:no-preference){
+    a, .toc li a{transition:background .12s ease, color .12s ease;}
+  }
+</style>
+
+<div class="shell">
+
+  <div class="doc-header">
+    <div class="kicker">PureEats Backend &middot; Domain Reference</div>
+    <h1 class="title">Restaurant Domain Architecture</h1>
+    <p class="lead">How a <code>Restaurant</code> row connects to categories, items, addons, coupons, location, owner, media and its audit trail — and, in detail, how opening hours are stored versus how "open now" is actually decided today.</p>
+    <div class="meta-row">
+      <div class="meta-item"><span class="k">Scope</span>Catalog, Order &amp; User services</div>
+      <div class="meta-item"><span class="k">Status</span>Descriptive — documents the codebase as it stands</div>
+      <div class="meta-item"><span class="k">Reads against</span><code>main</code>, multi&#8209;module Maven / Spring Boot 4.1</div>
+      <div class="meta-item"><span class="k">See also</span><a href="RESTAURANT_DOMAIN_ARCHITECTURE.md">.md version</a></div>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="status-pill live">Implemented</span> exists and runs today</div>
+      <div class="legend-item"><span class="status-pill gap">Gap</span> data exists but nothing reads it where you'd expect</div>
+    </div>
+  </div>
+
+  <details class="toc-mobile">
+    <summary>Contents</summary>
+    <ol>
+      <li><a href="#overview"><span class="toc-num">01</span>System at a glance</a></li>
+      <li><a href="#table"><span class="toc-num">02</span>The restaurants table</a></li>
+      <li><a href="#relations"><span class="toc-num">03</span>How it connects to everything</a></li>
+      <li><a href="#hours"><span class="toc-num">04</span>How opening hours are stored</a></li>
+      <li><a href="#decision"><span class="toc-num">05</span>How open/closed is decided</a></li>
+      <li><a href="#classes"><span class="toc-num">06</span>Class diagram</a></li>
+    </ol>
+  </details>
+
+  <div class="layout">
+    <nav class="toc">
+      <div class="toc-title">Contents</div>
+      <ol>
+        <li><a href="#overview"><span class="toc-num">01</span>System at a glance</a></li>
+        <li><a href="#table"><span class="toc-num">02</span>The restaurants table</a></li>
+        <li><a href="#relations"><span class="toc-num">03</span>How it connects to everything</a></li>
+        <li class="sub"><a href="#loc-detail">Serviceable location, in detail</a></li>
+        <li><a href="#hours"><span class="toc-num">04</span>How opening hours are stored</a></li>
+        <li><a href="#decision"><span class="toc-num">05</span>How open/closed is decided</a></li>
+        <li class="sub"><a href="#decision-fix">If this gets fixed later</a></li>
+        <li><a href="#classes"><span class="toc-num">06</span>Class diagram</a></li>
+      </ol>
+    </nav>
+
+    <main class="content">
+
+      <!-- 01 OVERVIEW -->
+      <section class="chapter" id="overview">
+        <div class="chapter-head"><span class="chapter-num">01</span><h2>System at a glance</h2></div>
+        <p class="chapter-dek">A <strong>modular monolith</strong> — several Maven modules, one deployable Spring Boot process on one port — behind two separate React SPAs that both talk to it over REST.</p>
+
+        <div class="diagram-panel">
+          <figure>
+            <svg viewBox="0 0 900 430" role="img" aria-label="Admin panel and customer app both call pureeats-app over REST. Inside pureeats-app, catalog-service, order-service, user-service and media-service modules all depend on the shared domain module, which persists to one MySQL/MariaDB schema.">
+              <defs>
+                <marker id="a2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 z" fill="var(--diagram-line)"/>
+                </marker>
+              </defs>
+
+              <rect x="60" y="16" width="220" height="54" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="170" y="38" text-anchor="middle" fill="var(--diagram-ink)" font-size="13" font-weight="600">Admin Panel</text>
+              <text x="170" y="55" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10">pureeats-admin-react-app</text>
+
+              <rect x="620" y="16" width="220" height="54" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="730" y="38" text-anchor="middle" fill="var(--diagram-ink)" font-size="13" font-weight="600">Customer App</text>
+              <text x="730" y="55" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10">pureeats-customer-react-app</text>
+
+              <line x1="170" y1="70" x2="170" y2="112" stroke="var(--diagram-line)" marker-end="url(#a2)"/>
+              <line x1="730" y1="70" x2="730" y2="112" stroke="var(--diagram-line)" marker-end="url(#a2)"/>
+              <text x="170" y="94" text-anchor="middle" font-size="9.5" fill="var(--diagram-ink-dim)">REST + JWT</text>
+              <text x="730" y="94" text-anchor="middle" font-size="9.5" fill="var(--diagram-ink-dim)">REST + JWT</text>
+
+              <rect x="30" y="114" width="840" height="230" rx="12" fill="none" stroke="var(--diagram-ink-dim)" stroke-dasharray="4 4"/>
+              <text x="450" y="136" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="11" letter-spacing="0.04em">pureeats-app — one Spring Boot process, one port (:8081)</text>
+
+              <rect x="60" y="152" width="180" height="62" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="150" y="176" text-anchor="middle" fill="var(--diagram-ink)" font-size="12" font-weight="600">catalog-service</text>
+              <text x="150" y="192" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5">restaurants, menu, categories</text>
+
+              <rect x="260" y="152" width="180" height="62" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="350" y="176" text-anchor="middle" fill="var(--diagram-ink)" font-size="12" font-weight="600">order-service</text>
+              <text x="350" y="192" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5">cart validation, pricing</text>
+
+              <rect x="460" y="152" width="180" height="62" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="550" y="176" text-anchor="middle" fill="var(--diagram-ink)" font-size="12" font-weight="600">user-service</text>
+              <text x="550" y="192" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5">auth, roles</text>
+
+              <rect x="660" y="152" width="180" height="62" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="750" y="176" text-anchor="middle" fill="var(--diagram-ink)" font-size="12" font-weight="600">media-service</text>
+              <text x="750" y="192" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5">uploads (media_assets)</text>
+
+              <line x1="150" y1="214" x2="230" y2="256" stroke="var(--diagram-line)"/>
+              <line x1="350" y1="214" x2="330" y2="256" stroke="var(--diagram-line)"/>
+              <line x1="550" y1="214" x2="500" y2="256" stroke="var(--diagram-line)"/>
+              <line x1="750" y1="214" x2="600" y2="256" stroke="var(--diagram-line)"/>
+
+              <rect x="80" y="258" width="720" height="50" rx="8" fill="var(--diagram-bg)" stroke="var(--diagram-line)" stroke-width="1.3"/>
+              <text x="440" y="278" text-anchor="middle" fill="var(--diagram-ink)" font-size="12" font-weight="600">domain — shared JPA entities</text>
+              <text x="440" y="296" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5">Restaurant, Item, ItemCategory, Coupon, RestaurantCategory, Location, RestaurantUser, ...</text>
+
+              <line x1="440" y1="308" x2="440" y2="336" stroke="var(--diagram-line)" marker-end="url(#a2)"/>
+
+              <rect x="290" y="338" width="300" height="42" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-width="1.3"/>
+              <text x="440" y="364" text-anchor="middle" fill="var(--diagram-ink)" font-size="12">MySQL / MariaDB — one shared schema</text>
+
+              <text x="450" y="410" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5">pureeats-catalog-service also owns two entities local to itself, not in "domain":</text>
+              <text x="450" y="424" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5">RestaurantCategoryRestaurant (the category join table) and RestaurantAuditLog</text>
+            </svg>
+          </figure>
+          <figcaption><span class="status-pill live">Implemented</span> — despite the "-service" naming, this is not network-separated microservices: one JVM, one deployable JAR, one database. The module split is a compile-time boundary only.</figcaption>
+        </div>
+      </section>
+
+      <!-- 02 TABLE -->
+      <section class="chapter" id="table">
+        <div class="chapter-head"><span class="chapter-num">02</span><h2>The <code>restaurants</code> table</h2></div>
+        <p class="chapter-dek"><code>domain/entity/Restaurant.java</code> — every relationship in this doc hangs off this one row. Grouped by purpose below (not the literal column order in the file).</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Group</th><th>Columns</th></tr></thead>
+            <tbody>
+              <tr><td>Identity</td><td><code>id</code>, <code>name</code>, <code>slug</code>, <code>sku</code>, <code>description</code>, <code>contact_number</code>, <code>certificate</code></td></tr>
+              <tr><td>Status</td><td><code>is_active</code>, <code>is_accepted</code>, <code>is_featured</code>, <code>auto_acceptable</code>, <code>is_schedulable</code>, <code>is_notifiable</code></td></tr>
+              <tr><td>Geo location</td><td><code>latitude</code>, <code>longitude</code> (both <code>String</code>), <code>address</code>, <code>pincode</code>, <code>landmark</code></td></tr>
+              <tr><td>Location tag</td><td><code>location_id</code> — <strong>not</strong> a foreign key, see §3</td></tr>
+              <tr><td>Hours (legacy)</td><td><code>opening_time</code>, <code>closing_time</code> — one daily window, see §4</td></tr>
+              <tr><td>Hours (current)</td><td><code>schedule_data</code> — JSON blob, the real weekly multi-slot schedule, see §4</td></tr>
+              <tr><td>Pricing</td><td><code>restaurant_charges</code>, <code>delivery_charges</code>, <code>commission_rate</code>, <code>min_order_price</code></td></tr>
+              <tr><td>Delivery</td><td><code>delivery_type</code> (0/1/2 → self-pickup/delivery/both), <code>delivery_radius</code>, <code>delivery_charge_type</code>, <code>base_delivery_charge</code>, <code>base_delivery_distance</code>, <code>extra_delivery_charge</code>, <code>extra_delivery_distance</code>, <code>delivery_time</code> (<code>String</code>, minutes)</td></tr>
+              <tr><td>Media</td><td><code>image</code>, <code>placeholder_image</code> — gallery images live in <code>media_assets</code>, not on this row</td></tr>
+              <tr><td>Misc</td><td><code>is_accept_cod</code>, <code>rating</code>, <code>price_range</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Nothing on this row is a JPA <code>@ManyToOne</code>/<code>@OneToMany</code> — every relationship in this codebase is a plain id column plus a hand-written repository query. That's a consistent style choice across the whole domain model, not specific to <code>Restaurant</code>.</p>
+      </section>
+
+      <!-- 03 RELATIONS -->
+      <section class="chapter" id="relations">
+        <div class="chapter-head"><span class="chapter-num">03</span><h2>How it connects to everything</h2></div>
+        <p class="chapter-dek">Ten relationships, three different shapes: direct FK-style id columns, join tables, and one polymorphic owner-type table shared by every uploadable entity in the app.</p>
+
+        <div class="diagram-panel">
+          <figure>
+            <svg viewBox="0 0 980 740" role="img" aria-label="Entity relationship diagram centered on Restaurant, connecting to RestaurantCategory via a join table, to User via the restaurant_user join table, to Item which itself connects to ItemCategory and, via AddonCategoryItem, to AddonCategory and Addon, to Coupon with a nullable restaurant id, to MediaAsset via polymorphic owner type and id, to RestaurantAuditLog, and loosely, with no foreign key, to Location.">
+              <defs>
+                <marker id="a3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 z" fill="var(--diagram-line)"/>
+                </marker>
+                <marker id="a3d" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 z" fill="var(--diagram-danger)"/>
+                </marker>
+              </defs>
+
+              <!-- Restaurant, center -->
+              <rect x="390" y="330" width="200" height="64" rx="10" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-width="1.8"/>
+              <text x="490" y="358" text-anchor="middle" fill="var(--diagram-ink)" font-size="14" font-weight="600">Restaurant</text>
+              <text x="490" y="376" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5">restaurants</text>
+
+              <!-- Owner: User <- restaurant_user -->
+              <rect x="30" y="40" width="170" height="46" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="115" y="68" text-anchor="middle" fill="var(--diagram-ink)" font-size="11.5">User (owner)</text>
+
+              <rect x="30" y="130" width="170" height="46" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="115" y="152" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5">restaurant_user</text>
+              <text x="115" y="166" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">join · user_id, restaurant_id</text>
+
+              <line x1="115" y1="86" x2="115" y2="130" stroke="var(--diagram-line)" marker-end="url(#a3)"/>
+              <path d="M390,355 C260,340 200,240 130,176" fill="none" stroke="var(--diagram-line)" marker-end="url(#a3)"/>
+              <text x="200" y="270" font-size="9.5" fill="var(--diagram-ink-dim)">many-to-many</text>
+
+              <!-- Cuisine: RestaurantCategory <- join -->
+              <rect x="780" y="40" width="170" height="46" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="865" y="68" text-anchor="middle" fill="var(--diagram-ink)" font-size="11.5">RestaurantCategory</text>
+
+              <rect x="780" y="130" width="170" height="46" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="865" y="150" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5">restaurant_category_</text>
+              <text x="865" y="163" text-anchor="middle" fill="var(--diagram-ink)" font-size="9.5">restaurant (join)</text>
+
+              <line x1="865" y1="86" x2="865" y2="130" stroke="var(--diagram-line)" marker-end="url(#a3)"/>
+              <path d="M590,355 C720,340 800,240 855,176" fill="none" stroke="var(--diagram-line)" marker-end="url(#a3)"/>
+              <text x="770" y="270" font-size="9.5" fill="var(--diagram-ink-dim)">many-to-many</text>
+
+              <!-- Item chain, left -->
+              <rect x="70" y="330" width="160" height="46" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="150" y="352" text-anchor="middle" fill="var(--diagram-ink)" font-size="11.5">Item</text>
+              <text x="150" y="366" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">restaurant_id</text>
+              <line x1="390" y1="358" x2="230" y2="352" stroke="var(--diagram-line)" marker-end="url(#a3)"/>
+              <text x="310" y="345" font-size="9.5" fill="var(--diagram-ink-dim)">one-to-many</text>
+
+              <rect x="70" y="410" width="160" height="46" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-ink-dim)" stroke-dasharray="3 3"/>
+              <text x="150" y="430" text-anchor="middle" fill="var(--diagram-ink)" font-size="11">ItemCategory</text>
+              <text x="150" y="444" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8.5">global, not restaurant-scoped</text>
+              <line x1="150" y1="376" x2="150" y2="410" stroke="var(--diagram-line)" marker-end="url(#a3)"/>
+
+              <rect x="70" y="490" width="160" height="46" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="150" y="508" text-anchor="middle" fill="var(--diagram-ink)" font-size="10">AddonCategoryItem</text>
+              <text x="150" y="522" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8.5">join · item_id, addon_category_id</text>
+              <line x1="150" y1="490" x2="150" y2="456" stroke="var(--diagram-line)" marker-start="url(#a3)"/>
+
+              <rect x="70" y="570" width="160" height="46" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="150" y="592" text-anchor="middle" fill="var(--diagram-ink)" font-size="11.5">AddonCategory</text>
+              <line x1="150" y1="536" x2="150" y2="570" stroke="var(--diagram-line)" marker-end="url(#a3)"/>
+
+              <rect x="70" y="650" width="160" height="46" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="150" y="672" text-anchor="middle" fill="var(--diagram-ink)" font-size="11.5">Addon</text>
+              <line x1="150" y1="616" x2="150" y2="650" stroke="var(--diagram-line)" marker-end="url(#a3)"/>
+
+              <!-- Right column -->
+              <rect x="750" y="330" width="200" height="46" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="850" y="348" text-anchor="middle" fill="var(--diagram-ink)" font-size="11">Coupon</text>
+              <text x="850" y="362" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8.5">restaurant_id NULLABLE</text>
+              <line x1="590" y1="350" x2="750" y2="350" stroke="var(--diagram-line)" stroke-dasharray="4 3" marker-end="url(#a3)"/>
+              <text x="670" y="342" font-size="9" fill="var(--diagram-ink-dim)">optional</text>
+
+              <rect x="750" y="410" width="200" height="52" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="850" y="430" text-anchor="middle" fill="var(--diagram-ink)" font-size="11">MediaAsset</text>
+              <text x="850" y="444" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8.5">owner_type/owner_id (poly)</text>
+              <path d="M590,378 C700,390 740,400 800,410" fill="none" stroke="var(--diagram-line)" marker-end="url(#a3)"/>
+
+              <rect x="750" y="500" width="200" height="46" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="850" y="518" text-anchor="middle" fill="var(--diagram-ink)" font-size="11">RestaurantAuditLog</text>
+              <text x="850" y="532" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="8.5">field-level change trail</text>
+              <path d="M590,388 C700,430 730,470 800,500" fill="none" stroke="var(--diagram-line)" marker-end="url(#a3)"/>
+
+              <!-- Location, dashed/gap -->
+              <rect x="390" y="600" width="200" height="56" rx="8" fill="var(--diagram-bg)" stroke="var(--diagram-danger)" stroke-dasharray="4 3" stroke-width="1.4"/>
+              <text x="490" y="622" text-anchor="middle" fill="var(--diagram-ink)" font-size="11.5">Location</text>
+              <text x="490" y="638" text-anchor="middle" fill="var(--diagram-danger)" font-size="9">no FK · unused elsewhere</text>
+              <line x1="490" y1="394" x2="490" y2="600" stroke="var(--diagram-danger)" stroke-dasharray="4 3" marker-end="url(#a3d)"/>
+              <text x="560" y="500" font-size="9.5" fill="var(--diagram-danger)">location_id (String)</text>
+
+              <rect x="330" y="690" width="320" height="34" rx="8" fill="none" stroke="var(--diagram-ink-dim)" stroke-dasharray="2 3"/>
+              <text x="490" y="711" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">+ DeliveryGuyRestaurant, RestaurantEarning, RestaurantPayout (financial/ops, not shown)</text>
+            </svg>
+          </figure>
+          <figcaption><span class="status-pill live">Implemented</span> solid green lines · <span class="status-pill gap">Gap</span> dashed amber line to <code>Location</code> — stored, but not a real foreign key and not read anywhere else in the backend or either frontend.</figcaption>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Related to</th><th>Mechanism</th><th>Cardinality</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td><code>RestaurantCategory</code></td><td><code>restaurant_category_restaurant</code> join</td><td>many-to-many</td><td>Written by <code>RestaurantService.replaceCategoryLinks()</code>; read by <code>restaurantsInCategory()</code> — the "tap a cuisine chip" endpoint.</td></tr>
+              <tr><td><code>Item</code></td><td><code>Item.restaurantId</code></td><td>one-to-many</td><td>A restaurant's menu = items filtered by this column.</td></tr>
+              <tr><td><code>ItemCategory</code></td><td><code>Item.itemCategoryId</code></td><td>many-to-one, indirect</td><td>Global taxonomy shared by every restaurant — <code>ItemCategory</code> has no <code>restaurant_id</code> at all.</td></tr>
+              <tr><td><code>AddonCategory</code> / <code>Addon</code></td><td><code>AddonCategoryItem</code> join (on <code>item_id</code>)</td><td>many-to-many, one hop from Restaurant</td><td>Addons attach to items, not restaurants: <code>Restaurant → Item → AddonCategoryItem → AddonCategory → Addon</code>.</td></tr>
+              <tr><td><code>MediaAsset</code></td><td>polymorphic <code>owner_type</code>/<code>owner_id</code></td><td>one-to-many</td><td>Generic upload table shared by every entity that can hold a file; max 5 gallery images enforced in code, not the schema.</td></tr>
+              <tr><td><code>Location</code></td><td><code>Restaurant.locationId</code> (<code>String</code>)</td><td>loose tag, no FK</td><td>See below.</td></tr>
+              <tr><td>Owning <code>User</code></td><td><code>restaurant_user</code> join</td><td>many-to-many</td><td>An owner can run several restaurants; admin-created restaurants have no row here.</td></tr>
+              <tr><td><code>Coupon</code></td><td><code>Coupon.restaurantId</code> (nullable)</td><td>many-to-one, optional</td><td><code>NULL</code> = platform-wide; set = one restaurant's own coupon.</td></tr>
+              <tr><td><code>RestaurantAuditLog</code></td><td><code>restaurant_id</code> on the log row</td><td>one-to-many</td><td>Written by <code>applyField()</code>/<code>applyCategoryIds()</code> on every admin patch. Lives in catalog-service's own entity package, not <code>domain</code>.</td></tr>
+              <tr><td><code>DeliveryGuyRestaurant</code></td><td><code>restaurant_id</code></td><td>many-to-many</td><td>Admin-managed allowlist of which restaurants a rider may pick up from.</td></tr>
+              <tr><td><code>RestaurantEarning</code> / <code>RestaurantPayout</code></td><td><code>restaurant_id</code></td><td>one-to-many</td><td>Financial ledger — out of scope beyond noting it exists.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="loc-detail">Serviceable location, in detail <span class="subhead-note">— why it's a dashed line above</span></h3>
+        <p><code>Restaurant.locationId</code> is a plain <code>String</code> column: no <code>@JoinColumn</code>, no FK constraint, and no query anywhere in the backend that filters or joins on it — the only two hits for <code>getLocationId()</code> in the whole codebase are the admin patch handler and the detail-response mapper, both just passing the value straight through. <code>Location</code> itself (<code>name</code>, <code>description</code>, <code>is_popular</code>, <code>is_active</code>) is unrelated to delivery-radius matching, which is computed entirely from <code>latitude</code>/<code>longitude</code> + <code>deliveryRadius</code>.</p>
+        <div class="panel gap">
+          <h4>Gap</h4>
+          <ul>
+            <li>Admin panel picks a location from a dropdown and stores its id — that's the entire write path.</li>
+            <li><code>RestaurantSummaryResponse</code> (every listing/card screen) doesn't include <code>locationId</code> at all; only the single-restaurant detail response does, and only as a bare id — never resolved to the location's name.</li>
+            <li>The customer app never reads <code>locationId</code> anywhere in its source.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- 04 HOURS -->
+      <section class="chapter" id="hours">
+        <div class="chapter-head"><span class="chapter-num">04</span><h2>How opening hours are stored</h2></div>
+        <p class="chapter-dek">Two representations on the same row — one legacy, one current — and the backend does not keep them in sync. That sync is entirely a client-side responsibility today.</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Column</th><th>Shape</th><th>Written by</th><th>Read by</th></tr></thead>
+            <tbody>
+              <tr><td><code>opening_time</code> / <code>closing_time</code></td><td>Two <code>LocalTime</code> columns — one daily window</td><td><code>RestaurantService</code> create/patch, indirectly driven by the schedule editor (below)</td><td><code>RestaurantAvailabilityRule</code> and the customer app's <code>getOpenStatus()</code> — <strong>the only two places that decide "open now"</strong></td></tr>
+              <tr><td><code>schedule_data</code></td><td>One <code>String</code> column — JSON array of 7 <code>{day, isOpen, slots:[{open,close}]}</code> objects</td><td><code>RestaurantScheduleCodec.validateAndSerialize()</code></td><td><code>RestaurantScheduleCodec.deserialize()</code> → <code>RestaurantDetailResponse.weeklySchedule</code>, fed back into the admin edit form only</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p><code>schedule_data</code> reuses a column that pre-existed and sat completely unused before the weekly-hours feature was built — no migration needed, just a codec that validates known day names, rejects duplicate days, requires an open day to carry ≥1 slot, rejects overlapping/duplicate slots within a day, and requires each slot's close to be after its open.</p>
+
+        <h3>The two columns are linked only in the admin form</h3>
+        <p>Editing the weekly schedule derives the legacy window like this, client-side, on every change:</p>
+        <div class="code-block"><span class="cm">// RestaurantForm.tsx — WeeklyScheduleEditor onChange</span>
+<span class="kw">const</span> firstOpenDay = schedule.find(d =&gt; d.isOpen &amp;&amp; d.slots.length &gt; 0)
+onChange(<span class="fn">'openingTime'</span>, firstOpenDay.slots[0].open)
+onChange(<span class="fn">'closingTime'</span>, firstOpenDay.slots[firstOpenDay.slots.length - 1].close)</div>
+        <p>"First open day found, its first slot's start, its last slot's end." A split lunch/dinner schedule (09:00–14:00 + 18:00–22:00) collapses into one continuous 09:00–22:00 window, and the choice isn't even day-aware — whichever day comes first in the list wins, regardless of what day it actually is today.</p>
+      </section>
+
+      <!-- 05 DECISION -->
+      <section class="chapter" id="decision">
+        <div class="chapter-head"><span class="chapter-num">05</span><h2>How open/closed is actually decided</h2></div>
+        <p class="chapter-dek">Two independent implementations, both bypassing <code>schedule_data</code> entirely.</p>
+
+        <div class="diagram-panel">
+          <figure>
+            <svg viewBox="0 0 860 480" role="img" aria-label="An admin edits the weekly schedule in the admin form, which derives a single opening and closing time and saves both that and the full schedule to the restaurant row. Two independent consumers then read only the legacy opening and closing time: the order-service checkout gate, and the customer app's open-status helper. The rich weekly schedule data is stored but not consulted by either.">
+              <defs>
+                <marker id="a4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 z" fill="var(--diagram-line)"/>
+                </marker>
+                <marker id="a4d" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 z" fill="var(--diagram-danger)"/>
+                </marker>
+              </defs>
+
+              <rect x="290" y="10" width="280" height="46" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="430" y="38" text-anchor="middle" fill="var(--diagram-ink)" font-size="12.5">Admin edits weekly schedule</text>
+
+              <line x1="430" y1="56" x2="430" y2="88" stroke="var(--diagram-line)" marker-end="url(#a4)"/>
+              <text x="430" y="76" text-anchor="middle" font-size="10" fill="var(--diagram-ink-dim)">PUT /admin/restaurants/{id}</text>
+
+              <rect x="230" y="90" width="400" height="70" rx="10" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+              <text x="430" y="112" text-anchor="middle" fill="var(--diagram-ink)" font-size="12.5" font-weight="600">Restaurant row saved</text>
+              <text x="430" y="130" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10">schedule_data ← full weekly JSON (rich)</text>
+              <text x="430" y="146" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="10">opening_time/closing_time ← derived, lossy</text>
+
+              <line x1="330" y1="160" x2="230" y2="230" stroke="var(--diagram-danger)" stroke-dasharray="4 3"/>
+              <line x1="530" y1="160" x2="630" y2="230" stroke="var(--diagram-line)" marker-end="url(#a4)"/>
+              <line x1="430" y1="160" x2="430" y2="230" stroke="var(--diagram-line)" marker-end="url(#a4)"/>
+
+              <rect x="130" y="232" width="220" height="56" rx="8" fill="var(--diagram-bg)" stroke="var(--diagram-danger)" stroke-dasharray="4 3"/>
+              <text x="240" y="254" text-anchor="middle" fill="var(--diagram-ink)" font-size="11">schedule_data</text>
+              <text x="240" y="270" text-anchor="middle" fill="var(--diagram-danger)" font-size="9.5">stored — not read by either</text>
+              <text x="240" y="283" text-anchor="middle" fill="var(--diagram-danger)" font-size="9.5">decision below</text>
+
+              <rect x="320" y="232" width="220" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="430" y="254" text-anchor="middle" fill="var(--diagram-ink)" font-size="11">opening_time</text>
+              <text x="430" y="270" text-anchor="middle" fill="var(--diagram-ink)" font-size="11">closing_time</text>
+
+              <rect x="510" y="232" width="240" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="630" y="254" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5">(same row — one window,</text>
+              <text x="630" y="269" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5">not day-aware)</text>
+
+              <line x1="430" y1="288" x2="260" y2="340" stroke="var(--diagram-line)" marker-end="url(#a4)"/>
+              <line x1="430" y1="288" x2="600" y2="340" stroke="var(--diagram-line)" marker-end="url(#a4)"/>
+
+              <rect x="90" y="342" width="340" height="66" rx="10" fill="var(--diagram-surface)" stroke="var(--diagram-line)" stroke-width="1.4"/>
+              <text x="260" y="364" text-anchor="middle" fill="var(--diagram-ink)" font-size="12" font-weight="600">RestaurantAvailabilityRule</text>
+              <text x="260" y="380" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5">order-service · cart validation +</text>
+              <text x="260" y="394" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5">OrderService.placeOrder() checkout gate</text>
+
+              <rect x="430" y="342" width="340" height="66" rx="10" fill="var(--diagram-surface)" stroke="var(--diagram-line)" stroke-width="1.4"/>
+              <text x="600" y="364" text-anchor="middle" fill="var(--diagram-ink)" font-size="12" font-weight="600">isRestaurantOrderable / getOpenStatus</text>
+              <text x="600" y="380" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5">customer app · greys out cards</text>
+              <text x="600" y="394" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5">&amp; menu on Home/Search/Detail</text>
+
+              <line x1="260" y1="408" x2="260" y2="436" stroke="var(--diagram-danger)" marker-end="url(#a4d)"/>
+              <line x1="600" y1="408" x2="600" y2="436" stroke="var(--diagram-danger)" marker-end="url(#a4d)"/>
+              <text x="430" y="460" text-anchor="middle" fill="var(--diagram-danger)" font-size="11" font-weight="600">Two independent reimplementations of the same single-window logic — neither reads schedule_data</text>
+            </svg>
+          </figure>
+          <figcaption><span class="status-pill gap">Gap</span> — a restaurant configured Mon–Fri 09:00–14:00 + 18:00–22:00, closed weekends, is in practice treated by both the checkout gate and the customer app as open on whatever single window it last derived — including weekends — because neither consults the real per-day schedule.</figcaption>
+        </div>
+
+        <h3>Backend — the checkout gate</h3>
+        <div class="code-block"><span class="cm">// RestaurantAvailabilityRule.java (pureeats-order-service)</span>
+<span class="kw">if</span> (restaurant.getOpeningTime() != <span class="kw">null</span> &amp;&amp; restaurant.getClosingTime() != <span class="kw">null</span>
+        &amp;&amp; !isWithinOpeningHours(restaurant)) {
+    <span class="kw">return</span> List.of(CartIssue.restaurantLevel(
+        <span class="fn">"This restaurant is closed right now (opens "</span> + restaurant.getOpeningTime() + <span class="fn">")"</span>));
+}</div>
+        <p>Runs on every cart validation and again inside <code>OrderService.placeOrder()</code> against the exact same rule list — so the page-load check and the real checkout gate can never disagree <em>with each other</em>. Both still only look at the single window.</p>
+
+        <h3>Customer app — card and menu greying</h3>
+        <div class="code-block"><span class="cm">// restaurantAvailability.ts (pureeats-customer-react-app)</span>
+<span class="kw">export function</span> <span class="fn">isRestaurantOrderable</span>(restaurant): boolean {
+  <span class="kw">if</span> (!restaurant.isActive || !restaurant.isAccepted) <span class="kw">return</span> false
+  <span class="kw">return</span> getOpenStatus(restaurant.openingTime, restaurant.closingTime).isOpen
+}</div>
+        <p>A second, independent reimplementation of the same single-window logic — it even re-solves the overnight-wraparound case (e.g. 18:00–02:00) separately from the backend's version — reading a type that doesn't even request <code>weeklySchedule</code>.</p>
+
+        <h3 id="decision-fix">If this gets fixed later</h3>
+        <p>Not attempted here — this document is descriptive. The shape of a real fix: compute "open now" from <code>schedule_data</code> (today's weekday + current time against that day's slots) in <strong>one place</strong> — most naturally a backend-computed <code>isOpenNow</code>/<code>opensAt</code>/<code>closesAt</code> field added to the summary/detail responses, so neither the cart rule nor the customer app has to re-derive or duplicate the logic. The overnight-window handling already written twice, once in Java and once in TypeScript, is exactly the kind of logic duplication like this tends to let drift.</p>
+      </section>
+
+      <!-- 06 CLASSES -->
+      <section class="chapter" id="classes">
+        <div class="chapter-head"><span class="chapter-num">06</span><h2>Class diagram</h2></div>
+        <p class="chapter-dek">The classes that actually carry this domain — entities, the DTOs that cross the wire, the services that own the logic, and the one cart-validation rule that reads (only) the legacy hours.</p>
+
+        <div class="diagram-panel">
+          <figure>
+            <svg viewBox="0 0 920 640" role="img" aria-label="Class diagram: AdminRestaurantController, RestaurantController and StoreOwnerRestaurantController all call RestaurantService, which uses RestaurantScheduleCodec for schedule serialization, writes to RestaurantCategoryRestaurant for category links, and reads and writes the Restaurant entity. DTOs RestaurantCreateRequest, RestaurantPatchRequest, RestaurantDetailResponse and DayScheduleDto carry data across the boundary. RestaurantAvailabilityRule in order-service reads only the Restaurant entity's legacy openingTime and closingTime fields.">
+              <defs>
+                <marker id="a5" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 z" fill="var(--diagram-line)"/>
+                </marker>
+                <marker id="a5d" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 z" fill="var(--diagram-danger)"/>
+                </marker>
+              </defs>
+
+              <!-- Controllers -->
+              <rect x="20" y="20" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="125" y="42" text-anchor="middle" fill="var(--diagram-ink)" font-size="11.5" font-weight="600">AdminRestaurantController</text>
+              <text x="125" y="58" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">/api/v1/admin/restaurants/**</text>
+
+              <rect x="250" y="20" width="210" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="355" y="42" text-anchor="middle" fill="var(--diagram-ink)" font-size="11.5" font-weight="600">RestaurantController</text>
+              <text x="355" y="58" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">/api/v1/restaurants/** (public)</text>
+
+              <rect x="480" y="20" width="230" height="56" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="595" y="42" text-anchor="middle" fill="var(--diagram-ink)" font-size="11.5" font-weight="600">StoreOwnerRestaurantController</text>
+              <text x="595" y="58" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">/api/v1/store-owner/restaurants/**</text>
+
+              <line x1="125" y1="76" x2="330" y2="140" stroke="var(--diagram-line)" marker-end="url(#a5)"/>
+              <line x1="355" y1="76" x2="345" y2="140" stroke="var(--diagram-line)" marker-end="url(#a5)"/>
+              <line x1="595" y1="76" x2="400" y2="140" stroke="var(--diagram-line)" marker-end="url(#a5)"/>
+
+              <!-- RestaurantService -->
+              <rect x="220" y="142" width="260" height="86" rx="10" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-width="1.8"/>
+              <text x="350" y="164" text-anchor="middle" fill="var(--diagram-ink)" font-size="13" font-weight="600">RestaurantService</text>
+              <text x="350" y="182" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5">createAsAdmin() · patchAsAdmin()</text>
+              <text x="350" y="196" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5">toDetail() · toSummary()</text>
+              <text x="350" y="210" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5">replaceCategoryLinks() · categoryIdsFor()</text>
+              <text x="350" y="222" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5">findNearby() · checkDeliveryArea()</text>
+
+              <!-- Codec -->
+              <rect x="530" y="150" width="210" height="66" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="635" y="172" text-anchor="middle" fill="var(--diagram-ink)" font-size="11.5" font-weight="600">RestaurantScheduleCodec</text>
+              <text x="635" y="188" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">validateAndSerialize()</text>
+              <text x="635" y="202" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">deserialize()</text>
+              <line x1="480" y1="185" x2="530" y2="183" stroke="var(--diagram-line)" marker-end="url(#a5)"/>
+              <text x="500" y="176" font-size="8.5" fill="var(--diagram-ink-dim)">uses</text>
+
+              <!-- Category service -->
+              <rect x="530" y="240" width="210" height="66" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="635" y="262" text-anchor="middle" fill="var(--diagram-ink)" font-size="11.5" font-weight="600">RestaurantCategoryService</text>
+              <text x="635" y="278" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">restaurantsInCategory()</text>
+              <text x="635" y="292" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">listActive() · CRUD</text>
+
+              <!-- DTOs -->
+              <rect x="20" y="150" width="180" height="140" rx="8" fill="var(--diagram-bg)" stroke="var(--diagram-ink-dim)"/>
+              <text x="110" y="170" text-anchor="middle" fill="var(--diagram-ink)" font-size="10.5" font-weight="600">DTOs (records)</text>
+              <text x="110" y="190" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">RestaurantCreateRequest</text>
+              <text x="110" y="206" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">RestaurantPatchRequest</text>
+              <text x="110" y="222" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">RestaurantDetailResponse</text>
+              <text x="110" y="238" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">RestaurantSummaryResponse</text>
+              <text x="110" y="254" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">DayScheduleDto / TimeSlotDto</text>
+              <text x="110" y="270" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">LocationRequest/Response</text>
+              <line x1="200" y1="220" x2="220" y2="200" stroke="var(--diagram-line)" marker-end="url(#a5)"/>
+
+              <!-- Restaurant entity -->
+              <rect x="250" y="360" width="240" height="120" rx="10" fill="var(--diagram-surface)" stroke="var(--diagram-accent)" stroke-width="1.8"/>
+              <text x="370" y="382" text-anchor="middle" fill="var(--diagram-ink)" font-size="13" font-weight="600">Restaurant (entity)</text>
+              <text x="370" y="400" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5">openingTime, closingTime</text>
+              <text x="370" y="414" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5">scheduleData (JSON)</text>
+              <text x="370" y="428" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5">locationId, latitude, longitude</text>
+              <text x="370" y="442" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5">commissionRate, deliveryRadius</text>
+              <text x="370" y="456" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9.5">isActive, isAccepted, ...</text>
+              <line x1="350" y1="228" x2="370" y2="360" stroke="var(--diagram-line)" marker-end="url(#a5)"/>
+              <text x="386" y="300" font-size="9" fill="var(--diagram-ink-dim)">reads / writes</text>
+
+              <!-- RestaurantCategoryRestaurant -->
+              <rect x="560" y="360" width="220" height="64" rx="8" fill="var(--diagram-surface)" stroke="var(--diagram-line)"/>
+              <text x="670" y="382" text-anchor="middle" fill="var(--diagram-ink)" font-size="11" font-weight="600">RestaurantCategoryRestaurant</text>
+              <text x="670" y="398" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">restaurant_id, restaurant_category_id</text>
+              <text x="670" y="412" text-anchor="middle" fill="var(--diagram-ink-dim)" font-size="9">(catalog-service local entity)</text>
+              <line x1="480" y1="200" x2="600" y2="360" stroke="var(--diagram-line)" marker-end="url(#a5)"/>
+              <text x="600" y="290" font-size="9" fill="var(--diagram-ink-dim)">writes</text>
+
+              <!-- RestaurantAvailabilityRule -->
+              <rect x="240" y="530" width="280" height="80" rx="10" fill="var(--diagram-bg)" stroke="var(--diagram-danger)" stroke-width="1.6"/>
+              <text x="380" y="554" text-anchor="middle" fill="var(--diagram-ink)" font-size="12" font-weight="600">RestaurantAvailabilityRule</text>
+              <text x="380" y="572" text-anchor="middle" fill="var(--diagram-danger)" font-size="9.5">order-service · CartValidationRule</text>
+              <text x="380" y="588" text-anchor="middle" fill="var(--diagram-danger)" font-size="9.5">reads ONLY openingTime/closingTime</text>
+              <line x1="370" y1="480" x2="380" y2="530" stroke="var(--diagram-danger)" marker-end="url(#a5d)"/>
+            </svg>
+          </figure>
+          <figcaption>Green/solid = normal collaboration. The bottom edge in amber is the same gap as §5 — <code>RestaurantAvailabilityRule</code> depends on <code>Restaurant</code> but only ever touches its two legacy fields, never <code>scheduleData</code>.</figcaption>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Layer</th><th>Classes</th></tr></thead>
+            <tbody>
+              <tr><td>Entities (<code>domain/entity</code>)</td><td><code>Restaurant</code>, <code>RestaurantCategory</code>, <code>Location</code>, <code>PopularGeoPlace</code>, <code>Item</code>, <code>ItemCategory</code>, <code>Addon</code>, <code>AddonCategory</code>, <code>AddonCategoryItem</code>, <code>Coupon</code>, <code>RestaurantUser</code>, <code>DeliveryGuyRestaurant</code>, <code>RestaurantEarning</code>, <code>RestaurantPayout</code></td></tr>
+              <tr><td>Entities (catalog-service local)</td><td><code>RestaurantCategoryRestaurant</code>, <code>RestaurantAuditLog</code></td></tr>
+              <tr><td>DTOs</td><td><code>RestaurantCreateRequest</code>, <code>RestaurantPatchRequest</code>, <code>RestaurantUpdateRequest</code>, <code>RestaurantDetailResponse</code>, <code>RestaurantSummaryResponse</code>, <code>DayScheduleDto</code>/<code>TimeSlotDto</code>, <code>LocationRequest</code>/<code>LocationAdminResponse</code>/<code>LocationResponse</code></td></tr>
+              <tr><td>Services</td><td><code>RestaurantService</code>, <code>RestaurantScheduleCodec</code>, <code>RestaurantCategoryService</code>, <code>LocationService</code>, <code>RestaurantAuditLogService</code>, <code>MenuService</code>, <code>MediaAssetService</code></td></tr>
+              <tr><td>Controllers</td><td><code>AdminRestaurantController</code>, <code>RestaurantController</code>, <code>StoreOwnerRestaurantController</code>, <code>RestaurantCategoryController</code>, <code>AdminLocationController</code>, <code>LocationController</code></td></tr>
+              <tr><td>Cart validation</td><td><code>RestaurantAvailabilityRule</code> — one of several <code>CartValidationRule</code> components <code>CartValidationService</code> fans out to</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <footer>
+    Descriptive documentation, generated from reading the codebase directly — nothing here changes code. See <a href="RESTAURANT_DOMAIN_ARCHITECTURE.md">the .md companion</a> for the same material without diagrams, and <a href="ORDER_JOURNEY_ARCHITECTURE.html">Order Journey Blueprint</a> for how cart validation feeds into order placement.
+  </footer>
+
+</div>

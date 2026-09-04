@@ -7,4 +7,8 @@ import java.util.List;
 
 public interface RestaurantCategoryRepository extends JpaRepository<RestaurantCategory, Long> {
     List<RestaurantCategory> findByIsActiveTrue();
+
+    boolean existsByNameIgnoreCase(String name);
+
+    boolean existsByNameIgnoreCaseAndIdNot(String name, Long id);
 }
