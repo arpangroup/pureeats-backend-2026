@@ -506,7 +506,7 @@ public class RestaurantService {
 
     RestaurantSummaryResponse toSummary(Restaurant r) {
         List<DayScheduleDto> weeklySchedule = scheduleCodec.deserialize(r.getScheduleData());
-        RestaurantOpenStatus openStatus = openStatusService.compute(r, weeklySchedule, LocalDateTime.now());
+        RestaurantOpenStatus openStatus = openStatusService.compute(r, weeklySchedule);
         return new RestaurantSummaryResponse(r.getId(), r.getName(), r.getSlug(), mediaUrlResolver.resolve(r.getImage()), r.getRating(),
                 parseDeliveryTime(r.getDeliveryTime()), r.getPriceRange(), Boolean.TRUE.equals(r.getIsPureveg()),
                 Boolean.TRUE.equals(r.getIsActive()), Boolean.TRUE.equals(r.getIsAccepted()),
@@ -516,7 +516,7 @@ public class RestaurantService {
 
     private RestaurantDetailResponse toDetail(Restaurant r) {
         List<DayScheduleDto> weeklySchedule = scheduleCodec.deserialize(r.getScheduleData());
-        RestaurantOpenStatus openStatus = openStatusService.compute(r, weeklySchedule, LocalDateTime.now());
+        RestaurantOpenStatus openStatus = openStatusService.compute(r, weeklySchedule);
         return new RestaurantDetailResponse(r.getId(), r.getName(), r.getDescription(), r.getSlug(),
                 r.getContactNumber(), r.getOpeningTime(), r.getClosingTime(), mediaUrlResolver.resolve(r.getImage()), r.getRating(),
                 parseDeliveryTime(r.getDeliveryTime()), r.getPriceRange(), Boolean.TRUE.equals(r.getIsPureveg()), r.getAddress(),
