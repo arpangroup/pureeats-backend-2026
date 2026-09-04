@@ -2,15 +2,18 @@ package com.pureeats.catalog.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalTime;
+import java.util.List;
 
 /**
  * Every field optional - only fields actually present get applied and diffed for the audit log.
  * {@code name}, {@code commissionRate}, {@code isActive}, {@code isAccepted}, {@code autoAcceptable},
  * {@code isFeatured} are admin/super-admin only (see {@code RestaurantService.ADMIN_ONLY_FIELDS}).
  * <p>
- * Deliberately excludes {@code weeklySchedule} (its own JSON-blob serialization) and
- * {@code categoryIds} (a join-table, not a scalar field) - neither fits this generic
- * diff-and-apply pattern and both need dedicated endpoints.
+ * Deliberately excludes {@code categoryIds} (a join-table, not a scalar field) - that doesn't fit
+ * this generic diff-and-apply pattern and needs its own endpoint. {@code weeklySchedule} is
+ * included even though it's a JSON blob under the hood ({@code RestaurantScheduleCodec} validates
+ * and (de)serializes it against {@code Restaurant.scheduleData}) - the admin form always saves the
+ * whole week in the same request as every other field, so it belongs in the same patch.
  */
 public record RestaurantPatchRequest(
         String name,
@@ -44,6 +47,7 @@ public record RestaurantPatchRequest(
         Boolean isActive,
         Boolean isAccepted,
         Boolean isFeatured,
-        BigDecimal commissionRate
+        BigDecimal commissionRate,
+        List<DayScheduleDto> weeklySchedule
 ) {
 }

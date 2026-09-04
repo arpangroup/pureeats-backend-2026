@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotNull;
 
 import java.math.BigDecimal;
 import java.time.LocalTime;
+import java.util.List;
 
 public record RestaurantCreateRequest(
         @NotBlank String name,
@@ -22,6 +23,8 @@ public record RestaurantCreateRequest(
         @NotNull BigDecimal deliveryCharges,
         @NotNull BigDecimal deliveryRadius,
         @NotNull BigDecimal minOrderPrice,
-        boolean isAcceptCod
+        boolean isAcceptCod,
+        /** Optional - omit to leave every day unset (closed) until edited later via patch. */
+        List<DayScheduleDto> weeklySchedule
 ) {
 }

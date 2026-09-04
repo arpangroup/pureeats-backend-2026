@@ -30,9 +30,12 @@ public class RestaurantAuditLog {
     @Column(name = "field_name", nullable = false, length = 64)
     private String fieldName;
 
+    /** @Lob (TEXT, not the default VARCHAR(255)) - a weeklySchedule diff is a full JSON blob, well past 255 chars. */
+    @Lob
     @Column(name = "old_value")
     private String oldValue;
 
+    @Lob
     @Column(name = "new_value")
     private String newValue;
 

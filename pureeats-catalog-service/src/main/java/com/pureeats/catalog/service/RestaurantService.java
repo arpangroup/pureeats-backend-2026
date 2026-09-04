@@ -49,6 +49,7 @@ public class RestaurantService {
     private final RestaurantAuditLogService restaurantAuditLogService;
     private final MediaAssetService mediaAssetService;
     private final DistanceCalculator distanceCalculator;
+    private final RestaurantScheduleCodec scheduleCodec;
 
     /** Name of the cache backing every {@code @Cacheable} method below - see {@code CacheConfig} in pureeats-app for the (in-memory now, Redis-ready later) {@code CacheManager}. */
     static final String RESTAURANTS_CACHE = "restaurants";
@@ -208,6 +209,9 @@ public class RestaurantService {
         restaurant.setDeliveryRadius(request.deliveryRadius());
         restaurant.setMinOrderPrice(request.minOrderPrice());
         restaurant.setIsAcceptCod(request.isAcceptCod());
+        if (request.weeklySchedule() != null) {
+            restaurant.setScheduleData(scheduleCodec.validateAndSerialize(request.weeklySchedule()));
+        }
 
         restaurant.setSlug(slugify(request.name()) + "-" + UUID.randomUUID().toString().substring(0, 6));
         restaurant.setSku(UUID.randomUUID().toString().substring(0, 12).toUpperCase());
@@ -297,6 +301,10 @@ public class RestaurantService {
         applyField(restaurant.getId(), "isAccepted", restaurant.getIsAccepted(), request.isAccepted(), isPrivileged, callerUserId, restaurant::setIsAccepted);
         applyField(restaurant.getId(), "isFeatured", restaurant.getIsFeatured(), request.isFeatured(), isPrivileged, callerUserId, restaurant::setIsFeatured);
         applyField(restaurant.getId(), "commissionRate", restaurant.getCommissionRate(), request.commissionRate(), isPrivileged, callerUserId, restaurant::setCommissionRate);
+        if (request.weeklySchedule() != null) {
+            String newScheduleJson = scheduleCodec.validateAndSerialize(request.weeklySchedule());
+            applyField(restaurant.getId(), "weeklySchedule", restaurant.getScheduleData(), newScheduleJson, isPrivileged, callerUserId, restaurant::setScheduleData);
+        }
 
         restaurant.setUpdatedAt(LocalDateTime.now());
         restaurantRepository.save(restaurant);
@@ -437,7 +445,7 @@ public class RestaurantService {
                 r.getExtraDeliveryCharge(), r.getExtraDeliveryDistance(), Boolean.TRUE.equals(r.getIsSchedulable()),
                 Boolean.TRUE.equals(r.getIsNotifiable()), Boolean.TRUE.equals(r.getIsActive()), Boolean.TRUE.equals(r.getIsAccepted()),
                 Boolean.TRUE.equals(r.getIsFeatured()), Boolean.TRUE.equals(r.getIsAcceptCod()),
-                Boolean.TRUE.equals(r.getAutoAcceptable()));
+                Boolean.TRUE.equals(r.getAutoAcceptable()), scheduleCodec.deserialize(r.getScheduleData()));
     }
 
     private static final Map<String, Integer> DELIVERY_TYPE_TO_INT = Map.of("self-pickup", 0, "delivery", 1, "both", 2);

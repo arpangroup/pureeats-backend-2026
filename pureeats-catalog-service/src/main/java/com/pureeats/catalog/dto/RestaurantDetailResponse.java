@@ -2,6 +2,7 @@ package com.pureeats.catalog.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalTime;
+import java.util.List;
 
 public record RestaurantDetailResponse(
         Long id,
@@ -40,6 +41,7 @@ public record RestaurantDetailResponse(
         boolean isAccepted,
         boolean isFeatured,
         boolean isAcceptCod,
-        boolean autoAcceptable
+        boolean autoAcceptable,
+        List<DayScheduleDto> weeklySchedule
 ) {
 }
