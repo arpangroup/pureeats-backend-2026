@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Notification Dispatch Map</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
@@ -22,6 +23,9 @@
     --warn:#a8650a;
     --warn-fill:#fbf0dc;
     --warn-border:#e3c07f;
+    --ref:#5b4b9e;
+    --ref-fill:#eeeafc;
+    --ref-border:#c9bdf0;
     --line:#8a90a6;
     --line-dashed:#a9aebd;
     --shadow: 0 1px 2px rgba(23,26,36,0.05), 0 10px 26px -14px rgba(23,26,36,0.16);
@@ -47,6 +51,9 @@
       --warn:#e0a545;
       --warn-fill:#2c2210;
       --warn-border:#5c481f;
+      --ref:#a99bea;
+      --ref-fill:#211c38;
+      --ref-border:#4a3f7c;
       --line:#565c72;
       --line-dashed:#454a5e;
       --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 10px 26px -14px rgba(0,0,0,0.55);
@@ -59,6 +66,7 @@
     --core-fill:#0e2e33; --core-ink:#c9f5f1;
     --ok:#5cc98c; --ok-fill:#12271e; --ok-border:#2f6b48;
     --warn:#e0a545; --warn-fill:#2c2210; --warn-border:#5c481f;
+    --ref:#a99bea; --ref-fill:#211c38; --ref-border:#4a3f7c;
     --line:#565c72; --line-dashed:#454a5e;
     --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 10px 26px -14px rgba(0,0,0,0.55);
   }
@@ -67,13 +75,23 @@
   body{ background:var(--bg); color:var(--ink); font-family:'IBM Plex Sans', system-ui, sans-serif; }
   a{ color:var(--accent-strong); }
   :root[data-theme="dark"] a, :root:not([data-theme="light"]) a{ color:var(--accent); }
-  .shell{ max-width:1680px; margin:0 auto; padding:28px 24px 60px; }
+  .shell{ max-width:1900px; margin:0 auto; padding:28px 24px 60px; position:relative; }
+
+  .print-btn{
+    position:absolute; top:28px; right:24px;
+    font-family:'IBM Plex Sans',sans-serif; font-size:13px; font-weight:600;
+    color:#fff; background:var(--accent-strong); border:none; border-radius:8px;
+    padding:10px 18px; cursor:pointer; box-shadow:var(--shadow);
+    display:inline-flex; align-items:center; gap:8px;
+  }
+  .print-btn:hover{ background:var(--accent); }
+  .print-btn svg{ width:15px; height:15px; flex-shrink:0; }
 
   header{ display:flex; flex-direction:column; gap:8px; padding-bottom:20px; margin-bottom:20px; border-bottom:1px solid var(--border); }
   .eyebrow{ font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.05em; text-transform:uppercase; color:var(--accent-strong); }
   :root[data-theme="dark"] .eyebrow, :root:not([data-theme="light"]) .eyebrow{ color:var(--accent); }
   h1{ font-size:clamp(24px,3.4vw,32px); margin:0; letter-spacing:-0.01em; text-wrap:balance; }
-  p.dek{ margin:0; color:var(--ink-soft); font-size:14.5px; max-width:82ch; }
+  p.dek{ margin:0; color:var(--ink-soft); font-size:14.5px; max-width:92ch; }
   code{ font-family:'IBM Plex Mono',monospace; background:var(--surface-alt); border:1px solid var(--border); border-radius:4px; padding:1px 6px; font-size:12.5px; color:var(--ink); }
 
   .diagram-frame{
@@ -88,12 +106,13 @@
   .legend-title{ font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); }
   .legend-row{ display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--ink-soft); }
   .swatch{ width:16px; height:12px; border-radius:3px; flex-shrink:0; }
-  .sw-caller{ background:var(--surface-alt); border:1.5px solid var(--ink-faint); }
   .sw-core{ background:var(--core-fill); border:1.5px solid var(--core-fill); }
   .sw-sender{ background:var(--accent-soft); border:1.5px solid var(--accent-soft-border); }
+  .sw-iface{ background:var(--surface); border:1.5px dashed var(--accent-strong); }
   .sw-impl{ background:var(--surface); border:1.5px solid var(--border); }
   .sw-ext{ background:var(--warn-fill); border:1.5px dashed var(--warn-border); }
   .sw-store{ background:var(--ok-fill); border:1.5px solid var(--ok-border); }
+  .sw-ref{ background:var(--ref-fill); border:1.5px dashed var(--ref-border); }
   .line-sample{ width:22px; height:0; border-top:2px solid var(--line); }
   .line-sample.dashed{ border-top:2px dashed var(--line-dashed); }
 
@@ -101,37 +120,89 @@
 
   /* SVG text/box styling via classes */
   .box{ fill:var(--surface); stroke:var(--border); stroke-width:1.5; }
-  .box-caller{ fill:var(--surface-alt); stroke:var(--ink-faint); stroke-width:1.5; }
   .box-core{ fill:var(--core-fill); stroke:var(--core-fill); }
   .box-iface{ fill:var(--surface); stroke:var(--accent-strong); stroke-width:1.5; stroke-dasharray:5,4; }
   .box-sender{ fill:var(--accent-soft); stroke:var(--accent-soft-border); stroke-width:1.5; }
   .box-ext{ fill:var(--warn-fill); stroke:var(--warn-border); stroke-width:1.5; stroke-dasharray:5,4; }
   .box-store{ fill:var(--ok-fill); stroke:var(--ok-border); stroke-width:1.5; }
+  .box-ref{ fill:var(--ref-fill); stroke:var(--ref-border); stroke-width:1.5; stroke-dasharray:5,4; }
 
   .lbl{ font-family:'IBM Plex Sans',sans-serif; font-weight:600; fill:var(--ink); font-size:13.5px; }
   .lbl-core{ font-family:'IBM Plex Sans',sans-serif; font-weight:600; fill:var(--core-ink); font-size:13.5px; }
   .lbl-mono{ font-family:'IBM Plex Mono',monospace; font-weight:600; fill:var(--ink); font-size:13px; }
-  .sub{ font-family:'IBM Plex Mono',monospace; fill:var(--ink-soft); font-size:10.7px; }
+  .lbl-iface{ font-family:'IBM Plex Mono',monospace; font-weight:600; fill:var(--accent-strong); font-size:12.5px; }
+  .sub{ font-family:'IBM Plex Mono',monospace; fill:var(--ink-soft); font-size:10.5px; }
   .sub-core{ font-family:'IBM Plex Mono',monospace; fill:#9fd8d3; font-size:10.7px; }
+  .field{ font-family:'IBM Plex Mono',monospace; fill:var(--ink-soft); font-size:10px; }
   .zone{ font-family:'IBM Plex Mono',monospace; font-weight:600; letter-spacing:.08em; fill:var(--ink-faint); font-size:11px; text-transform:uppercase; }
 
   .conn{ stroke:var(--line); stroke-width:1.6; fill:none; marker-end:url(#arrow); }
   .conn-dash{ stroke:var(--line-dashed); stroke-width:1.6; fill:none; stroke-dasharray:5,4; marker-end:url(#arrowDash); }
   .conn-label{ font-family:'IBM Plex Mono',monospace; fill:var(--ink-faint); font-size:9.6px; }
+
+  /* ============ PRINT: one landscape page, no margins, light theme forced ============ */
+  @media print{
+    @page{ size:landscape; margin:0; }
+
+    :root, :root[data-theme="dark"], :root[data-theme="light"]{
+      --bg:#ffffff; --surface:#ffffff; --surface-alt:#e9ebf1; --border:#d6d9e2;
+      --ink:#171a24; --ink-soft:#4c5165; --ink-faint:#7d8296;
+      --accent:#0e7f8c; --accent-strong:#0a5f69; --accent-soft:#dcf1f1; --accent-soft-border:#a9d9d9;
+      --core-fill:#123a41; --core-ink:#eafbfa;
+      --ok:#2f8f5b; --ok-fill:#e1f3e8; --ok-border:#9bcfb0;
+      --warn:#a8650a; --warn-fill:#fbf0dc; --warn-border:#e3c07f;
+      --ref:#5b4b9e; --ref-fill:#eeeafc; --ref-border:#c9bdf0;
+      --line:#8a90a6; --line-dashed:#a9aebd;
+      --shadow:none;
+    }
+    *{ -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; color-adjust:exact !important; }
+
+    html, body{ width:100%; height:100%; margin:0; padding:0; background:#fff; }
+    .no-print{ display:none !important; }
+
+    .shell{ max-width:none; width:100%; height:100vh; margin:0; padding:4mm 6mm; box-sizing:border-box;
+      display:flex; flex-direction:column; }
+
+    header{ flex:0 0 auto; padding-bottom:4px; margin-bottom:4px; border-bottom:1px solid #ccc; }
+    .eyebrow{ font-size:9px; }
+    h1{ font-size:15px; }
+    header .dek{ display:none; }
+
+    .diagram-frame{ flex:1 1 auto; min-height:0; border:none; box-shadow:none; padding:0; overflow:visible;
+      display:flex; align-items:center; justify-content:center; }
+    .diagram-frame svg{ min-width:0 !important; width:auto; height:100%; max-width:100%; max-height:100%; }
+
+    .legend{ flex:0 0 auto; box-shadow:none; border:1px solid #ccc; border-radius:6px;
+      margin-top:4px; padding:4px 10px; gap:14px; }
+    .legend-title{ font-size:7px; }
+    .legend-row{ font-size:8px; gap:5px; }
+    .swatch{ width:11px; height:8px; }
+    .line-sample{ width:16px; }
+
+    footer{ display:none; }
+  }
 </style>
 
 <div class="shell">
+  <button class="print-btn no-print" onclick="window.print()" type="button">
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2M6 14h12v7H6v-7z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path>
+    </svg>
+    Print diagram
+  </button>
   <header>
     <div class="eyebrow">pureeats-notification-service &nbsp;/&nbsp; architecture</div>
     <h1>Notification Dispatch Map</h1>
-    <p class="dek">Every box below is a real class or table in <code>pureeats-notification-service</code>
-      (plus the two current callers in user-service and order-service). Solid lines are synchronous
-      calls/implements relationships; dashed lines are async hand-offs, config lookups, or audit-log
-      writes. Trace any channel top-to-bottom to see its exact path from HTTP request to delivery.</p>
+    <p class="dek">Every box below is a real class, interface, or table in <code>pureeats-notification-service</code>.
+      Dashed-border boxes marked <code>«interface»</code> are Java interfaces; every solid-border box beneath one
+      is a concrete class that <code>implements</code> it. Each channel sender's box lists the exact fields it is
+      constructed with, so you can trace one channel (say EMAIL) top-to-bottom - dispatcher → sender → provider →
+      wire - without needing any other column. A dagger (†) marks a field that is a shared singleton bean, reused
+      unchanged by every other sender that lists it.</p>
   </header>
 
   <div class="diagram-frame">
-<svg viewBox="0 0 1620 770" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Notification service architecture diagram">
+<svg viewBox="0 0 1850 1120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Notification service class diagram">
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"></path>
@@ -142,199 +213,272 @@
   </defs>
 
   <!-- ============ ZONE LABELS ============ -->
-  <text class="zone" x="40" y="16">Callers · request threads</text>
-  <text class="zone" x="560" y="182">Async dispatch core</text>
-  <text class="zone" x="40" y="378">Channel senders · ChannelNotificationSender</text>
-  <text class="zone" x="40" y="484">Providers · concrete implementation</text>
-  <text class="zone" x="40" y="590">External systems &amp; persistence</text>
-
-  <!-- ============ ROW: CALLERS ============ -->
-  <rect class="box box-caller" x="170" y="30" width="390" height="60" rx="8"></rect>
-  <text class="lbl" x="365" y="55" text-anchor="middle">AuthenticationService</text>
-  <text class="sub" x="365" y="74" text-anchor="middle">user-service · POST /api/v1/auth/otp/send</text>
-
-  <rect class="box box-caller" x="790" y="30" width="390" height="60" rx="8"></rect>
-  <text class="lbl" x="985" y="55" text-anchor="middle">OrderNotificationService</text>
-  <text class="sub" x="985" y="74" text-anchor="middle">order-service · accept · cancel · assign · deliver · admin-override</text>
-
-  <rect class="box box-core" x="1340" y="30" width="240" height="70" rx="8"></rect>
-  <text class="lbl-core" x="1460" y="55" text-anchor="middle">NotificationRoutingService</text>
-  <text class="sub-core" x="1460" y="70" text-anchor="middle">extraChannelsFor(type)</text>
-  <text class="sub-core" x="1460" y="83" text-anchor="middle">orderStatusChannelsFor(role)</text>
-
-  <rect class="box box-store" x="1340" y="120" width="240" height="46" rx="8"></rect>
-  <text class="lbl" x="1460" y="139" text-anchor="middle" font-size="12.5">settings table</text>
-  <text class="sub" x="1460" y="154" text-anchor="middle">key: notification_routing (JSON)</text>
-
-  <!-- caller -> routing (dashed, config lookup) -->
-  <polyline class="conn-dash" points="560,58 1300,58 1300,55 1340,55"></polyline>
-  <polyline class="conn-dash" points="1180,45 1260,45 1260,42 1340,42"></polyline>
-  <text class="conn-label" x="900" y="52">consult routing config</text>
-  <line class="conn" x1="1460" y1="100" x2="1460" y2="120"></line>
-
-  <!-- callers converge into NotificationService -->
-  <polyline class="conn" points="365,90 365,176 792,176 792,196"></polyline>
-  <polyline class="conn" points="985,90 985,176 830,176 830,196"></polyline>
-  <text class="conn-label" x="440" y="170">sendAsync(request)</text>
-  <text class="conn-label" x="895" y="170">sendAsync(request) per channel</text>
+  <text class="zone" x="40" y="16">Async dispatch core</text>
+  <text class="zone" x="40" y="222">«interface» ChannelNotificationSender — routed to by channel()</text>
+  <text class="zone" x="40" y="312">Channel senders — one implementation per NotificationChannel</text>
+  <text class="zone" x="40" y="502">Per-channel provider interfaces &amp; concrete dependencies</text>
+  <text class="zone" x="40" y="680">External systems</text>
+  <text class="zone" x="60" y="780">Shared template/render layer — referenced (†) by Email · SMS senders above</text>
 
   <!-- ============ ROW: DISPATCH CORE ============ -->
-  <rect class="box box-iface" x="560" y="196" width="500" height="54" rx="8"></rect>
-  <text class="lbl-mono" x="810" y="217" text-anchor="middle">«interface» NotificationService</text>
-  <text class="sub" x="810" y="235" text-anchor="middle">send · sendAsync · sendToChannels · sendToChannelsAsync</text>
+  <rect class="box box-iface" x="200" y="30" width="1160" height="92" rx="8"></rect>
+  <text class="lbl-iface" x="780" y="51" text-anchor="middle">«interface» NotificationService</text>
+  <text class="sub" x="780" y="67" text-anchor="middle" style="font-size:10px">send(NotificationRequest request): NotificationResult</text>
+  <text class="sub" x="780" y="81" text-anchor="middle" style="font-size:10px">sendAsync(NotificationRequest request): CompletableFuture&lt;NotificationResult&gt;</text>
+  <text class="sub" x="780" y="95" text-anchor="middle" style="font-size:10px">sendToChannels(type, destination, userId, params, channels): Map&lt;NotificationChannel, NotificationResult&gt;</text>
+  <text class="sub" x="780" y="109" text-anchor="middle" style="font-size:10px">sendToChannelsAsync(type, destination, userId, params, channels): void</text>
 
-  <line class="conn" x1="810" y1="250" x2="810" y2="268"></line>
-  <text class="conn-label" x="822" y="262">implements</text>
+  <line class="conn" x1="780" y1="122" x2="780" y2="146"></line>
+  <text class="conn-label" x="792" y="138">implements</text>
 
-  <rect class="box box-core" x="520" y="268" width="580" height="64" rx="8"></rect>
-  <text class="lbl-core" x="810" y="292" text-anchor="middle">NotificationDispatcherService</text>
-  <text class="sub-core" x="810" y="309" text-anchor="middle">sendersByChannel: Map&lt;Channel,Sender&gt; — built once, in the constructor</text>
-  <text class="sub-core" x="810" y="323" text-anchor="middle">@Async(notificationTaskExecutor) on sendAsync / sendToChannelsAsync</text>
+  <rect class="box box-core" x="400" y="146" width="760" height="88" rx="8"></rect>
+  <text class="lbl-core" x="780" y="169" text-anchor="middle">NotificationDispatcherService</text>
+  <text class="sub-core" x="780" y="185" text-anchor="middle">implements NotificationService</text>
+  <text class="sub-core" x="780" y="200" text-anchor="middle">field: sendersByChannel: Map&lt;NotificationChannel, ChannelNotificationSender&gt;</text>
+  <text class="sub-core" x="780" y="214" text-anchor="middle">— built once in the constructor from every ChannelNotificationSender bean</text>
+  <text class="sub-core" x="780" y="228" text-anchor="middle">@Async(notificationTaskExecutor) on sendAsync / sendToChannelsAsync</text>
 
-  <rect class="box box-core" x="1150" y="268" width="430" height="64" rx="8"></rect>
-  <text class="lbl-core" x="1365" y="292" text-anchor="middle">notificationTaskExecutor</text>
-  <text class="sub-core" x="1365" y="309" text-anchor="middle">4–16 threads · queue 200 · CallerRunsPolicy</text>
-  <text class="sub-core" x="1365" y="323" text-anchor="middle">waits up to 20s for in-flight sends on shutdown</text>
+  <rect class="box box-core" x="1180" y="146" width="380" height="88" rx="8"></rect>
+  <text class="lbl-core" x="1370" y="169" text-anchor="middle">notificationTaskExecutor</text>
+  <text class="sub-core" x="1370" y="187" text-anchor="middle">4–16 threads · queue 200</text>
+  <text class="sub-core" x="1370" y="201" text-anchor="middle">CallerRunsPolicy on saturation</text>
+  <text class="sub-core" x="1370" y="215" text-anchor="middle">waits up to 20s for in-flight</text>
+  <text class="sub-core" x="1370" y="228" text-anchor="middle">sends on shutdown</text>
 
-  <line class="conn-dash" x1="1100" y1="300" x2="1150" y2="300"></line>
-  <text class="conn-label" x="1096" y="292" text-anchor="end">submits to</text>
+  <line class="conn-dash" x1="1160" y1="190" x2="1180" y2="190"></line>
+  <text class="conn-label" x="1156" y="182" text-anchor="end">submits to</text>
 
-  <!-- bus: dispatcher fans out to all 6 senders -->
-  <line class="conn" x1="810" y1="332" x2="810" y2="366"></line>
-  <line x1="160" y1="366" x2="1460" y2="366" stroke="var(--line)" stroke-width="1.6"></line>
-  <line class="conn" x1="160" y1="366" x2="160" y2="392"></line>
-  <line class="conn" x1="420" y1="366" x2="420" y2="392"></line>
-  <line class="conn" x1="680" y1="366" x2="680" y2="392"></line>
-  <line class="conn" x1="940" y1="366" x2="940" y2="392"></line>
-  <line class="conn" x1="1200" y1="366" x2="1200" y2="392"></line>
-  <line class="conn" x1="1460" y1="366" x2="1460" y2="392"></line>
+  <!-- dispatcher routes to the ChannelNotificationSender interface -->
+  <line class="conn" x1="780" y1="234" x2="780" y2="252"></line>
+  <line x1="40" y1="252" x2="1520" y2="252" stroke="var(--line)" stroke-width="1.6"></line>
+  <text class="conn-label" x="792" y="246">sendersByChannel.get(channel).send(request)</text>
 
-  <!-- ============ ROW: CHANNEL SENDERS ============ -->
-  <rect class="box box-sender" x="40"   y="392" width="240" height="62" rx="8"></rect>
-  <rect class="box box-sender" x="300"  y="392" width="240" height="62" rx="8"></rect>
-  <rect class="box box-sender" x="560"  y="392" width="240" height="62" rx="8"></rect>
-  <rect class="box box-sender" x="820"  y="392" width="240" height="62" rx="8"></rect>
-  <rect class="box box-sender" x="1080" y="392" width="240" height="62" rx="8"></rect>
-  <rect class="box box-sender" x="1340" y="392" width="240" height="62" rx="8"></rect>
+  <!-- ============ ROW: CHANNEL INTERFACE ============ -->
+  <rect class="box box-iface" x="40" y="264" width="1480" height="52" rx="8"></rect>
+  <text class="lbl-iface" x="780" y="285" text-anchor="middle">«interface» ChannelNotificationSender</text>
+  <text class="sub" x="780" y="303" text-anchor="middle">NotificationChannel channel()  ·  NotificationResult send(NotificationRequest request)</text>
 
-  <text class="lbl" x="160"  y="418" text-anchor="middle">EmailNotificationService</text>
-  <text class="lbl" x="420"  y="418" text-anchor="middle">SmsNotificationService</text>
-  <text class="lbl" x="680"  y="418" text-anchor="middle">PushNotificationSender</text>
-  <text class="lbl" x="940"  y="418" text-anchor="middle">WhatsAppNotificationSender</text>
-  <text class="lbl" x="1200" y="418" text-anchor="middle">InAppNotificationSender</text>
-  <text class="lbl" x="1460" y="418" text-anchor="middle">ConsoleNotificationSender</text>
+  <!-- implements arrows, one per sender column -->
+  <line class="conn" x1="180"  y1="316" x2="180"  y2="364"></line>
+  <line class="conn" x1="480"  y1="316" x2="480"  y2="364"></line>
+  <line class="conn" x1="780"  y1="316" x2="780"  y2="364"></line>
+  <line class="conn" x1="1080" y1="316" x2="1080" y2="364"></line>
+  <line class="conn" x1="1380" y1="316" x2="1380" y2="364"></line>
+  <text class="conn-label" x="180" y="342" text-anchor="middle">implements</text>
+  <text class="conn-label" x="1380" y="342" text-anchor="middle">implements</text>
 
-  <text class="sub" x="160"  y="438" text-anchor="middle">channel() = EMAIL</text>
-  <text class="sub" x="420"  y="438" text-anchor="middle">channel() = SMS</text>
-  <text class="sub" x="680"  y="438" text-anchor="middle">channel() = PUSH</text>
-  <text class="sub" x="940"  y="438" text-anchor="middle">channel() = WHATSAPP</text>
-  <text class="sub" x="1200" y="438" text-anchor="middle">channel() = IN_APP</text>
-  <text class="sub" x="1460" y="438" text-anchor="middle">channel() = CONSOLE</text>
-  <text class="sub" x="160" y="450" text-anchor="middle" opacity="0.85">renders templates/email/*</text>
-  <text class="sub" x="420" y="450" text-anchor="middle" opacity="0.85">renders templates/sms/*</text>
-  <text class="sub" x="680" y="450" text-anchor="middle" opacity="0.85">title/body straight from params</text>
-  <text class="sub" x="940" y="450" text-anchor="middle" opacity="0.85">renders templates/whatsapp/*</text>
-  <text class="sub" x="1200" y="450" text-anchor="middle" opacity="0.85">title/body straight from params</text>
-  <text class="sub" x="1460" y="450" text-anchor="middle" opacity="0.85">title/body straight from params</text>
+  <!-- ============ ROW: SENDERS ============ -->
+  <rect class="box box-sender" x="40"   y="364" width="280" height="150" rx="8"></rect>
+  <rect class="box box-sender" x="340"  y="364" width="280" height="150" rx="8"></rect>
+  <rect class="box box-sender" x="640"  y="364" width="280" height="150" rx="8"></rect>
+  <rect class="box box-sender" x="940"  y="364" width="280" height="150" rx="8"></rect>
+  <rect class="box box-sender" x="1240" y="364" width="280" height="150" rx="8"></rect>
 
-  <!-- senders -> impl row -->
-  <line class="conn" x1="160"  y1="454" x2="160"  y2="496"></line>
-  <line class="conn" x1="420"  y1="454" x2="420"  y2="496"></line>
-  <line class="conn" x1="680"  y1="454" x2="680"  y2="496"></line>
-  <line class="conn" x1="940"  y1="454" x2="940"  y2="496"></line>
-  <line class="conn" x1="1200" y1="454" x2="1200" y2="496"></line>
-  <line class="conn" x1="1460" y1="454" x2="1460" y2="496"></line>
+  <text class="lbl" x="180"  y="386" text-anchor="middle">EmailNotificationService</text>
+  <text class="lbl" x="480"  y="386" text-anchor="middle">SmsNotificationService</text>
+  <text class="lbl" x="780"  y="386" text-anchor="middle">PushNotificationSender</text>
+  <text class="lbl" x="1080" y="386" text-anchor="middle">InAppNotificationSender</text>
+  <text class="lbl" x="1380" y="386" text-anchor="middle">ConsoleNotificationSender</text>
 
-  <!-- push sender also feeds PushToken table directly, routed through the gutter -->
-  <polyline class="conn-dash" points="800,423 806,423 806,696"></polyline>
+  <text class="sub" x="180"  y="403" text-anchor="middle">channel() = EMAIL</text>
+  <text class="sub" x="480"  y="403" text-anchor="middle">channel() = SMS</text>
+  <text class="sub" x="780"  y="403" text-anchor="middle">channel() = PUSH</text>
+  <text class="sub" x="1080" y="403" text-anchor="middle">channel() = IN_APP</text>
+  <text class="sub" x="1380" y="403" text-anchor="middle">channel() = CONSOLE</text>
 
-  <!-- ============ ROW: PROVIDERS / IMPL ============ -->
-  <rect class="box" x="40"   y="496" width="240" height="66" rx="8"></rect>
-  <rect class="box" x="300"  y="496" width="240" height="66" rx="8"></rect>
-  <rect class="box" x="560"  y="496" width="240" height="66" rx="8"></rect>
-  <rect class="box" x="820"  y="496" width="240" height="66" rx="8"></rect>
-  <rect class="box" x="1080" y="496" width="240" height="66" rx="8"></rect>
-  <rect class="box" x="1340" y="496" width="240" height="66" rx="8"></rect>
+  <!-- field lists -->
+  <text class="field" x="60" y="420">fields:</text>
+  <text class="field" x="60" y="433">• emailProvider: EmailProvider (I)</text>
+  <text class="field" x="60" y="446">• templateRenderer: TemplateRenderer (I) †</text>
+  <text class="field" x="60" y="459">• templateResolver: †</text>
+  <text class="field" x="72" y="472">NotificationTemplateResolver</text>
+  <text class="field" x="60" y="485">• notificationLogRepository: †</text>
+  <text class="field" x="72" y="498">NotificationLogRepository</text>
 
-  <text class="lbl-mono" x="160"  y="521" text-anchor="middle">SmtpEmailProvider</text>
-  <text class="lbl-mono" x="420"  y="521" text-anchor="middle">ConsoleSmsProvider</text>
-  <text class="lbl-mono" x="680"  y="521" text-anchor="middle">FcmSender</text>
-  <text class="lbl-mono" x="940"  y="521" text-anchor="middle">ConsoleWhatsAppProvider</text>
-  <text class="lbl-mono" x="1200" y="521" text-anchor="middle">AlertRepository</text>
-  <text class="lbl-mono" x="1460" y="521" text-anchor="middle">logger.info(...)</text>
+  <text class="field" x="360" y="420">fields:</text>
+  <text class="field" x="360" y="433">• smsProvider: SmsProvider (I)</text>
+  <text class="field" x="360" y="446">• templateRenderer: TemplateRenderer (I) †</text>
+  <text class="field" x="360" y="459">• templateResolver: †</text>
+  <text class="field" x="372" y="472">NotificationTemplateResolver</text>
+  <text class="field" x="360" y="485">• notificationLogRepository: †</text>
+  <text class="field" x="372" y="498">NotificationLogRepository</text>
 
-  <text class="sub" x="160"  y="539" text-anchor="middle">implements EmailProvider · active</text>
-  <text class="sub" x="420"  y="539" text-anchor="middle">implements SmsProvider</text>
-  <text class="sub" x="680"  y="539" text-anchor="middle">Firebase Admin SDK</text>
-  <text class="sub" x="940"  y="539" text-anchor="middle">implements WhatsAppProvider</text>
-  <text class="sub" x="1200" y="539" text-anchor="middle">persists the Alert row</text>
-  <text class="sub" x="1460" y="539" text-anchor="middle">no dependency</text>
-  <text class="sub" x="160" y="553" text-anchor="middle" opacity="0.8">(or ConsoleEmailProvider)</text>
-  <text class="sub" x="680" y="553" text-anchor="middle" opacity="0.8">stub-safe, no creds needed</text>
-  <text class="sub" x="1460" y="553" text-anchor="middle" opacity="0.8">always active</text>
+  <text class="field" x="660" y="420">fields:</text>
+  <text class="field" x="660" y="437">• pushTokenRepository: PushTokenRepository</text>
+  <text class="field" x="660" y="451">• fcmSender: FcmSender</text>
+  <text class="field" x="660" y="472" opacity="0.85" style="font-size:9.3px">resolves destination via request.userId()</text>
+  <text class="field" x="660" y="486" opacity="0.85" style="font-size:9.3px">— fans out to every active device token</text>
 
-  <!-- impl -> external/store row -->
-  <line class="conn" x1="160"  y1="562" x2="160"  y2="602"></line>
-  <line class="conn" x1="680"  y1="562" x2="680"  y2="602"></line>
-  <line class="conn" x1="940"  y1="562" x2="940"  y2="602"></line>
-  <line class="conn" x1="1200" y1="562" x2="1200" y2="602"></line>
-  <line class="conn" x1="1460" y1="562" x2="1460" y2="602"></line>
-  <line class="conn-dash" x1="420" y1="562" x2="420" y2="602"></line>
+  <text class="field" x="960" y="422">fields:</text>
+  <text class="field" x="960" y="437">• alertRepository: AlertRepository</text>
+  <text class="field" x="960" y="451">• objectMapper: ObjectMapper (Jackson)</text>
+  <text class="field" x="960" y="472" opacity="0.85">persists an Alert row read by</text>
+  <text class="field" x="960" y="486" opacity="0.85">GET /api/v1/notifications (the bell)</text>
 
-  <!-- email + sms impl -> shared NotificationLog table, through the gutter -->
-  <polyline class="conn-dash" points="220,562 290,562 290,696"></polyline>
-  <polyline class="conn-dash" points="360,562 290,562 290,696"></polyline>
+  <text class="field" x="1260" y="422">fields: (none)</text>
+  <text class="field" x="1260" y="443" opacity="0.85">zero-config channel - logs via Slf4j.</text>
+  <text class="field" x="1260" y="457" opacity="0.85">always available, no provider setup,</text>
+  <text class="field" x="1260" y="471" opacity="0.85">useful in local dev and as an</text>
+  <text class="field" x="1260" y="485" opacity="0.85">always-on fan-out target.</text>
 
-  <!-- ============ ROW: EXTERNAL / STORE ============ -->
-  <rect class="box box-ext"   x="40"   y="602" width="240" height="64" rx="8"></rect>
-  <rect class="box box-ext"   x="300"  y="602" width="240" height="64" rx="8" opacity="0.7"></rect>
-  <rect class="box box-ext"   x="560"  y="602" width="240" height="64" rx="8"></rect>
-  <rect class="box box-ext"   x="820"  y="602" width="240" height="64" rx="8" opacity="0.7"></rect>
-  <rect class="box box-store" x="1080" y="602" width="240" height="64" rx="8"></rect>
-  <rect class="box box-ext"   x="1340" y="602" width="240" height="64" rx="8"></rect>
+  <!-- senders -> row 11 (provider interfaces / repos) -->
+  <line class="conn" x1="180"  y1="514" x2="180"  y2="554"></line>
+  <line class="conn" x1="480"  y1="514" x2="480"  y2="554"></line>
+  <line class="conn" x1="705"  y1="514" x2="705"  y2="554"></line>
+  <line class="conn" x1="855"  y1="514" x2="855"  y2="554"></line>
+  <line class="conn" x1="1005" y1="514" x2="1005" y2="554"></line>
+  <line class="conn" x1="1155" y1="514" x2="1155" y2="554"></line>
 
-  <text class="lbl" x="160"  y="628" text-anchor="middle">SMTP Relay</text>
-  <text class="lbl" x="420"  y="628" text-anchor="middle" opacity="0.75">No gateway configured</text>
-  <text class="lbl" x="680"  y="628" text-anchor="middle">Firebase Cloud Messaging</text>
-  <text class="lbl" x="940"  y="628" text-anchor="middle" opacity="0.75">WhatsApp Business API</text>
-  <text class="lbl" x="1200" y="628" text-anchor="middle">Alert table</text>
-  <text class="lbl" x="1460" y="628" text-anchor="middle">stdout / app log</text>
+  <!-- ============ ROW 11: PROVIDER INTERFACES / CONCRETE REPOS ============ -->
+  <rect class="box box-iface" x="40"   y="554" width="280" height="50" rx="8"></rect>
+  <text class="lbl-iface" x="180" y="575" text-anchor="middle">«interface» EmailProvider</text>
+  <text class="sub" x="180" y="592" text-anchor="middle">send(to, subject, html, text)</text>
 
-  <text class="sub" x="160"  y="646" text-anchor="middle">external — real mail server</text>
-  <text class="sub" x="420"  y="646" text-anchor="middle">console-only today</text>
-  <text class="sub" x="680"  y="646" text-anchor="middle">external — real push delivery</text>
-  <text class="sub" x="940"  y="646" text-anchor="middle">not wired yet</text>
-  <text class="sub" x="1200" y="646" text-anchor="middle">powers the notification bell</text>
-  <text class="sub" x="1460" y="646" text-anchor="middle">dev-visible trace</text>
+  <rect class="box box-iface" x="340"  y="554" width="280" height="50" rx="8"></rect>
+  <text class="lbl-iface" x="480" y="575" text-anchor="middle">«interface» SmsProvider</text>
+  <text class="sub" x="480" y="592" text-anchor="middle">send(phoneNumber, message)</text>
 
-  <!-- ============ ROW: SHARED PERSISTENCE ============ -->
-  <rect class="box box-store" x="170" y="696" width="390" height="52" rx="8"></rect>
-  <text class="lbl" x="365" y="717" text-anchor="middle" font-size="12.5">NotificationLog table</text>
-  <text class="sub" x="365" y="734" text-anchor="middle">one row per EMAIL/SMS attempt — status, provider, failure reason (never the message body)</text>
+  <rect class="box" x="640" y="554" width="130" height="50" rx="8"></rect>
+  <text class="lbl-mono" x="705" y="575" text-anchor="middle" style="font-size:9.2px">PushTokenRepository</text>
+  <text class="sub" x="705" y="592" text-anchor="middle" style="font-size:8.8px">Spring Data JPA repo</text>
 
-  <rect class="box box-store" x="620" y="696" width="390" height="52" rx="8"></rect>
-  <text class="lbl" x="815" y="717" text-anchor="middle" font-size="12.5">PushToken table</text>
-  <text class="sub" x="815" y="734" text-anchor="middle">active device tokens per user — read directly by PushNotificationSender</text>
+  <rect class="box" x="790" y="554" width="130" height="50" rx="8"></rect>
+  <text class="lbl-mono" x="855" y="575" text-anchor="middle" style="font-size:12px">FcmSender</text>
+  <text class="sub" x="855" y="592" text-anchor="middle" style="font-size:8.8px">Firebase Admin SDK</text>
+
+  <rect class="box" x="940" y="554" width="130" height="50" rx="8"></rect>
+  <text class="lbl-mono" x="1005" y="575" text-anchor="middle" style="font-size:10.5px">AlertRepository</text>
+  <text class="sub" x="1005" y="592" text-anchor="middle" style="font-size:8.8px">Spring Data JPA repo</text>
+
+  <rect class="box" x="1090" y="554" width="130" height="50" rx="8"></rect>
+  <text class="lbl-mono" x="1155" y="575" text-anchor="middle" style="font-size:11px">ObjectMapper</text>
+  <text class="sub" x="1155" y="592" text-anchor="middle" style="font-size:9px">Jackson (JSON)</text>
+
+  <!-- row11 -> row12 (implements) for the 2 provider interfaces -->
+  <line class="conn" x1="103" y1="604" x2="103" y2="620"></line>
+  <line class="conn" x1="248" y1="604" x2="248" y2="620"></line>
+  <line class="conn" x1="405" y1="604" x2="405" y2="620"></line>
+  <text class="conn-label" x="180" y="615" text-anchor="middle">implements</text>
+
+  <!-- FcmSender / AlertRepository drop straight to the external row -->
+  <line class="conn" x1="855"  y1="604" x2="855"  y2="732"></line>
+  <line class="conn" x1="1005" y1="604" x2="1005" y2="732"></line>
+
+  <!-- ============ ROW 12: CONCRETE PROVIDER IMPLEMENTATIONS ============ -->
+  <rect class="box" x="40"  y="620" width="125" height="80" rx="8"></rect>
+  <text class="lbl-mono" x="103" y="638" text-anchor="middle">Smtp</text>
+  <text class="lbl-mono" x="103" y="651" text-anchor="middle">EmailProvider</text>
+  <text class="sub" x="103" y="664" text-anchor="middle" style="font-size:8.6px">email-provider=smtp</text>
+  <text class="sub" x="103" y="677" text-anchor="middle" style="font-size:8.6px">JavaMailSender</text>
+  <text class="sub" x="103" y="690" text-anchor="middle" style="font-size:8.6px">(Gmail/SMTP)</text>
+
+  <rect class="box" x="175" y="620" width="145" height="80" rx="8"></rect>
+  <text class="lbl-mono" x="248" y="638" text-anchor="middle">Console</text>
+  <text class="lbl-mono" x="248" y="651" text-anchor="middle">EmailProvider</text>
+  <text class="sub" x="248" y="664" text-anchor="middle" style="font-size:8.6px">default (dev)</text>
+  <text class="sub" x="248" y="677" text-anchor="middle" style="font-size:8.6px">prints to stdout,</text>
+  <text class="sub" x="248" y="690" text-anchor="middle" style="font-size:8.6px">no creds needed</text>
+
+  <rect class="box" x="340" y="620" width="130" height="80" rx="8"></rect>
+  <text class="lbl-mono" x="405" y="638" text-anchor="middle">Console</text>
+  <text class="lbl-mono" x="405" y="651" text-anchor="middle">SmsProvider</text>
+  <text class="sub" x="405" y="664" text-anchor="middle" style="font-size:8.6px">default - only impl</text>
+  <text class="sub" x="405" y="677" text-anchor="middle" style="font-size:8.6px">today, prints to</text>
+  <text class="sub" x="405" y="690" text-anchor="middle" style="font-size:8.6px">stdout</text>
+
+  <rect class="box box-ref" x="490" y="620" width="130" height="80" rx="8" opacity="0.75"></rect>
+  <text class="lbl-mono" x="555" y="643" text-anchor="middle" style="font-size:9px" opacity="0.85">+ future gateway</text>
+  <text class="sub" x="555" y="660" text-anchor="middle" style="font-size:8.4px" opacity="0.8">(new class + @Bean)</text>
+  <text class="sub" x="555" y="674" text-anchor="middle" style="font-size:8.4px" opacity="0.8">e.g. TwilioSmsProvider</text>
+
+  <!-- row12 -> external row -->
+  <line class="conn" x1="103"  y1="700" x2="103"  y2="732"></line>
+  <line class="conn-dash" x1="405"  y1="700" x2="405"  y2="732"></line>
+
+  <!-- ConsoleNotificationSender drops straight from the sender row to stdout -->
+  <line class="conn" x1="1380" y1="514" x2="1380" y2="732"></line>
+
+  <!-- ============ ROW: EXTERNAL ============ -->
+  <rect class="box box-ext"   x="40"   y="732" width="280" height="64" rx="8"></rect>
+  <rect class="box box-ext"   x="340"  y="732" width="280" height="64" rx="8" opacity="0.7"></rect>
+  <rect class="box box-ext"   x="640"  y="732" width="280" height="64" rx="8"></rect>
+  <rect class="box box-store" x="940"  y="732" width="280" height="64" rx="8"></rect>
+  <rect class="box box-ext"   x="1240" y="732" width="280" height="64" rx="8"></rect>
+
+  <text class="lbl" x="180"  y="758" text-anchor="middle">SMTP Relay</text>
+  <text class="lbl" x="480"  y="758" text-anchor="middle" opacity="0.75">No gateway configured</text>
+  <text class="lbl" x="780"  y="758" text-anchor="middle">Firebase Cloud Messaging</text>
+  <text class="lbl" x="1080" y="758" text-anchor="middle">Alert table</text>
+  <text class="lbl" x="1380" y="758" text-anchor="middle">stdout / app log</text>
+
+  <text class="sub" x="180"  y="776" text-anchor="middle">external — real mail server</text>
+  <text class="sub" x="480"  y="776" text-anchor="middle">console-only today</text>
+  <text class="sub" x="780"  y="776" text-anchor="middle">external — real push delivery</text>
+  <text class="sub" x="1080" y="776" text-anchor="middle">powers the notification bell</text>
+  <text class="sub" x="1380" y="776" text-anchor="middle">dev-visible trace</text>
+  <text class="sub" x="180" y="790" text-anchor="middle" opacity="0.85">(ConsoleEmailProvider → stdout instead)</text>
+  <text class="sub" x="780" y="790" text-anchor="middle" opacity="0.85">stub-safe if no credentials-path set</text>
+  <text class="sub" x="1380" y="790" text-anchor="middle" opacity="0.85">always active</text>
+
+  <!-- ============ ROW: SHARED TEMPLATE LAYER (reference) ============ -->
+  <rect class="box box-ref" x="40" y="832" width="280" height="82" rx="8"></rect>
+  <text class="lbl-iface" x="180" y="852" text-anchor="middle" style="font-size:11.5px">«interface» TemplateRenderer</text>
+  <text class="sub" x="180" y="868" text-anchor="middle" style="font-size:9.3px">render(template, params) — {{mustache}}</text>
+  <line class="conn" x1="180" y1="872" x2="180" y2="880"></line>
+  <text class="field" x="180" y="894" text-anchor="middle">↳ impl: SimpleTemplateRenderer</text>
+  <text class="field" x="180" y="906" text-anchor="middle" opacity="0.85">(no conditionals/loops, by design)</text>
+
+  <rect class="box box-ref" x="340" y="832" width="320" height="82" rx="8"></rect>
+  <text class="lbl-mono" x="500" y="854" text-anchor="middle" style="font-size:11.5px">NotificationTemplateResolver</text>
+  <text class="sub" x="500" y="870" text-anchor="middle" style="font-size:9px">concrete component, not an interface</text>
+  <text class="field" x="500" y="888" text-anchor="middle" style="font-size:9px">loads classpath:templates/{channel}/{type}.{html|txt}</text>
+  <text class="field" x="500" y="902" text-anchor="middle" opacity="0.85" style="font-size:9px">falls back to otp.* for any OTP-shaped type</text>
+
+
+  <!-- ============ ROW: SUPPORTING TYPES (reference) ============ -->
+  <text class="zone" x="40" y="928">Supporting types — the request payload &amp; channel enum used above</text>
+
+  <rect class="box box-ref" x="40" y="942" width="380" height="150" rx="8"></rect>
+  <text class="lbl-iface" x="230" y="964" text-anchor="middle">«record» NotificationRequest</text>
+  <text class="sub" x="230" y="980" text-anchor="middle" style="font-size:9.3px">the one shape every caller builds to trigger a notification</text>
+  <text class="field" x="60" y="998">type: NotificationType</text>
+  <text class="field" x="60" y="1012">channel: NotificationChannel</text>
+  <text class="field" x="60" y="1026">destination: String</text>
+  <text class="field" x="60" y="1040">userId: Long</text>
+  <text class="field" x="60" y="1054">params: Map&lt;String, Object&gt;</text>
+  <text class="field" x="230" y="1070" text-anchor="middle" opacity="0.85" style="font-size:8.6px">canonical ctor defaults params to Map.of() when null</text>
+
+  <rect class="box box-ref" x="450" y="942" width="480" height="150" rx="8"></rect>
+  <text class="lbl-iface" x="690" y="964" text-anchor="middle">«enum» NotificationChannel</text>
+  <text class="sub" x="690" y="980" text-anchor="middle" style="font-size:9.3px">every channel a notification can go out on</text>
+  <text class="field" x="470" y="998">EMAIL</text>
+  <text class="field" x="470" y="1012">SMS</text>
+  <text class="field" x="470" y="1026">PUSH — Firebase Cloud Messaging; fans out to every active PushToken</text>
+  <text class="field" x="470" y="1040">IN_APP — persists an Alert row (powers the notification bell)</text>
+  <text class="field" x="470" y="1054">CONSOLE — zero-config console trace, always available</text>
+  <text class="field" x="690" y="1070" text-anchor="middle" opacity="0.85" style="font-size:8.8px">(WHATSAPP also exists in code — not covered by this map)</text>
 </svg>
   </div>
 
   <div class="legend">
     <div class="legend-group">
       <span class="legend-title">Box kind</span>
-      <div class="legend-row"><span class="swatch sw-caller"></span> Caller (request thread)</div>
       <div class="legend-row"><span class="swatch sw-core"></span> Async dispatch core</div>
-      <div class="legend-row"><span class="swatch sw-sender"></span> ChannelNotificationSender</div>
+      <div class="legend-row"><span class="swatch sw-sender"></span> ChannelNotificationSender impl</div>
+      <div class="legend-row"><span class="swatch sw-iface"></span> «interface» (dashed accent border)</div>
     </div>
     <div class="legend-group">
       <span class="legend-title">&nbsp;</span>
-      <div class="legend-row"><span class="swatch sw-impl"></span> Provider / concrete impl</div>
+      <div class="legend-row"><span class="swatch sw-impl"></span> Concrete class / repository</div>
       <div class="legend-row"><span class="swatch sw-ext"></span> External system (dashed = not wired yet)</div>
       <div class="legend-row"><span class="swatch sw-store"></span> Our own table</div>
+      <div class="legend-row"><span class="swatch sw-ref"></span> Reference panel / extension point</div>
     </div>
     <div class="legend-group">
       <span class="legend-title">Line style</span>
       <div class="legend-row"><span class="line-sample"></span> Synchronous call / implements</div>
       <div class="legend-row"><span class="line-sample dashed"></span> Async hand-off, config lookup, or log write</div>
+      <div class="legend-row">† = shared singleton bean, same instance across every sender that lists it</div>
     </div>
   </div>
 

@@ -1,0 +1,431 @@
+<meta charset="utf-8">
+<title>Coupon Validation Map</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --bg:#f2f3f7;
+    --surface:#ffffff;
+    --surface-alt:#e9ebf1;
+    --border:#d6d9e2;
+    --ink:#171a24;
+    --ink-soft:#4c5165;
+    --ink-faint:#7d8296;
+    --accent:#0e7f8c;
+    --accent-strong:#0a5f69;
+    --accent-soft:#dcf1f1;
+    --accent-soft-border:#a9d9d9;
+    --core-fill:#123a41;
+    --core-ink:#eafbfa;
+    --ok:#2f8f5b;
+    --ok-fill:#e1f3e8;
+    --ok-border:#9bcfb0;
+    --warn:#a8650a;
+    --warn-fill:#fbf0dc;
+    --warn-border:#e3c07f;
+    --ref:#5b4b9e;
+    --ref-fill:#eeeafc;
+    --ref-border:#c9bdf0;
+    --line:#8a90a6;
+    --line-dashed:#a9aebd;
+    --shadow: 0 1px 2px rgba(23,26,36,0.05), 0 10px 26px -14px rgba(23,26,36,0.16);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0e1017;
+      --surface:#171a24;
+      --surface-alt:#1e222f;
+      --border:#2c303f;
+      --ink:#e9ebf3;
+      --ink-soft:#aeb2c4;
+      --ink-faint:#787d92;
+      --accent:#3fd0c9;
+      --accent-strong:#5fe0d9;
+      --accent-soft:#123632;
+      --accent-soft-border:#245a54;
+      --core-fill:#0e2e33;
+      --core-ink:#c9f5f1;
+      --ok:#5cc98c;
+      --ok-fill:#12271e;
+      --ok-border:#2f6b48;
+      --warn:#e0a545;
+      --warn-fill:#2c2210;
+      --warn-border:#5c481f;
+      --ref:#a99bea;
+      --ref-fill:#211c38;
+      --ref-border:#4a3f7c;
+      --line:#565c72;
+      --line-dashed:#454a5e;
+      --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 10px 26px -14px rgba(0,0,0,0.55);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0e1017; --surface:#171a24; --surface-alt:#1e222f; --border:#2c303f;
+    --ink:#e9ebf3; --ink-soft:#aeb2c4; --ink-faint:#787d92;
+    --accent:#3fd0c9; --accent-strong:#5fe0d9; --accent-soft:#123632; --accent-soft-border:#245a54;
+    --core-fill:#0e2e33; --core-ink:#c9f5f1;
+    --ok:#5cc98c; --ok-fill:#12271e; --ok-border:#2f6b48;
+    --warn:#e0a545; --warn-fill:#2c2210; --warn-border:#5c481f;
+    --ref:#a99bea; --ref-fill:#211c38; --ref-border:#4a3f7c;
+    --line:#565c72; --line-dashed:#454a5e;
+    --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 10px 26px -14px rgba(0,0,0,0.55);
+  }
+
+  *{box-sizing:border-box;}
+  body{ background:var(--bg); color:var(--ink); font-family:'IBM Plex Sans', system-ui, sans-serif; }
+  a{ color:var(--accent-strong); }
+  :root[data-theme="dark"] a, :root:not([data-theme="light"]) a{ color:var(--accent); }
+  .shell{ max-width:1900px; margin:0 auto; padding:28px 24px 60px; position:relative; }
+
+  .print-btn{
+    position:absolute; top:28px; right:24px;
+    font-family:'IBM Plex Sans',sans-serif; font-size:13px; font-weight:600;
+    color:#fff; background:var(--accent-strong); border:none; border-radius:8px;
+    padding:10px 18px; cursor:pointer; box-shadow:var(--shadow);
+    display:inline-flex; align-items:center; gap:8px;
+  }
+  .print-btn:hover{ background:var(--accent); }
+  .print-btn svg{ width:15px; height:15px; flex-shrink:0; }
+
+  header{ display:flex; flex-direction:column; gap:8px; padding-bottom:20px; margin-bottom:20px; border-bottom:1px solid var(--border); }
+  .eyebrow{ font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.05em; text-transform:uppercase; color:var(--accent-strong); }
+  :root[data-theme="dark"] .eyebrow, :root:not([data-theme="light"]) .eyebrow{ color:var(--accent); }
+  h1{ font-size:clamp(24px,3.4vw,32px); margin:0; letter-spacing:-0.01em; text-wrap:balance; }
+  p.dek{ margin:0; color:var(--ink-soft); font-size:14.5px; max-width:92ch; }
+  code{ font-family:'IBM Plex Mono',monospace; background:var(--surface-alt); border:1px solid var(--border); border-radius:4px; padding:1px 6px; font-size:12.5px; color:var(--ink); }
+
+  .diagram-frame{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    box-shadow:var(--shadow); overflow-x:auto; padding:8px;
+  }
+  .diagram-frame svg{ display:block; min-width:1300px; width:100%; height:auto; }
+
+  /* legend */
+  .legend{ display:flex; flex-wrap:wrap; gap:24px; margin-top:18px; padding:16px 20px; background:var(--surface); border:1px solid var(--border); border-radius:10px; box-shadow:var(--shadow); }
+  .legend-group{ display:flex; flex-direction:column; gap:8px; }
+  .legend-title{ font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); }
+  .legend-row{ display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--ink-soft); }
+  .swatch{ width:16px; height:12px; border-radius:3px; flex-shrink:0; }
+  .sw-caller{ background:var(--surface-alt); border:1.5px solid var(--ink-faint); }
+  .sw-core{ background:var(--core-fill); border:1.5px solid var(--core-fill); }
+  .sw-pipe{ background:var(--warn-fill); border:1.5px solid var(--warn-border); }
+  .sw-iface{ background:var(--surface); border:1.5px dashed var(--accent-strong); }
+  .sw-impl{ background:var(--surface); border:1.5px solid var(--border); }
+  .sw-store{ background:var(--ok-fill); border:1.5px solid var(--ok-border); }
+  .sw-ref{ background:var(--ref-fill); border:1.5px dashed var(--ref-border); }
+  .line-sample{ width:22px; height:0; border-top:2px solid var(--line); }
+  .line-sample.dashed{ border-top:2px dashed var(--line-dashed); }
+
+  footer{ margin-top:26px; padding-top:16px; border-top:1px solid var(--border); font-size:12px; color:var(--ink-faint); font-family:'IBM Plex Mono',monospace; display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+
+  /* SVG text/box styling via classes */
+  .box{ fill:var(--surface); stroke:var(--border); stroke-width:1.5; }
+  .box-caller{ fill:var(--surface-alt); stroke:var(--ink-faint); stroke-width:1.5; }
+  .box-core{ fill:var(--core-fill); stroke:var(--core-fill); }
+  .box-iface{ fill:var(--surface); stroke:var(--accent-strong); stroke-width:1.5; stroke-dasharray:5,4; }
+  .box-pipe{ fill:var(--warn-fill); stroke:var(--warn-border); stroke-width:1.5; }
+  .box-store{ fill:var(--ok-fill); stroke:var(--ok-border); stroke-width:1.5; }
+  .box-ref{ fill:var(--ref-fill); stroke:var(--ref-border); stroke-width:1.5; stroke-dasharray:5,4; }
+
+  .lbl{ font-family:'IBM Plex Sans',sans-serif; font-weight:600; fill:var(--ink); font-size:13.5px; }
+  .lbl-core{ font-family:'IBM Plex Sans',sans-serif; font-weight:600; fill:var(--core-ink); font-size:13.5px; }
+  .lbl-mono{ font-family:'IBM Plex Mono',monospace; font-weight:600; fill:var(--ink); font-size:13px; }
+  .lbl-iface{ font-family:'IBM Plex Mono',monospace; font-weight:600; fill:var(--accent-strong); font-size:12.5px; }
+  .sub{ font-family:'IBM Plex Mono',monospace; fill:var(--ink-soft); font-size:10.5px; }
+  .sub-core{ font-family:'IBM Plex Mono',monospace; fill:#9fd8d3; font-size:10.7px; }
+  .field{ font-family:'IBM Plex Mono',monospace; fill:var(--ink-soft); font-size:10px; }
+  .zone{ font-family:'IBM Plex Mono',monospace; font-weight:600; letter-spacing:.08em; fill:var(--ink-faint); font-size:11px; text-transform:uppercase; }
+
+  .conn{ stroke:var(--line); stroke-width:1.6; fill:none; marker-end:url(#arrow); }
+  .conn-dash{ stroke:var(--line-dashed); stroke-width:1.6; fill:none; stroke-dasharray:5,4; marker-end:url(#arrowDash); }
+  .conn-label{ font-family:'IBM Plex Mono',monospace; fill:var(--ink-faint); font-size:9.6px; }
+
+  /* ============ PRINT: one landscape page, no margins, light theme forced ============ */
+  @media print{
+    @page{ size:landscape; margin:0; }
+
+    :root, :root[data-theme="dark"], :root[data-theme="light"]{
+      --bg:#ffffff; --surface:#ffffff; --surface-alt:#e9ebf1; --border:#d6d9e2;
+      --ink:#171a24; --ink-soft:#4c5165; --ink-faint:#7d8296;
+      --accent:#0e7f8c; --accent-strong:#0a5f69; --accent-soft:#dcf1f1; --accent-soft-border:#a9d9d9;
+      --core-fill:#123a41; --core-ink:#eafbfa;
+      --ok:#2f8f5b; --ok-fill:#e1f3e8; --ok-border:#9bcfb0;
+      --warn:#a8650a; --warn-fill:#fbf0dc; --warn-border:#e3c07f;
+      --ref:#5b4b9e; --ref-fill:#eeeafc; --ref-border:#c9bdf0;
+      --line:#8a90a6; --line-dashed:#a9aebd;
+      --shadow:none;
+    }
+    *{ -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; color-adjust:exact !important; }
+
+    html, body{ width:100%; height:100%; margin:0; padding:0; background:#fff; }
+    .no-print{ display:none !important; }
+
+    .shell{ max-width:none; width:100%; height:100vh; margin:0; padding:4mm 6mm; box-sizing:border-box;
+      display:flex; flex-direction:column; }
+
+    header{ flex:0 0 auto; padding-bottom:4px; margin-bottom:4px; border-bottom:1px solid #ccc; }
+    .eyebrow{ font-size:9px; }
+    h1{ font-size:15px; }
+    header .dek{ display:none; }
+
+    .diagram-frame{ flex:1 1 auto; min-height:0; border:none; box-shadow:none; padding:0; overflow:visible;
+      display:flex; align-items:center; justify-content:center; }
+    .diagram-frame svg{ min-width:0 !important; width:auto; height:100%; max-width:100%; max-height:100%; }
+
+    .legend{ flex:0 0 auto; box-shadow:none; border:1px solid #ccc; border-radius:6px;
+      margin-top:4px; padding:4px 10px; gap:14px; }
+    .legend-title{ font-size:7px; }
+    .legend-row{ font-size:8px; gap:5px; }
+    .swatch{ width:11px; height:8px; }
+    .line-sample{ width:16px; }
+
+    footer{ display:none; }
+  }
+</style>
+
+<div class="shell">
+  <button class="print-btn no-print" onclick="window.print()" type="button">
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2M6 14h12v7H6v-7z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path>
+    </svg>
+    Print diagram
+  </button>
+  <header>
+    <div class="eyebrow">pureeats-order-service &nbsp;/&nbsp; pureeats-catalog-service &nbsp;/&nbsp; coupon validation</div>
+    <h1>Coupon Validation Map</h1>
+    <p class="dek">Zoomed-in view of just the coupon-validation rule chain (see
+      <code>checkout-validation-map.html</code> for the full pre-order picture). Unlike the cart-validation
+      rules, coupon checks are <strong>sequential and fail-fast</strong>: <code>CouponService.validate(...)</code>
+      throws <code>BadRequestException</code> on the very first check that fails, in the fixed order shown below -
+      order matters here, unlike the independent <code>CartValidationRule</code> beans.</p>
+  </header>
+
+  <div class="diagram-frame">
+<svg viewBox="0 0 1600 1100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Coupon validation class diagram">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"></path>
+    </marker>
+    <marker id="arrowDash" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--line-dashed)"></path>
+    </marker>
+  </defs>
+
+  <!-- ============ ZONE LABELS ============ -->
+  <text class="zone" x="40" y="16">Callers — where coupon validation is triggered from</text>
+  <text class="zone" x="40" y="160">«service» CouponService — the single validation &amp; redemption gate</text>
+  <text class="zone" x="40" y="310">private validate(code, restaurantId, orderAmount, isFirstOrder) — sequential, throws on the FIRST failing check</text>
+  <text class="zone" x="40" y="460">Discount calculation — strategy pattern, dispatched by calculatorFor(coupon.discountType)</text>
+  <text class="zone" x="40" y="700">Entities</text>
+  <text class="zone" x="40" y="940">DTOs used above</text>
+
+  <!-- ============ ROW: CALLERS ============ -->
+  <rect class="box box-caller" x="40" y="30" width="750" height="100" rx="8"></rect>
+  <text class="lbl" x="415" y="52" text-anchor="middle">CartValidationService</text>
+  <text class="sub" x="415" y="69" text-anchor="middle">validate(request, userId) — live cart-page preview</text>
+  <text class="field" x="415" y="86" text-anchor="middle">→ couponService.preview(new CouponApplyRequest(code, restaurantId, itemTotal))</text>
+  <text class="field" x="415" y="102" text-anchor="middle" opacity="0.85">lenient: treats caller as first-order-eligible (isFirstOrder = true)</text>
+
+  <rect class="box box-caller" x="810" y="30" width="750" height="100" rx="8"></rect>
+  <text class="lbl" x="1185" y="52" text-anchor="middle">OrderService</text>
+  <text class="sub" x="1185" y="69" text-anchor="middle">placeOrder(userId, request) — actual checkout</text>
+  <text class="field" x="1185" y="86" text-anchor="middle">→ couponService.recordUsage(code, restaurantId, itemTotal, userId, isFirstOrder)</text>
+  <text class="field" x="1185" y="102" text-anchor="middle" opacity="0.85">isFirstOrder = orderRepository.findByUserIdOrderByCreatedAtDesc(userId).isEmpty()</text>
+
+  <line class="conn" x1="415" y1="130" x2="415" y2="174"></line>
+  <line class="conn" x1="1185" y1="130" x2="1185" y2="174"></line>
+
+  <!-- ============ ROW: COUPONSERVICE ============ -->
+  <rect class="box box-core" x="300" y="174" width="1000" height="118" rx="8"></rect>
+  <text class="lbl-core" x="800" y="196" text-anchor="middle">CouponService</text>
+  <text class="sub-core" x="800" y="212" text-anchor="middle">@Service · @RequiredArgsConstructor</text>
+  <text class="sub-core" x="800" y="230" text-anchor="middle">fields: CouponRepository · CouponUsageRepository · UserRepository · RestaurantRepository</text>
+  <text class="sub-core" x="800" y="246" text-anchor="middle">discountCalculators: List&lt;DiscountCalculator&gt; → @PostConstruct indexes into Map&lt;DiscountType,DiscountCalculator&gt;</text>
+  <text class="sub-core" x="800" y="264" text-anchor="middle">preview(...): CouponApplyResponse — validate(lenient) + calculate, usage NOT recorded</text>
+  <text class="sub-core" x="800" y="280" text-anchor="middle">recordUsage(...): CouponRedemptionResult — validate + calculate + record usage, atomically</text>
+
+  <!-- route down to the first pipeline step -->
+  <line class="conn" x1="800" y1="292" x2="800" y2="308"></line>
+  <polyline class="conn" points="800,308 160,308 160,330"></polyline>
+
+  <!-- ============ ROW: SEQUENTIAL VALIDATE() PIPELINE ============ -->
+  <rect class="box box-pipe" x="40"   y="330" width="240" height="112" rx="8"></rect>
+  <rect class="box box-pipe" x="296"  y="330" width="240" height="112" rx="8"></rect>
+  <rect class="box box-pipe" x="552"  y="330" width="240" height="112" rx="8"></rect>
+  <rect class="box box-pipe" x="808"  y="330" width="240" height="112" rx="8"></rect>
+  <rect class="box box-pipe" x="1064" y="330" width="240" height="112" rx="8"></rect>
+  <rect class="box box-pipe" x="1320" y="330" width="240" height="112" rx="8"></rect>
+
+  <text class="lbl" x="160"  y="352" text-anchor="middle" font-size="12.5">1. Exists &amp; active</text>
+  <text class="lbl" x="416"  y="352" text-anchor="middle" font-size="12.5">2. Not expired</text>
+  <text class="lbl" x="672"  y="352" text-anchor="middle" font-size="12.5">3. Restaurant scope</text>
+  <text class="lbl" x="928"  y="352" text-anchor="middle" font-size="12.5">4. Usage limit</text>
+  <text class="lbl" x="1184" y="352" text-anchor="middle" font-size="12.5">5. Min. order amount</text>
+  <text class="lbl" x="1440" y="352" text-anchor="middle" font-size="12.5">6. First-order-only</text>
+
+  <text class="sub" x="160"  y="371" text-anchor="middle">findByCodeIgnoreCase-</text>
+  <text class="sub" x="160"  y="384" text-anchor="middle">AndIsActiveTrue(code)</text>
+  <text class="sub" x="416"  y="371" text-anchor="middle">coupon.expiryDate</text>
+  <text class="sub" x="416"  y="384" text-anchor="middle">.isBefore(now)</text>
+  <text class="sub" x="672"  y="371" text-anchor="middle">global (id=0) or ==</text>
+  <text class="sub" x="672"  y="384" text-anchor="middle">coupon.restaurantId</text>
+  <text class="sub" x="928"  y="371" text-anchor="middle">coupon.count &gt;=</text>
+  <text class="sub" x="928"  y="384" text-anchor="middle">coupon.totalCoupon</text>
+  <text class="sub" x="1184" y="371" text-anchor="middle">orderAmount &lt;</text>
+  <text class="sub" x="1184" y="384" text-anchor="middle">coupon.minOrderAmount</text>
+  <text class="sub" x="1440" y="371" text-anchor="middle">firstOrderOnly &amp;&amp;</text>
+  <text class="sub" x="1440" y="384" text-anchor="middle">!isFirstOrder</text>
+
+  <text class="field" x="160"  y="405" text-anchor="middle" opacity="0.85">else throw:</text>
+  <text class="field" x="160"  y="420" text-anchor="middle" opacity="0.85">"Invalid or inactive</text>
+  <text class="field" x="160"  y="433" text-anchor="middle" opacity="0.85">coupon code"</text>
+
+  <text class="field" x="416"  y="405" text-anchor="middle" opacity="0.85">else throw:</text>
+  <text class="field" x="416"  y="420" text-anchor="middle" opacity="0.85">"This coupon has</text>
+  <text class="field" x="416"  y="433" text-anchor="middle" opacity="0.85">expired"</text>
+
+  <text class="field" x="672"  y="405" text-anchor="middle" opacity="0.85">else throw:</text>
+  <text class="field" x="672"  y="420" text-anchor="middle" opacity="0.85">"not valid for this</text>
+  <text class="field" x="672"  y="433" text-anchor="middle" opacity="0.85">restaurant"</text>
+
+  <text class="field" x="928"  y="405" text-anchor="middle" opacity="0.85">else throw:</text>
+  <text class="field" x="928"  y="420" text-anchor="middle" opacity="0.85">"reached its usage</text>
+  <text class="field" x="928"  y="433" text-anchor="middle" opacity="0.85">limit"</text>
+
+  <text class="field" x="1184" y="405" text-anchor="middle" opacity="0.85">else throw:</text>
+  <text class="field" x="1184" y="420" text-anchor="middle" opacity="0.85">"Minimum order amount</text>
+  <text class="field" x="1184" y="433" text-anchor="middle" opacity="0.85">for this coupon is ₹X"</text>
+
+  <text class="field" x="1440" y="405" text-anchor="middle" opacity="0.85">else throw:</text>
+  <text class="field" x="1440" y="420" text-anchor="middle" opacity="0.85">"only valid on your</text>
+  <text class="field" x="1440" y="433" text-anchor="middle" opacity="0.85">first order"</text>
+
+  <!-- sequential flow arrows between pipeline steps -->
+  <line class="conn" x1="280"  y1="386" x2="296"  y2="386"></line>
+  <line class="conn" x1="536"  y1="386" x2="552"  y2="386"></line>
+  <line class="conn" x1="792"  y1="386" x2="808"  y2="386"></line>
+  <line class="conn" x1="1048" y1="386" x2="1064" y2="386"></line>
+  <line class="conn" x1="1304" y1="386" x2="1320" y2="386"></line>
+
+  <!-- all 6 pass -> validated Coupon -> discount calculation -->
+  <polyline class="conn" points="1440,442 1440,460 800,460 800,478"></polyline>
+  <text class="conn-label" x="1100" y="454">all 6 pass → validated Coupon → calculatorFor(coupon.discountType)</text>
+
+  <!-- ============ ROW: DISCOUNTCALCULATOR INTERFACE ============ -->
+  <rect class="box box-iface" x="300" y="478" width="1000" height="56" rx="8"></rect>
+  <text class="lbl-iface" x="800" y="500" text-anchor="middle">«interface» DiscountCalculator</text>
+  <text class="sub" x="800" y="518" text-anchor="middle">type(): DiscountType  ·  calculateDiscount(coupon, orderAmount): BigDecimal  ·  waivesDeliveryCharge(): boolean = false</text>
+
+  <line class="conn" x1="285"  y1="534" x2="285"  y2="560"></line>
+  <line class="conn" x1="800"  y1="534" x2="800"  y2="560"></line>
+  <line class="conn" x1="1315" y1="534" x2="1315" y2="560"></line>
+  <text class="conn-label" x="285" y="552" text-anchor="middle">implements</text>
+  <text class="conn-label" x="1315" y="552" text-anchor="middle">implements</text>
+
+  <!-- ============ ROW: DISCOUNTCALCULATOR IMPLEMENTATIONS ============ -->
+  <rect class="box" x="40"   y="560" width="490" height="112" rx="8"></rect>
+  <text class="lbl-mono" x="285" y="582" text-anchor="middle">FlatDiscountCalculator</text>
+  <text class="sub" x="285" y="599" text-anchor="middle">type() = DiscountType.AMOUNT</text>
+  <text class="field" x="285" y="618" text-anchor="middle">fixed ₹ amount off the item total,</text>
+  <text class="field" x="285" y="632" text-anchor="middle">capped at coupon.uptoAmount</text>
+
+  <rect class="box" x="555"  y="560" width="490" height="112" rx="8"></rect>
+  <text class="lbl-mono" x="800" y="582" text-anchor="middle">PercentageDiscountCalculator</text>
+  <text class="sub" x="800" y="599" text-anchor="middle">type() = DiscountType.PERCENTAGE</text>
+  <text class="field" x="800" y="618" text-anchor="middle">% of orderAmount off (HALF_UP, scale 2),</text>
+  <text class="field" x="800" y="632" text-anchor="middle">capped at coupon.uptoAmount</text>
+
+  <rect class="box" x="1070" y="560" width="490" height="112" rx="8"></rect>
+  <text class="lbl-mono" x="1315" y="582" text-anchor="middle">FreeDeliveryDiscountCalculator</text>
+  <text class="sub" x="1315" y="599" text-anchor="middle">type() = DiscountType.FREE_DELIVERY</text>
+  <text class="field" x="1315" y="618" text-anchor="middle">discount is always ZERO —</text>
+  <text class="field" x="1315" y="632" text-anchor="middle">waivesDeliveryCharge() returns true</text>
+
+  <!-- ============ ROW: ENTITIES ============ -->
+  <rect class="box box-store" x="40"  y="714" width="700" height="200" rx="8"></rect>
+  <text class="lbl" x="390" y="736" text-anchor="middle">Coupon</text>
+  <text class="sub" x="390" y="752" text-anchor="middle">@Entity(table = "coupons")</text>
+  <text class="field" x="60"  y="772">id: Long</text>
+  <text class="field" x="60"  y="788">name, description: String</text>
+  <text class="field" x="60"  y="804">code: String</text>
+  <text class="field" x="60"  y="820">discountType: String (enum name)</text>
+  <text class="field" x="60"  y="836">discount: String (numeric text)</text>
+  <text class="field" x="60"  y="852">expiryDate: LocalDateTime</text>
+  <text class="field" x="60"  y="868">isActive: Boolean</text>
+  <text class="field" x="60"  y="884">createdBy: Long</text>
+  <text class="field" x="400" y="772">restaurantId: Integer (0 = global)</text>
+  <text class="field" x="400" y="788">minOrderAmount: BigDecimal</text>
+  <text class="field" x="400" y="804">uptoAmount: String (numeric text)</text>
+  <text class="field" x="400" y="820">totalCoupon, maxCount: Integer</text>
+  <text class="field" x="400" y="836">count: Integer (redemptions so far)</text>
+  <text class="field" x="400" y="852">firstOrderOnly: Boolean</text>
+  <text class="field" x="400" y="868">createdAt, updatedAt: LocalDateTime</text>
+
+  <rect class="box box-store" x="760" y="714" width="380" height="200" rx="8"></rect>
+  <text class="lbl" x="950" y="736" text-anchor="middle">CouponUsage</text>
+  <text class="sub" x="950" y="752" text-anchor="middle">@Entity — one row per redemption</text>
+  <text class="field" x="780" y="772">id: Long</text>
+  <text class="field" x="780" y="788">couponId: Integer</text>
+  <text class="field" x="780" y="804">userId: Integer</text>
+  <text class="field" x="780" y="820">resturantId: Integer <tspan opacity="0.7">(sic)</tspan></text>
+  <text class="field" x="780" y="836">couponUsed: Integer</text>
+  <text class="field" x="780" y="852">createdAt, updatedAt: LocalDateTime</text>
+
+  <rect class="box box-ref" x="1160" y="714" width="400" height="200" rx="8"></rect>
+  <text class="lbl-iface" x="1360" y="736" text-anchor="middle" style="font-size:12px">«enum» DiscountType</text>
+  <text class="sub" x="1360" y="752" text-anchor="middle" style="font-size:9.5px">domain.enums</text>
+  <text class="field" x="1180" y="774">AMOUNT</text>
+  <text class="field" x="1180" y="790">PERCENTAGE</text>
+  <text class="field" x="1180" y="806">FREE_DELIVERY</text>
+  <text class="field" x="1360" y="828" text-anchor="middle" opacity="0.85" style="font-size:9px">CouponService.toDiscountType(wireValue):</text>
+  <text class="field" x="1360" y="842" text-anchor="middle" opacity="0.85" style="font-size:9px">"flat"/"amount" → AMOUNT</text>
+  <text class="field" x="1360" y="856" text-anchor="middle" opacity="0.85" style="font-size:9px">"percentage" → PERCENTAGE</text>
+  <text class="field" x="1360" y="870" text-anchor="middle" opacity="0.85" style="font-size:9px">"free_delivery"/"freedelivery" → FREE_DELIVERY</text>
+
+  <!-- ============ ROW: DTOs ============ -->
+  <rect class="box box-ref" x="40"   y="954" width="490" height="112" rx="8"></rect>
+  <text class="lbl-mono" x="285" y="976" text-anchor="middle" style="font-size:12px">CouponApplyRequest</text>
+  <text class="sub" x="285" y="992" text-anchor="middle" style="font-size:9.5px">record — input to preview()</text>
+  <text class="field" x="285" y="1011" text-anchor="middle">code: String</text>
+  <text class="field" x="285" y="1027" text-anchor="middle">restaurantId: Integer · orderAmount: BigDecimal</text>
+
+  <rect class="box box-ref" x="555"  y="954" width="490" height="112" rx="8"></rect>
+  <text class="lbl-mono" x="800" y="976" text-anchor="middle" style="font-size:12px">CouponApplyResponse</text>
+  <text class="sub" x="800" y="992" text-anchor="middle" style="font-size:9.5px">record — output of preview()</text>
+  <text class="field" x="800" y="1011" text-anchor="middle">couponId: Long · code: String · waivesDelivery: boolean</text>
+  <text class="field" x="800" y="1027" text-anchor="middle">discountAmount, payableAmount: BigDecimal</text>
+
+  <rect class="box box-ref" x="1070" y="954" width="490" height="112" rx="8"></rect>
+  <text class="lbl-mono" x="1315" y="976" text-anchor="middle" style="font-size:12px">CouponRedemptionResult</text>
+  <text class="sub" x="1315" y="992" text-anchor="middle" style="font-size:9.5px">record — output of recordUsage()</text>
+  <text class="field" x="1315" y="1011" text-anchor="middle">couponId: Long · code, name: String</text>
+  <text class="field" x="1315" y="1027" text-anchor="middle">discountAmount: BigDecimal · freeDelivery: boolean</text>
+</svg>
+  </div>
+
+  <div class="legend">
+    <div class="legend-group">
+      <span class="legend-title">Box kind</span>
+      <div class="legend-row"><span class="swatch sw-caller"></span> Caller (triggers coupon validation)</div>
+      <div class="legend-row"><span class="swatch sw-core"></span> CouponService (the gate)</div>
+      <div class="legend-row"><span class="swatch sw-pipe"></span> One step of the sequential validate() chain</div>
+    </div>
+    <div class="legend-group">
+      <span class="legend-title">&nbsp;</span>
+      <div class="legend-row"><span class="swatch sw-iface"></span> «interface» (dashed accent border)</div>
+      <div class="legend-row"><span class="swatch sw-impl"></span> Concrete class implementing it</div>
+      <div class="legend-row"><span class="swatch sw-store"></span> Persisted entity</div>
+      <div class="legend-row"><span class="swatch sw-ref"></span> DTO / enum reference</div>
+    </div>
+    <div class="legend-group">
+      <span class="legend-title">Line style</span>
+      <div class="legend-row"><span class="line-sample"></span> Method call / sequential flow / implements</div>
+      <div class="legend-row">Pipeline order matters — step 1 must pass before step 2 even runs</div>
+    </div>
+  </div>
+
+  <footer>
+    <span>pureeats-order-service · pureeats-catalog-service · see also <a href="README.md">README.md</a> · <a href="checkout-validation-map.html">checkout-validation-map.html</a> for the full pre-order picture</span>
+    <span>generated from source, September 2026</span>
+  </footer>
+</div>
