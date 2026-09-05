@@ -1,0 +1,450 @@
+<meta charset="utf-8">
+<title>Checkout Validation Map</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --bg:#f2f3f7;
+    --surface:#ffffff;
+    --surface-alt:#e9ebf1;
+    --border:#d6d9e2;
+    --ink:#171a24;
+    --ink-soft:#4c5165;
+    --ink-faint:#7d8296;
+    --accent:#0e7f8c;
+    --accent-strong:#0a5f69;
+    --accent-soft:#dcf1f1;
+    --accent-soft-border:#a9d9d9;
+    --core-fill:#123a41;
+    --core-ink:#eafbfa;
+    --ok:#2f8f5b;
+    --ok-fill:#e1f3e8;
+    --ok-border:#9bcfb0;
+    --warn:#a8650a;
+    --warn-fill:#fbf0dc;
+    --warn-border:#e3c07f;
+    --ref:#5b4b9e;
+    --ref-fill:#eeeafc;
+    --ref-border:#c9bdf0;
+    --line:#8a90a6;
+    --line-dashed:#a9aebd;
+    --shadow: 0 1px 2px rgba(23,26,36,0.05), 0 10px 26px -14px rgba(23,26,36,0.16);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0e1017;
+      --surface:#171a24;
+      --surface-alt:#1e222f;
+      --border:#2c303f;
+      --ink:#e9ebf3;
+      --ink-soft:#aeb2c4;
+      --ink-faint:#787d92;
+      --accent:#3fd0c9;
+      --accent-strong:#5fe0d9;
+      --accent-soft:#123632;
+      --accent-soft-border:#245a54;
+      --core-fill:#0e2e33;
+      --core-ink:#c9f5f1;
+      --ok:#5cc98c;
+      --ok-fill:#12271e;
+      --ok-border:#2f6b48;
+      --warn:#e0a545;
+      --warn-fill:#2c2210;
+      --warn-border:#5c481f;
+      --ref:#a99bea;
+      --ref-fill:#211c38;
+      --ref-border:#4a3f7c;
+      --line:#565c72;
+      --line-dashed:#454a5e;
+      --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 10px 26px -14px rgba(0,0,0,0.55);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0e1017; --surface:#171a24; --surface-alt:#1e222f; --border:#2c303f;
+    --ink:#e9ebf3; --ink-soft:#aeb2c4; --ink-faint:#787d92;
+    --accent:#3fd0c9; --accent-strong:#5fe0d9; --accent-soft:#123632; --accent-soft-border:#245a54;
+    --core-fill:#0e2e33; --core-ink:#c9f5f1;
+    --ok:#5cc98c; --ok-fill:#12271e; --ok-border:#2f6b48;
+    --warn:#e0a545; --warn-fill:#2c2210; --warn-border:#5c481f;
+    --ref:#a99bea; --ref-fill:#211c38; --ref-border:#4a3f7c;
+    --line:#565c72; --line-dashed:#454a5e;
+    --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 10px 26px -14px rgba(0,0,0,0.55);
+  }
+
+  *{box-sizing:border-box;}
+  body{ background:var(--bg); color:var(--ink); font-family:'IBM Plex Sans', system-ui, sans-serif; }
+  a{ color:var(--accent-strong); }
+  :root[data-theme="dark"] a, :root:not([data-theme="light"]) a{ color:var(--accent); }
+  .shell{ max-width:1980px; margin:0 auto; padding:28px 24px 60px; position:relative; }
+
+  .print-btn{
+    position:absolute; top:28px; right:24px;
+    font-family:'IBM Plex Sans',sans-serif; font-size:13px; font-weight:600;
+    color:#fff; background:var(--accent-strong); border:none; border-radius:8px;
+    padding:10px 18px; cursor:pointer; box-shadow:var(--shadow);
+    display:inline-flex; align-items:center; gap:8px;
+  }
+  .print-btn:hover{ background:var(--accent); }
+  .print-btn svg{ width:15px; height:15px; flex-shrink:0; }
+
+  header{ display:flex; flex-direction:column; gap:8px; padding-bottom:20px; margin-bottom:20px; border-bottom:1px solid var(--border); }
+  .eyebrow{ font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.05em; text-transform:uppercase; color:var(--accent-strong); }
+  :root[data-theme="dark"] .eyebrow, :root:not([data-theme="light"]) .eyebrow{ color:var(--accent); }
+  h1{ font-size:clamp(24px,3.4vw,32px); margin:0; letter-spacing:-0.01em; text-wrap:balance; }
+  p.dek{ margin:0; color:var(--ink-soft); font-size:14.5px; max-width:100ch; }
+  code{ font-family:'IBM Plex Mono',monospace; background:var(--surface-alt); border:1px solid var(--border); border-radius:4px; padding:1px 6px; font-size:12.5px; color:var(--ink); }
+
+  .diagram-frame{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    box-shadow:var(--shadow); overflow-x:auto; padding:8px;
+  }
+  .diagram-frame svg{ display:block; min-width:1500px; width:100%; height:auto; }
+
+  /* legend */
+  .legend{ display:flex; flex-wrap:wrap; gap:24px; margin-top:18px; padding:16px 20px; background:var(--surface); border:1px solid var(--border); border-radius:10px; box-shadow:var(--shadow); }
+  .legend-group{ display:flex; flex-direction:column; gap:8px; }
+  .legend-title{ font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); }
+  .legend-row{ display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--ink-soft); }
+  .swatch{ width:16px; height:12px; border-radius:3px; flex-shrink:0; }
+  .sw-caller{ background:var(--surface-alt); border:1.5px solid var(--ink-faint); }
+  .sw-core{ background:var(--core-fill); border:1.5px solid var(--core-fill); }
+  .sw-rule{ background:var(--accent-soft); border:1.5px solid var(--accent-soft-border); }
+  .sw-iface{ background:var(--surface); border:1.5px dashed var(--accent-strong); }
+  .sw-impl{ background:var(--surface); border:1.5px solid var(--border); }
+  .sw-store{ background:var(--ok-fill); border:1.5px solid var(--ok-border); }
+  .sw-ref{ background:var(--ref-fill); border:1.5px dashed var(--ref-border); }
+  .sw-proposed{ background:var(--surface-alt); border:1.5px dashed var(--ink-faint); }
+  .line-sample{ width:22px; height:0; border-top:2px solid var(--line); }
+  .line-sample.dashed{ border-top:2px dashed var(--line-dashed); }
+
+  footer{ margin-top:26px; padding-top:16px; border-top:1px solid var(--border); font-size:12px; color:var(--ink-faint); font-family:'IBM Plex Mono',monospace; display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+
+  /* SVG text/box styling via classes */
+  .box{ fill:var(--surface); stroke:var(--border); stroke-width:1.5; }
+  .box-caller{ fill:var(--surface-alt); stroke:var(--ink-faint); stroke-width:1.5; }
+  .box-core{ fill:var(--core-fill); stroke:var(--core-fill); }
+  .box-iface{ fill:var(--surface); stroke:var(--accent-strong); stroke-width:1.5; stroke-dasharray:5,4; }
+  .box-rule{ fill:var(--accent-soft); stroke:var(--accent-soft-border); stroke-width:1.5; }
+  .box-store{ fill:var(--ok-fill); stroke:var(--ok-border); stroke-width:1.5; }
+  .box-ref{ fill:var(--ref-fill); stroke:var(--ref-border); stroke-width:1.5; stroke-dasharray:5,4; }
+  .box-proposed{ fill:var(--surface-alt); stroke:var(--ink-faint); stroke-width:1.5; stroke-dasharray:3,3; }
+
+  .lbl{ font-family:'IBM Plex Sans',sans-serif; font-weight:600; fill:var(--ink); font-size:13.5px; }
+  .lbl-core{ font-family:'IBM Plex Sans',sans-serif; font-weight:600; fill:var(--core-ink); font-size:13.5px; }
+  .lbl-mono{ font-family:'IBM Plex Mono',monospace; font-weight:600; fill:var(--ink); font-size:13px; }
+  .lbl-iface{ font-family:'IBM Plex Mono',monospace; font-weight:600; fill:var(--accent-strong); font-size:12.5px; }
+  .lbl-proposed{ font-family:'IBM Plex Mono',monospace; font-weight:700; fill:var(--warn); font-size:12.5px; letter-spacing:.02em; }
+  .sub{ font-family:'IBM Plex Mono',monospace; fill:var(--ink-soft); font-size:10.5px; }
+  .sub-core{ font-family:'IBM Plex Mono',monospace; fill:#9fd8d3; font-size:10.7px; }
+  .field{ font-family:'IBM Plex Mono',monospace; fill:var(--ink-soft); font-size:10px; }
+  .zone{ font-family:'IBM Plex Mono',monospace; font-weight:600; letter-spacing:.08em; fill:var(--ink-faint); font-size:11px; text-transform:uppercase; }
+
+  .conn{ stroke:var(--line); stroke-width:1.6; fill:none; marker-end:url(#arrow); }
+  .conn-dash{ stroke:var(--line-dashed); stroke-width:1.6; fill:none; stroke-dasharray:5,4; marker-end:url(#arrowDash); }
+  .conn-label{ font-family:'IBM Plex Mono',monospace; fill:var(--ink-faint); font-size:9.6px; }
+
+  /* ============ PRINT: one landscape page, no margins, light theme forced ============ */
+  @media print{
+    @page{ size:landscape; margin:0; }
+
+    :root, :root[data-theme="dark"], :root[data-theme="light"]{
+      --bg:#ffffff; --surface:#ffffff; --surface-alt:#e9ebf1; --border:#d6d9e2;
+      --ink:#171a24; --ink-soft:#4c5165; --ink-faint:#7d8296;
+      --accent:#0e7f8c; --accent-strong:#0a5f69; --accent-soft:#dcf1f1; --accent-soft-border:#a9d9d9;
+      --core-fill:#123a41; --core-ink:#eafbfa;
+      --ok:#2f8f5b; --ok-fill:#e1f3e8; --ok-border:#9bcfb0;
+      --warn:#a8650a; --warn-fill:#fbf0dc; --warn-border:#e3c07f;
+      --ref:#5b4b9e; --ref-fill:#eeeafc; --ref-border:#c9bdf0;
+      --line:#8a90a6; --line-dashed:#a9aebd;
+      --shadow:none;
+    }
+    *{ -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; color-adjust:exact !important; }
+
+    html, body{ width:100%; height:100%; margin:0; padding:0; background:#fff; }
+    .no-print{ display:none !important; }
+
+    .shell{ max-width:none; width:100%; height:100vh; margin:0; padding:4mm 6mm; box-sizing:border-box;
+      display:flex; flex-direction:column; }
+
+    header{ flex:0 0 auto; padding-bottom:4px; margin-bottom:4px; border-bottom:1px solid #ccc; }
+    .eyebrow{ font-size:9px; }
+    h1{ font-size:15px; }
+    header .dek{ display:none; }
+
+    .diagram-frame{ flex:1 1 auto; min-height:0; border:none; box-shadow:none; padding:0; overflow:visible;
+      display:flex; align-items:center; justify-content:center; }
+    .diagram-frame svg{ min-width:0 !important; width:auto; height:100%; max-width:100%; max-height:100%; }
+
+    .legend{ flex:0 0 auto; box-shadow:none; border:1px solid #ccc; border-radius:6px;
+      margin-top:4px; padding:4px 10px; gap:14px; }
+    .legend-title{ font-size:7px; }
+    .legend-row{ font-size:8px; gap:5px; }
+    .swatch{ width:11px; height:8px; }
+    .line-sample{ width:16px; }
+
+    footer{ display:none; }
+  }
+</style>
+
+<div class="shell">
+  <button class="print-btn no-print" onclick="window.print()" type="button">
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2M6 14h12v7H6v-7z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path>
+    </svg>
+    Print diagram
+  </button>
+  <header>
+    <div class="eyebrow">pureeats-order-service &nbsp;/&nbsp; pureeats-catalog-service &nbsp;/&nbsp; pre-order validation</div>
+    <h1>Checkout Validation Map</h1>
+    <p class="dek">Starts directly at <code>«interface» CartValidationRule</code> - the building blocks that can
+      block or adjust an order, not the controllers/orchestrators that call them (see <code>README.md</code> for
+      how <code>CartController</code>, <code>CartValidationService</code> and <code>OrderService.placeOrder</code>
+      wire these together). Covers cart-availability rules, address/distance validation, coupon validation
+      (summary - see <code>coupon-validation-map.html</code> for the full chain), pricing, and delivery-partner
+      assignment. The later order-status-transition flow (accept → prepare → deliver → ...) is out of scope.</p>
+  </header>
+
+  <div class="diagram-frame">
+<svg viewBox="0 0 1900 1690" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Checkout validation class diagram">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"></path>
+    </marker>
+    <marker id="arrowDash" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--line-dashed)"></path>
+    </marker>
+  </defs>
+
+  <!-- ============ ZONE LABELS ============ -->
+  <text class="zone" x="40" y="14">«interface» CartValidationRule — evaluate(context): List&lt;CartIssue&gt;, never throws, never short-circuits another rule</text>
+  <text class="zone" x="40" y="104">8 rule implementations — @Component beans, auto-collected by Spring into CartValidationService's rule list</text>
+  <text class="zone" x="40" y="274">Address / distance validation</text>
+  <text class="zone" x="40" y="568">Roadmap idea — NOT in current code, for future consideration</text>
+  <text class="zone" x="40" y="798">Coupon validation (summary — full chain in coupon-validation-map.html)</text>
+  <text class="zone" x="40" y="938">Pricing</text>
+  <text class="zone" x="40" y="1098">Delivery-partner assignment — entry points</text>
+  <text class="zone" x="40" y="1228">DeliveryOrderService — no automatic "nearest rider" matching; pull (rider) or push (admin)</text>
+  <text class="zone" x="40" y="1458">Supporting types</text>
+
+  <!-- ============ CartValidationRule INTERFACE — starting point ============ -->
+  <rect class="box box-iface" x="200" y="30" width="1500" height="50" rx="8"></rect>
+  <text class="lbl-iface" x="950" y="51" text-anchor="middle">«interface» CartValidationRule</text>
+  <text class="sub" x="950" y="69" text-anchor="middle">List&lt;CartIssue&gt; evaluate(CartValidationContext context)</text>
+
+  <!-- ============ ROW: 8 RULE IMPLEMENTATIONS ============ -->
+  <line class="conn" x1="146"  y1="80" x2="146"  y2="120"></line>
+  <line class="conn" x1="375"  y1="80" x2="375"  y2="120"></line>
+  <line class="conn" x1="604"  y1="80" x2="604"  y2="120"></line>
+  <line class="conn" x1="833"  y1="80" x2="833"  y2="120"></line>
+  <line class="conn" x1="1062" y1="80" x2="1062" y2="120"></line>
+  <line class="conn" x1="1291" y1="80" x2="1291" y2="120"></line>
+  <line class="conn" x1="1520" y1="80" x2="1520" y2="120"></line>
+  <line class="conn" x1="1749" y1="80" x2="1749" y2="120"></line>
+  <text class="conn-label" x="146" y="107" text-anchor="middle">implements</text>
+  <text class="conn-label" x="1749" y="107" text-anchor="middle">implements</text>
+
+  <rect class="box box-rule" x="40"   y="120" width="213" height="130" rx="8"></rect>
+  <rect class="box box-rule" x="269"  y="120" width="213" height="130" rx="8"></rect>
+  <rect class="box box-rule" x="498"  y="120" width="213" height="130" rx="8"></rect>
+  <rect class="box box-rule" x="727"  y="120" width="213" height="130" rx="8"></rect>
+  <rect class="box box-rule" x="956"  y="120" width="213" height="130" rx="8"></rect>
+  <rect class="box box-rule" x="1185" y="120" width="213" height="130" rx="8"></rect>
+  <rect class="box box-rule" x="1414" y="120" width="213" height="130" rx="8"></rect>
+  <rect class="box box-rule" x="1643" y="120" width="213" height="130" rx="8"></rect>
+
+  <text class="lbl-mono" x="146.5"  y="140" text-anchor="middle" font-size="9.8">RestaurantAvailability-</text>
+  <text class="lbl-mono" x="146.5"  y="153" text-anchor="middle" font-size="9.8">Rule</text>
+  <text class="field" x="146.5" y="173" text-anchor="middle">blocks: deactivated, not</text>
+  <text class="field" x="146.5" y="187" text-anchor="middle">accepting orders, or closed</text>
+  <text class="field" x="146.5" y="207" text-anchor="middle" opacity="0.85">(delegates to Restaurant-</text>
+  <text class="field" x="146.5" y="221" text-anchor="middle" opacity="0.85">OpenStatusService)</text>
+
+  <text class="lbl-mono" x="375.5"  y="140" text-anchor="middle" font-size="9.8">ItemAvailabilityRule</text>
+  <text class="field" x="375.5" y="173" text-anchor="middle">blocks: item deleted, or off</text>
+  <text class="field" x="375.5" y="187" text-anchor="middle">this restaurant's menu</text>
+
+  <text class="lbl-mono" x="604.5"  y="140" text-anchor="middle" font-size="9.8">ItemStockRule</text>
+  <text class="field" x="604.5" y="173" text-anchor="middle">blocks: stockQuantity &lt;= 0</text>
+  <text class="field" x="604.5" y="187" text-anchor="middle">or &lt; requested qty</text>
+  <text class="field" x="604.5" y="207" text-anchor="middle" opacity="0.85">(null/untracked skipped)</text>
+
+  <text class="lbl-mono" x="833.5"  y="140" text-anchor="middle" font-size="9.8">MinimumOrderAmount-</text>
+  <text class="lbl-mono" x="833.5"  y="153" text-anchor="middle" font-size="9.8">Rule</text>
+  <text class="field" x="833.5" y="173" text-anchor="middle">blocks: item total below</text>
+  <text class="field" x="833.5" y="187" text-anchor="middle">restaurant.minOrderPrice</text>
+
+  <text class="lbl-mono" x="1062.5" y="140" text-anchor="middle" font-size="9.8">DeliveryRadiusRule</text>
+  <text class="field" x="1062.5" y="173" text-anchor="middle">blocks: distanceKm &gt;</text>
+  <text class="field" x="1062.5" y="187" text-anchor="middle">restaurant.deliveryRadius</text>
+  <text class="field" x="1062.5" y="207" text-anchor="middle" opacity="0.85">(DELIVERY orders only)</text>
+  <text class="field" x="1062.5" y="221" text-anchor="middle" opacity="0.85">→ see Distance section</text>
+
+  <text class="lbl-mono" x="1291.5" y="140" text-anchor="middle" font-size="9.8">AddonSelectionRule</text>
+  <text class="field" x="1291.5" y="173" text-anchor="middle">blocks: addon not offered</text>
+  <text class="field" x="1291.5" y="187" text-anchor="middle">on this item</text>
+  <text class="field" x="1291.5" y="207" text-anchor="middle" opacity="0.85">(checks AddonCategoryItem-</text>
+  <text class="field" x="1291.5" y="221" text-anchor="middle" opacity="0.85">Repository membership)</text>
+
+  <text class="lbl-mono" x="1520.5" y="140" text-anchor="middle" font-size="9.8">PaymentMethodRule</text>
+  <text class="field" x="1520.5" y="173" text-anchor="middle">blocks: COD when</text>
+  <text class="field" x="1520.5" y="187" text-anchor="middle">restaurant.isAcceptCod = false</text>
+  <text class="field" x="1520.5" y="207" text-anchor="middle" opacity="0.85">(checked at placeOrder</text>
+  <text class="field" x="1520.5" y="221" text-anchor="middle" opacity="0.85">time only)</text>
+
+  <text class="lbl-mono" x="1749.5" y="140" text-anchor="middle" font-size="9.8">OrderFrequencyRule</text>
+  <text class="field" x="1749.5" y="173" text-anchor="middle">blocks: >= maxOrders (3)</text>
+  <text class="field" x="1749.5" y="187" text-anchor="middle">within windowMinutes (10)</text>
+  <text class="field" x="1749.5" y="207" text-anchor="middle" opacity="0.85">(anti-fraud rate limit,</text>
+  <text class="field" x="1749.5" y="221" text-anchor="middle" opacity="0.85">needs a known userId)</text>
+
+  <!-- ============ ROW: ADDRESS / DISTANCE VALIDATION ============ -->
+  <rect class="box" x="40" y="290" width="590" height="110" rx="8"></rect>
+  <text class="lbl-mono" x="335" y="312" text-anchor="middle" font-size="12">RestaurantService.checkDeliveryArea</text>
+  <text class="sub" x="335" y="329" text-anchor="middle">POST /{id}/check-delivery-area — pre-cart check, before anything is added</text>
+  <text class="field" x="335" y="350" text-anchor="middle">isActive &amp;&amp; isAccepted &amp;&amp; distanceKm &lt;= restaurant.deliveryRadius</text>
+  <text class="field" x="335" y="368" text-anchor="middle" opacity="0.85">shown on the restaurant-detail page — the other half of address-range validation</text>
+
+  <rect class="box box-iface" x="655" y="290" width="1205" height="110" rx="8"></rect>
+  <text class="lbl-iface" x="1257" y="312" text-anchor="middle">«interface» DistanceCalculator</text>
+  <text class="sub" x="1257" y="329" text-anchor="middle">distanceKm(lat1, lng1, lat2, lng2): BigDecimal — null/unparseable input always yields ZERO, never throws</text>
+  <text class="field" x="1257" y="350" text-anchor="middle">consumed by: DeliveryRadiusRule (via OrderPricingService) · OrderPricingService (delivery-charge tiers) · checkDeliveryArea (above)</text>
+  <text class="field" x="1257" y="368" text-anchor="middle" opacity="0.85">active implementation chosen by pureeats.distance.provider (@ConditionalOnProperty, default "haversine")</text>
+
+  <line class="conn-dash" x1="630" y1="345" x2="655" y2="345"></line>
+  <text class="conn-label" x="642" y="339" text-anchor="middle">uses</text>
+
+  <line class="conn" x1="849"  y1="400" x2="849"  y2="424"></line>
+  <line class="conn" x1="1257" y1="400" x2="1257" y2="424"></line>
+  <line class="conn" x1="1665" y1="400" x2="1665" y2="424"></line>
+  <text class="conn-label" x="849" y="417" text-anchor="middle">implements</text>
+  <text class="conn-label" x="1665" y="417" text-anchor="middle">implements</text>
+
+  <!-- ============ ROW: DISTANCECALCULATOR IMPLEMENTATIONS ============ -->
+  <rect class="box" x="655"  y="424" width="388" height="120" rx="8"></rect>
+  <text class="lbl-mono" x="849" y="446" text-anchor="middle">HaversineDistanceCalculator</text>
+  <text class="sub" x="849" y="464" text-anchor="middle">default — great-circle distance</text>
+  <text class="field" x="849" y="486" text-anchor="middle">Earth radius 6371km</text>
+
+  <rect class="box" x="1063" y="424" width="388" height="120" rx="8"></rect>
+  <text class="lbl-mono" x="1257" y="446" text-anchor="middle">EuclideanDistanceCalculator</text>
+  <text class="sub" x="1257" y="464" text-anchor="middle">flat-plane approximation</text>
+  <text class="field" x="1257" y="486" text-anchor="middle">111.32 km/degree — demo-only alt</text>
+
+  <rect class="box" x="1471" y="424" width="388" height="120" rx="8"></rect>
+  <text class="lbl-mono" x="1665" y="446" text-anchor="middle">GoogleDistanceMatrixCalculator</text>
+  <text class="sub" x="1665" y="464" text-anchor="middle">real road distance via Google</text>
+  <text class="field" x="1665" y="486" text-anchor="middle">Distance Matrix API — falls back to</text>
+  <text class="field" x="1665" y="502" text-anchor="middle">Haversine if no key / call fails</text>
+
+  <!-- ============ ROW: DISTANCECALCULATOR — PROPOSED FUTURE METHODS (NOT IMPLEMENTED) ============ -->
+  <rect class="box box-proposed" x="200" y="584" width="1500" height="190" rx="8"></rect>
+  <text class="lbl-proposed" x="950" y="606" text-anchor="middle">DistanceCalculator — PROPOSED future methods (not in current code)</text>
+  <text class="sub" x="950" y="622" text-anchor="middle" opacity="0.85">ideas for growing this into a fuller location-database-style API — none of this exists in the codebase today</text>
+  <text class="field" x="220" y="642">nearby(lat, lng, radiusKm, limit): List&lt;LatLng&gt; — points within a radius, closest-first (foundation for a real "near me" query)</text>
+  <text class="field" x="220" y="659">topNNearest(origin, candidates, n): List&lt;Ranked&lt;T&gt;&gt; — rank any candidate list (riders, restaurants) by distance from one point</text>
+  <text class="field" x="220" y="676">isWithinRadius(center, point, radiusKm): boolean — cheap yes/no gate when the exact km value isn't needed</text>
+  <text class="field" x="220" y="693">etaMinutes(lat1, lng1, lat2, lng2): int — real travel-time estimate, not just straight-line distance</text>
+  <text class="field" x="220" y="710">boundingBox(center, radiusKm): BoundingBox — expose the pre-filter RestaurantService.findNearby already computes inline</text>
+  <text class="field" x="220" y="727">geocode(address): LatLng   ·   reverseGeocode(lat, lng): Address — address ↔ coordinate lookup</text>
+  <text class="field" x="220" y="744">distanceMatrix(origins, destinations): Matrix — batch distances in one call, matching Google's real API shape (cheaper than N calls)</text>
+  <text class="field" x="220" y="761" font-weight="600">nearestAvailableRider(pickup, candidateRiders): DeliveryGuyDetail — would finally use isOnline/lastLat/lastLng (see DeliveryOrderService note below)</text>
+
+  <!-- ============ ROW: COUPON VALIDATION SUMMARY ============ -->
+  <rect class="box box-ref" x="200" y="814" width="1500" height="100" rx="8"></rect>
+  <text class="lbl-iface" x="950" y="836" text-anchor="middle" font-size="13">CouponService — coupon validation &amp; redemption</text>
+  <text class="sub" x="950" y="853" text-anchor="middle">@Service (pureeats-catalog-service) — called by CartValidationService.preview() [live estimate] and OrderService.placeOrder() → recordUsage() [actual redemption]</text>
+  <text class="field" x="950" y="873" text-anchor="middle">6-step sequential fail-fast chain: exists &amp; active → not expired → restaurant scope → usage limit → minimum order amount → first-order-only</text>
+  <text class="field" x="950" y="890" text-anchor="middle">discount amount then computed by a DiscountCalculator (strategy pattern) matching the coupon's DiscountType</text>
+  <text class="field" x="950" y="907" text-anchor="middle" font-weight="600">→ full breakdown, including every check's exact rejection message, in coupon-validation-map.html</text>
+
+  <!-- ============ ROW: PRICING ============ -->
+  <rect class="box" x="200" y="954" width="1500" height="120" rx="8"></rect>
+  <text class="lbl-mono" x="950" y="976" text-anchor="middle" font-size="13">OrderPricingService</text>
+  <text class="sub" x="950" y="993" text-anchor="middle">@Service — centralizes tax / restaurant-charge / delivery-charge math</text>
+  <text class="field" x="950" y="1013" text-anchor="middle">tax(amount): BigDecimal  ·  restaurantCharge(restaurant, amount): BigDecimal — both a simple percentage of the amount</text>
+  <text class="field" x="950" y="1030" text-anchor="middle">computeDeliveryCharge(restaurant, isSelfPickup, freeDelivery, lat, lng): DeliveryChargeResult — flat, or a distance-tiered "dynamic" charge</text>
+  <text class="field" x="950" y="1047" text-anchor="middle">distanceKm(restaurant, lat, lng): BigDecimal → delegates to DistanceCalculator (see Address/Distance section above)</text>
+  <text class="field" x="950" y="1064" text-anchor="middle" opacity="0.85">not a hard gate — feeds the final payable in both the live cart preview and the real placeOrder, so they can't drift</text>
+
+  <!-- ============ ROW: DELIVERY ASSIGNMENT ENTRY POINTS ============ -->
+  <rect class="box box-caller" x="40" y="1114" width="890" height="90" rx="8"></rect>
+  <text class="lbl" x="485" y="1136" text-anchor="middle">DeliveryOrderController (rider)</text>
+  <text class="sub" x="485" y="1153" text-anchor="middle">GET /delivery/orders/available   ·   POST /delivery/orders/{orderId}/accept</text>
+  <text class="field" x="485" y="1172" text-anchor="middle">→ availableOrders() / acceptToDeliver(riderUserId, orderId)</text>
+
+  <rect class="box box-caller" x="970" y="1114" width="890" height="90" rx="8"></rect>
+  <text class="lbl" x="1415" y="1136" text-anchor="middle">AdminOrderController</text>
+  <text class="sub" x="1415" y="1153" text-anchor="middle">POST /api/v1/admin/orders/{id}/assign-driver</text>
+  <text class="field" x="1415" y="1172" text-anchor="middle">→ assignDriverAsAdmin(adminUserId, orderId, riderUserId)</text>
+
+  <line class="conn" x1="485"  y1="1204" x2="700"  y2="1244"></line>
+  <line class="conn" x1="1415" y1="1204" x2="1200" y2="1244"></line>
+
+  <!-- ============ ROW: DELIVERYORDERSERVICE ============ -->
+  <rect class="box box-core" x="200" y="1244" width="1500" height="190" rx="8"></rect>
+  <text class="lbl-core" x="950" y="1266" text-anchor="middle">DeliveryOrderService</text>
+  <text class="sub-core" x="950" y="1283" text-anchor="middle">@Service — no automatic "nearest rider" matching; rider self-service ("pull") or admin override ("push")</text>
+  <text class="sub-core" x="950" y="1303" text-anchor="middle">availableOrders(): the rider's job board — RESTAURANT_ACCEPTED/READY_FOR_PICKUP status, DELIVERY type, no AcceptDelivery row yet</text>
+  <text class="sub-core" x="950" y="1323" text-anchor="middle">acceptToDeliver(riderUserId, orderId) — guard: not already assigned  ·  guard: concurrent-limit</text>
+  <text class="sub-core" x="950" y="1339" text-anchor="middle">(active AcceptDelivery count with isComplete=false >= rider.maxAcceptDeliveryLimit) → BadRequestException</text>
+  <text class="sub-core" x="950" y="1359" text-anchor="middle">assignDriverAsAdmin(adminUserId, orderId, riderUserId) — same not-already-assigned guard, but SKIPS the concurrent-limit check</text>
+  <text class="sub-core" x="950" y="1379" text-anchor="middle">→ creates an AcceptDelivery row, transitions the order to RIDER_ASSIGNED, notifies the customer (+ rider, if admin-assigned)</text>
+  <text class="sub-core" x="950" y="1399" text-anchor="middle" opacity="0.85">DeliveryGuyDetail has isOnline/lastLat/lastLng fields, but nothing here reads them — no proximity-based matching exists today</text>
+
+  <!-- ============ ROW: SUPPORTING TYPES ============ -->
+  <rect class="box box-ref" x="40"   y="1474" width="593" height="150" rx="8"></rect>
+  <text class="lbl-mono" x="336.5" y="1496" text-anchor="middle" style="font-size:12.5px">PlaceOrderRequest</text>
+  <text class="sub" x="336.5" y="1512" text-anchor="middle" style="font-size:9.5px">record — the checkout request body</text>
+  <text class="field" x="60" y="1532">restaurantId, addressId: Long</text>
+  <text class="field" x="60" y="1548">items: List&lt;PlaceOrderItemRequest&gt;</text>
+  <text class="field" x="60" y="1564">paymentMode: PaymentMode · deliveryType: DeliveryType</text>
+  <text class="field" x="60" y="1580">couponCode, orderComment: String</text>
+  <text class="field" x="60" y="1596">driverTipAmount: BigDecimal</text>
+
+  <rect class="box box-store" x="653" y="1474" width="593" height="150" rx="8"></rect>
+  <text class="lbl-mono" x="949.5" y="1496" text-anchor="middle" style="font-size:12.5px">AcceptDelivery</text>
+  <text class="sub" x="949.5" y="1512" text-anchor="middle" style="font-size:9.5px">@Entity — the actual order-to-rider assignment record</text>
+  <text class="field" x="673" y="1532">id: Long</text>
+  <text class="field" x="673" y="1548">orderId: Integer</text>
+  <text class="field" x="673" y="1564">userId: Integer (the assigned rider)</text>
+  <text class="field" x="673" y="1580">customerId: Integer</text>
+  <text class="field" x="673" y="1596">isComplete: Boolean</text>
+
+  <rect class="box box-store" x="1266" y="1474" width="593" height="150" rx="8"></rect>
+  <text class="lbl-mono" x="1562.5" y="1496" text-anchor="middle" style="font-size:12.5px">DeliveryGuyDetail</text>
+  <text class="sub" x="1562.5" y="1512" text-anchor="middle" style="font-size:9.5px">@Entity — rider profile</text>
+  <text class="field" x="1286" y="1532">maxAcceptDeliveryLimit: Integer</text>
+  <text class="field" x="1286" y="1548">rating: BigDecimal · vehicleNumber: String</text>
+  <text class="field" x="1286" y="1564">commissionRate: BigDecimal · isActive: Boolean</text>
+  <text class="field" x="1286" y="1580" opacity="0.85">isOnline, lastLat, lastLng: present but</text>
+  <text class="field" x="1286" y="1596" opacity="0.85">UNUSED by assignment logic today</text>
+</svg>
+  </div>
+
+  <div class="legend">
+    <div class="legend-group">
+      <span class="legend-title">Box kind</span>
+      <div class="legend-row"><span class="swatch sw-caller"></span> Caller / entry point (controller)</div>
+      <div class="legend-row"><span class="swatch sw-core"></span> Core service (gate / orchestrator)</div>
+      <div class="legend-row"><span class="swatch sw-rule"></span> CartValidationRule implementation</div>
+      <div class="legend-row"><span class="swatch sw-iface"></span> «interface» (dashed accent border)</div>
+    </div>
+    <div class="legend-group">
+      <span class="legend-title">&nbsp;</span>
+      <div class="legend-row"><span class="swatch sw-impl"></span> Concrete class implementing an interface</div>
+      <div class="legend-row"><span class="swatch sw-store"></span> Persisted entity</div>
+      <div class="legend-row"><span class="swatch sw-ref"></span> DTO / summary / reference panel</div>
+      <div class="legend-row"><span class="swatch sw-proposed"></span> Proposed idea — NOT in current code</div>
+    </div>
+    <div class="legend-group">
+      <span class="legend-title">Line style</span>
+      <div class="legend-row"><span class="line-sample"></span> Method call / implements / triggers</div>
+      <div class="legend-row"><span class="line-sample dashed"></span> Uses (reads a dependency, doesn't implement it)</div>
+    </div>
+  </div>
+
+  <footer>
+    <span>pureeats-order-service · pureeats-catalog-service · see also <a href="README.md">README.md</a> · <a href="coupon-validation-map.html">coupon-validation-map.html</a> for the full coupon rule chain</span>
+    <span>generated from source, September 2026</span>
+  </footer>
+</div>
