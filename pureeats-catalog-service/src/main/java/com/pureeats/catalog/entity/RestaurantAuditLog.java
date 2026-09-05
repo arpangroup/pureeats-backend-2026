@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
@@ -30,12 +32,13 @@ public class RestaurantAuditLog {
     @Column(name = "field_name", nullable = false, length = 64)
     private String fieldName;
 
-    /** @Lob (TEXT, not the default VARCHAR(255)) - a weeklySchedule diff is a full JSON blob, well past 255 chars. */
-    @Lob
+    /** Forced to TEXT, not the default VARCHAR(255) - a weeklySchedule diff is a full JSON blob, well past 255 chars.
+     * @JdbcTypeCode(LONGVARCHAR) instead of @Lob: on Postgres, Hibernate 6 maps @Lob String to the oid type, not text. */
+    @JdbcTypeCode(SqlTypes.LONGVARCHAR)
     @Column(name = "old_value")
     private String oldValue;
 
-    @Lob
+    @JdbcTypeCode(SqlTypes.LONGVARCHAR)
     @Column(name = "new_value")
     private String newValue;
 
