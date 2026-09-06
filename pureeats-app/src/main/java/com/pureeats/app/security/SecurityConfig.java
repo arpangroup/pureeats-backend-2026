@@ -90,6 +90,7 @@ public class SecurityConfig {
                                 "/api/v1/settings",
                                 "/api/v1/app-config",
                                 "/api/v1/geo/ip-location",
+                                "/api/v1/geo/simulator/**",
                                 "/api/v1/pricing/delivery-quote",
                                 "/api/v1/promo-sliders",
                                 "/api/v1/languages",

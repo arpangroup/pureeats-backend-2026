@@ -205,7 +205,7 @@
   </header>
 
   <div class="diagram-frame">
-<svg viewBox="0 0 1900 1840" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Checkout validation class diagram">
+<svg viewBox="0 0 1900 2050" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Checkout validation class diagram">
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"></path>
@@ -221,11 +221,12 @@
   <text class="zone" x="40" y="274">Roadmap idea — NOT in current code, for future consideration</text>
   <text class="zone" x="40" y="424">Address / distance validation</text>
   <text class="zone" x="40" y="718">Roadmap idea — NOT in current code, for future consideration</text>
-  <text class="zone" x="40" y="948">Coupon validation (summary — full chain in coupon-validation-map.html)</text>
-  <text class="zone" x="40" y="1088">Pricing</text>
-  <text class="zone" x="40" y="1248">Delivery-partner assignment — entry points</text>
-  <text class="zone" x="40" y="1378">DeliveryOrderService — no automatic "nearest rider" matching; pull (rider) or push (admin)</text>
-  <text class="zone" x="40" y="1608">Supporting types</text>
+  <text class="zone" x="40" y="948">Roadmap — bigger initiatives (1 done, 2 not yet in current code)</text>
+  <text class="zone" x="40" y="1158">Coupon validation (summary — full chain in coupon-validation-map.html)</text>
+  <text class="zone" x="40" y="1298">Pricing</text>
+  <text class="zone" x="40" y="1458">Delivery-partner assignment — entry points</text>
+  <text class="zone" x="40" y="1588">DeliveryOrderService — no automatic "nearest rider" matching; pull (rider) or push (admin)</text>
+  <text class="zone" x="40" y="1818">Supporting types</text>
 
   <!-- ============ CartValidationRule INTERFACE — starting point ============ -->
   <rect class="box box-iface" x="200" y="30" width="1500" height="50" rx="8"></rect>
@@ -357,7 +358,7 @@
 
   <rect class="box box-iface" x="655" y="440" width="1205" height="110" rx="8"></rect>
   <text class="lbl-iface" x="1257" y="462" text-anchor="middle">«interface» DistanceCalculator</text>
-  <text class="sub" x="1257" y="479" text-anchor="middle">distanceKm(lat1, lng1, lat2, lng2): BigDecimal — null/unparseable input always yields ZERO, never throws</text>
+  <text class="sub" x="1257" y="479" text-anchor="middle">distanceKm(lat1, lng1, lat2, lng2): BigDecimal — pureeats-geo-service (com.pureeats.geo); null/unparseable input yields ZERO, never throws</text>
   <text class="field" x="1257" y="500" text-anchor="middle">consumed by: DeliveryRadiusRule (via OrderPricingService) · OrderPricingService (delivery-charge tiers) · checkDeliveryArea (above)</text>
   <text class="field" x="1257" y="518" text-anchor="middle" opacity="0.85">active implementation chosen by pureeats.distance.provider (@ConditionalOnProperty, default "haversine")</text>
 
@@ -400,75 +401,103 @@
   <text class="field" x="220" y="894">distanceMatrix(origins, destinations): Matrix — batch distances in one call, matching Google's real API shape (cheaper than N calls)</text>
   <text class="field" x="220" y="911" font-weight="600">nearestAvailableRider(pickup, candidateRiders): DeliveryGuyDetail — would finally use isOnline/lastLat/lastLng (see DeliveryOrderService note below)</text>
 
+  <!-- ============ ROW: BIGGER ROADMAP INITIATIVES (1 DONE, 2 NOT IMPLEMENTED) ============ -->
+  <rect class="box box-store" x="40"   y="964" width="593" height="170" rx="8"></rect>
+  <text class="lbl" x="336.5" y="986" text-anchor="middle" style="font-size:12px;fill:var(--ok)">✓ DONE — geo code extracted into pureeats-geo-service</text>
+  <text class="sub" x="336.5" y="1002" text-anchor="middle" opacity="0.85" style="font-size:9.5px">com.pureeats.geo — mirrors how the domain module already works</text>
+  <text class="field" x="60" y="1022">DistanceCalculator + its 3 implementations (Haversine,</text>
+  <text class="field" x="60" y="1037">Euclidean, Google) moved out of pureeats-catalog-service;</text>
+  <text class="field" x="60" y="1052">both order-service and catalog-service depend on it</text>
+  <text class="field" x="60" y="1067">directly — same shared-module pattern domain already uses</text>
+  <text class="field" x="60" y="1086" font-weight="600">the routing engine / polygon work at right would extend this module</text>
+
+  <rect class="box box-proposed" x="653" y="964" width="593" height="170" rx="8"></rect>
+  <text class="lbl-proposed" x="949.5" y="986" text-anchor="middle" style="font-size:12px">Routing engine (GraphHopper-style, or Dijkstra/A*)</text>
+  <text class="sub" x="949.5" y="1002" text-anchor="middle" opacity="0.85" style="font-size:9.5px">real road-network distance/ETA, not straight-line Haversine</text>
+  <text class="field" x="673" y="1022">self-hosted routing over OpenStreetMap road-graph data —</text>
+  <text class="field" x="673" y="1037">no per-call cost or rate limit, unlike Google's API</text>
+  <text class="field" x="673" y="1052">would back the proposed etaMinutes(...) / distanceMatrix(...)</text>
+  <text class="field" x="673" y="1067">methods above</text>
+  <text class="field" x="673" y="1086" font-weight="600">could eventually replace GoogleDistanceMatrixCalculator</text>
+
+  <rect class="box box-proposed" x="1266" y="964" width="593" height="170" rx="8"></rect>
+  <text class="lbl-proposed" x="1562.5" y="986" text-anchor="middle" style="font-size:12px">Store delivery boundary via polygon mapping</text>
+  <text class="sub" x="1562.5" y="1002" text-anchor="middle" opacity="0.85" style="font-size:9.5px">replaces the single deliveryRadius number with a drawn shape</text>
+  <text class="field" x="1286" y="1022">containsPoint(polygon, lat, lng): boolean — point-in-</text>
+  <text class="field" x="1286" y="1037">polygon test instead of a simple circle (handles rivers,</text>
+  <text class="field" x="1286" y="1052">highways, one-way road networks a radius can't)</text>
+  <text class="field" x="1286" y="1067">needs a spatial library (e.g. JTS) + an admin map UI</text>
+  <text class="field" x="1286" y="1086" font-weight="600">could price per-zone too (Zone A free, Zone B +₹20, ...)</text>
+
   <!-- ============ ROW: COUPON VALIDATION SUMMARY ============ -->
-  <rect class="box box-ref" x="200" y="964" width="1500" height="100" rx="8"></rect>
-  <text class="lbl-iface" x="950" y="986" text-anchor="middle" font-size="13">CouponService — coupon validation &amp; redemption</text>
-  <text class="sub" x="950" y="1003" text-anchor="middle">@Service (pureeats-catalog-service) — called by CartValidationService.preview() [live estimate] and OrderService.placeOrder() → recordUsage() [actual redemption]</text>
-  <text class="field" x="950" y="1023" text-anchor="middle">6-step sequential fail-fast chain: exists &amp; active → not expired → restaurant scope → usage limit → minimum order amount → first-order-only</text>
-  <text class="field" x="950" y="1040" text-anchor="middle">discount amount then computed by a DiscountCalculator (strategy pattern) matching the coupon's DiscountType</text>
-  <text class="field" x="950" y="1057" text-anchor="middle" font-weight="600">→ full breakdown, including every check's exact rejection message, in coupon-validation-map.html</text>
+  <rect class="box box-ref" x="200" y="1174" width="1500" height="100" rx="8"></rect>
+  <text class="lbl-iface" x="950" y="1196" text-anchor="middle" font-size="13">CouponService — coupon validation &amp; redemption</text>
+  <text class="sub" x="950" y="1213" text-anchor="middle">@Service (pureeats-catalog-service) — called by CartValidationService.preview() [live estimate] and OrderService.placeOrder() → recordUsage() [actual redemption]</text>
+  <text class="field" x="950" y="1233" text-anchor="middle">6-step sequential fail-fast chain: exists &amp; active → not expired → restaurant scope → usage limit → minimum order amount → first-order-only</text>
+  <text class="field" x="950" y="1250" text-anchor="middle">discount amount then computed by a DiscountCalculator (strategy pattern) matching the coupon's DiscountType</text>
+  <text class="field" x="950" y="1267" text-anchor="middle" font-weight="600">→ full breakdown, including every check's exact rejection message, in coupon-validation-map.html</text>
 
   <!-- ============ ROW: PRICING ============ -->
-  <rect class="box" x="200" y="1104" width="1500" height="120" rx="8"></rect>
-  <text class="lbl-mono" x="950" y="1126" text-anchor="middle" font-size="13">OrderPricingService</text>
-  <text class="sub" x="950" y="1143" text-anchor="middle">@Service — centralizes tax / restaurant-charge / delivery-charge math</text>
-  <text class="field" x="950" y="1163" text-anchor="middle">tax(amount): BigDecimal  ·  restaurantCharge(restaurant, amount): BigDecimal — both a simple percentage of the amount</text>
-  <text class="field" x="950" y="1180" text-anchor="middle">computeDeliveryCharge(restaurant, isSelfPickup, freeDelivery, lat, lng): DeliveryChargeResult — flat, or a distance-tiered "dynamic" charge</text>
-  <text class="field" x="950" y="1197" text-anchor="middle">distanceKm(restaurant, lat, lng): BigDecimal → delegates to DistanceCalculator (see Address/Distance section above)</text>
-  <text class="field" x="950" y="1214" text-anchor="middle" opacity="0.85">not a hard gate — feeds the final payable in both the live cart preview and the real placeOrder, so they can't drift</text>
+  <rect class="box" x="200" y="1314" width="1500" height="120" rx="8"></rect>
+  <text class="lbl-mono" x="950" y="1336" text-anchor="middle" font-size="13">OrderPricingService</text>
+  <text class="sub" x="950" y="1353" text-anchor="middle">@Service — centralizes tax / restaurant-charge / delivery-charge math</text>
+  <text class="field" x="950" y="1373" text-anchor="middle">tax(amount): BigDecimal  ·  restaurantCharge(restaurant, amount): BigDecimal — both a simple percentage of the amount</text>
+  <text class="field" x="950" y="1390" text-anchor="middle">computeDeliveryCharge(restaurant, isSelfPickup, freeDelivery, lat, lng): DeliveryChargeResult — flat, or a distance-tiered "dynamic" charge</text>
+  <text class="field" x="950" y="1407" text-anchor="middle">distanceKm(restaurant, lat, lng): BigDecimal → delegates to DistanceCalculator (see Address/Distance section above)</text>
+  <text class="field" x="950" y="1424" text-anchor="middle" opacity="0.85">not a hard gate — feeds the final payable in both the live cart preview and the real placeOrder, so they can't drift</text>
 
   <!-- ============ ROW: DELIVERY ASSIGNMENT ENTRY POINTS ============ -->
-  <rect class="box box-caller" x="40" y="1264" width="890" height="90" rx="8"></rect>
-  <text class="lbl" x="485" y="1286" text-anchor="middle">DeliveryOrderController (rider)</text>
-  <text class="sub" x="485" y="1303" text-anchor="middle">GET /delivery/orders/available   ·   POST /delivery/orders/{orderId}/accept</text>
-  <text class="field" x="485" y="1322" text-anchor="middle">→ availableOrders() / acceptToDeliver(riderUserId, orderId)</text>
+  <rect class="box box-caller" x="40" y="1474" width="890" height="90" rx="8"></rect>
+  <text class="lbl" x="485" y="1496" text-anchor="middle">DeliveryOrderController (rider)</text>
+  <text class="sub" x="485" y="1513" text-anchor="middle">GET /delivery/orders/available   ·   POST /delivery/orders/{orderId}/accept</text>
+  <text class="field" x="485" y="1532" text-anchor="middle">→ availableOrders() / acceptToDeliver(riderUserId, orderId)</text>
 
-  <rect class="box box-caller" x="970" y="1264" width="890" height="90" rx="8"></rect>
-  <text class="lbl" x="1415" y="1286" text-anchor="middle">AdminOrderController</text>
-  <text class="sub" x="1415" y="1303" text-anchor="middle">POST /api/v1/admin/orders/{id}/assign-driver</text>
-  <text class="field" x="1415" y="1322" text-anchor="middle">→ assignDriverAsAdmin(adminUserId, orderId, riderUserId)</text>
+  <rect class="box box-caller" x="970" y="1474" width="890" height="90" rx="8"></rect>
+  <text class="lbl" x="1415" y="1496" text-anchor="middle">AdminOrderController</text>
+  <text class="sub" x="1415" y="1513" text-anchor="middle">POST /api/v1/admin/orders/{id}/assign-driver</text>
+  <text class="field" x="1415" y="1532" text-anchor="middle">→ assignDriverAsAdmin(adminUserId, orderId, riderUserId)</text>
 
-  <line class="conn" x1="485"  y1="1354" x2="700"  y2="1394"></line>
-  <line class="conn" x1="1415" y1="1354" x2="1200" y2="1394"></line>
+  <line class="conn" x1="485"  y1="1564" x2="700"  y2="1604"></line>
+  <line class="conn" x1="1415" y1="1564" x2="1200" y2="1604"></line>
 
   <!-- ============ ROW: DELIVERYORDERSERVICE ============ -->
-  <rect class="box box-core" x="200" y="1394" width="1500" height="190" rx="8"></rect>
-  <text class="lbl-core" x="950" y="1416" text-anchor="middle">DeliveryOrderService</text>
-  <text class="sub-core" x="950" y="1433" text-anchor="middle">@Service — no automatic "nearest rider" matching; rider self-service ("pull") or admin override ("push")</text>
-  <text class="sub-core" x="950" y="1453" text-anchor="middle">availableOrders(): the rider's job board — RESTAURANT_ACCEPTED/READY_FOR_PICKUP status, DELIVERY type, no AcceptDelivery row yet</text>
-  <text class="sub-core" x="950" y="1473" text-anchor="middle">acceptToDeliver(riderUserId, orderId) — guard: not already assigned  ·  guard: concurrent-limit</text>
-  <text class="sub-core" x="950" y="1489" text-anchor="middle">(active AcceptDelivery count with isComplete=false >= rider.maxAcceptDeliveryLimit) → BadRequestException</text>
-  <text class="sub-core" x="950" y="1509" text-anchor="middle">assignDriverAsAdmin(adminUserId, orderId, riderUserId) — same not-already-assigned guard, but SKIPS the concurrent-limit check</text>
-  <text class="sub-core" x="950" y="1529" text-anchor="middle">→ creates an AcceptDelivery row, transitions the order to RIDER_ASSIGNED, notifies the customer (+ rider, if admin-assigned)</text>
-  <text class="sub-core" x="950" y="1549" text-anchor="middle" opacity="0.85">DeliveryGuyDetail has isOnline/lastLat/lastLng fields, but nothing here reads them — no proximity-based matching exists today</text>
+  <rect class="box box-core" x="200" y="1604" width="1500" height="190" rx="8"></rect>
+  <text class="lbl-core" x="950" y="1626" text-anchor="middle">DeliveryOrderService</text>
+  <text class="sub-core" x="950" y="1643" text-anchor="middle">@Service — no automatic "nearest rider" matching; rider self-service ("pull") or admin override ("push")</text>
+  <text class="sub-core" x="950" y="1663" text-anchor="middle">availableOrders(): the rider's job board — RESTAURANT_ACCEPTED/READY_FOR_PICKUP status, DELIVERY type, no AcceptDelivery row yet</text>
+  <text class="sub-core" x="950" y="1683" text-anchor="middle">acceptToDeliver(riderUserId, orderId) — guard: not already assigned  ·  guard: concurrent-limit</text>
+  <text class="sub-core" x="950" y="1699" text-anchor="middle">(active AcceptDelivery count with isComplete=false >= rider.maxAcceptDeliveryLimit) → BadRequestException</text>
+  <text class="sub-core" x="950" y="1719" text-anchor="middle">assignDriverAsAdmin(adminUserId, orderId, riderUserId) — same not-already-assigned guard, but SKIPS the concurrent-limit check</text>
+  <text class="sub-core" x="950" y="1739" text-anchor="middle">→ creates an AcceptDelivery row, transitions the order to RIDER_ASSIGNED, notifies the customer (+ rider, if admin-assigned)</text>
+  <text class="sub-core" x="950" y="1759" text-anchor="middle" opacity="0.85">DeliveryGuyDetail has isOnline/lastLat/lastLng fields, but nothing here reads them — no proximity-based matching exists today</text>
 
   <!-- ============ ROW: SUPPORTING TYPES ============ -->
-  <rect class="box box-ref" x="40"   y="1624" width="593" height="150" rx="8"></rect>
-  <text class="lbl-mono" x="336.5" y="1646" text-anchor="middle" style="font-size:12.5px">PlaceOrderRequest</text>
-  <text class="sub" x="336.5" y="1662" text-anchor="middle" style="font-size:9.5px">record — the checkout request body</text>
-  <text class="field" x="60" y="1682">restaurantId, addressId: Long</text>
-  <text class="field" x="60" y="1698">items: List&lt;PlaceOrderItemRequest&gt;</text>
-  <text class="field" x="60" y="1714">paymentMode: PaymentMode · deliveryType: DeliveryType</text>
-  <text class="field" x="60" y="1730">couponCode, orderComment: String</text>
-  <text class="field" x="60" y="1746">driverTipAmount: BigDecimal</text>
+  <rect class="box box-ref" x="40"   y="1834" width="593" height="150" rx="8"></rect>
+  <text class="lbl-mono" x="336.5" y="1856" text-anchor="middle" style="font-size:12.5px">PlaceOrderRequest</text>
+  <text class="sub" x="336.5" y="1872" text-anchor="middle" style="font-size:9.5px">record — the checkout request body</text>
+  <text class="field" x="60" y="1892">restaurantId, addressId: Long</text>
+  <text class="field" x="60" y="1908">items: List&lt;PlaceOrderItemRequest&gt;</text>
+  <text class="field" x="60" y="1924">paymentMode: PaymentMode · deliveryType: DeliveryType</text>
+  <text class="field" x="60" y="1940">couponCode, orderComment: String</text>
+  <text class="field" x="60" y="1956">driverTipAmount: BigDecimal</text>
 
-  <rect class="box box-store" x="653" y="1624" width="593" height="150" rx="8"></rect>
-  <text class="lbl-mono" x="949.5" y="1646" text-anchor="middle" style="font-size:12.5px">AcceptDelivery</text>
-  <text class="sub" x="949.5" y="1662" text-anchor="middle" style="font-size:9.5px">@Entity — the actual order-to-rider assignment record</text>
-  <text class="field" x="673" y="1682">id: Long</text>
-  <text class="field" x="673" y="1698">orderId: Integer</text>
-  <text class="field" x="673" y="1714">userId: Integer (the assigned rider)</text>
-  <text class="field" x="673" y="1730">customerId: Integer</text>
-  <text class="field" x="673" y="1746">isComplete: Boolean</text>
+  <rect class="box box-store" x="653" y="1834" width="593" height="150" rx="8"></rect>
+  <text class="lbl-mono" x="949.5" y="1856" text-anchor="middle" style="font-size:12.5px">AcceptDelivery</text>
+  <text class="sub" x="949.5" y="1872" text-anchor="middle" style="font-size:9.5px">@Entity — the actual order-to-rider assignment record</text>
+  <text class="field" x="673" y="1892">id: Long</text>
+  <text class="field" x="673" y="1908">orderId: Integer</text>
+  <text class="field" x="673" y="1924">userId: Integer (the assigned rider)</text>
+  <text class="field" x="673" y="1940">customerId: Integer</text>
+  <text class="field" x="673" y="1956">isComplete: Boolean</text>
 
-  <rect class="box box-store" x="1266" y="1624" width="593" height="150" rx="8"></rect>
-  <text class="lbl-mono" x="1562.5" y="1646" text-anchor="middle" style="font-size:12.5px">DeliveryGuyDetail</text>
-  <text class="sub" x="1562.5" y="1662" text-anchor="middle" style="font-size:9.5px">@Entity — rider profile</text>
-  <text class="field" x="1286" y="1682">maxAcceptDeliveryLimit: Integer</text>
-  <text class="field" x="1286" y="1698">rating: BigDecimal · vehicleNumber: String</text>
-  <text class="field" x="1286" y="1714">commissionRate: BigDecimal · isActive: Boolean</text>
-  <text class="field" x="1286" y="1730" opacity="0.85">isOnline, lastLat, lastLng: present but</text>
-  <text class="field" x="1286" y="1746" opacity="0.85">UNUSED by assignment logic today</text>
+  <rect class="box box-store" x="1266" y="1834" width="593" height="150" rx="8"></rect>
+  <text class="lbl-mono" x="1562.5" y="1856" text-anchor="middle" style="font-size:12.5px">DeliveryGuyDetail</text>
+  <text class="sub" x="1562.5" y="1872" text-anchor="middle" style="font-size:9.5px">@Entity — rider profile</text>
+  <text class="field" x="1286" y="1892">maxAcceptDeliveryLimit: Integer</text>
+  <text class="field" x="1286" y="1908">rating: BigDecimal · vehicleNumber: String</text>
+  <text class="field" x="1286" y="1924">commissionRate: BigDecimal · isActive: Boolean</text>
+  <text class="field" x="1286" y="1940" opacity="0.85">isOnline, lastLat, lastLng: present but</text>
+  <text class="field" x="1286" y="1956" opacity="0.85">UNUSED by assignment logic today</text>
 </svg>
   </div>
 
@@ -483,7 +512,7 @@
     <div class="legend-group">
       <span class="legend-title">&nbsp;</span>
       <div class="legend-row"><span class="swatch sw-impl"></span> Concrete class implementing an interface</div>
-      <div class="legend-row"><span class="swatch sw-store"></span> Persisted entity</div>
+      <div class="legend-row"><span class="swatch sw-store"></span> Persisted entity (or a roadmap item marked ✓ DONE)</div>
       <div class="legend-row"><span class="swatch sw-ref"></span> DTO / summary / reference panel</div>
       <div class="legend-row"><span class="swatch sw-proposed"></span> Proposed idea — NOT in current code</div>
     </div>

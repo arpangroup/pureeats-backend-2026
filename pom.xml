@@ -19,6 +19,7 @@
 
 	<modules>
 		<module>domain</module>
+		<module>pureeats-geo-service</module>
 		<module>pureeats-user-service</module>
 		<module>pureeats-media-service</module>
 		<module>pureeats-catalog-service</module>
@@ -40,6 +41,11 @@
 			<dependency>
 				<groupId>com.pureeats</groupId>
 				<artifactId>domain</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.pureeats</groupId>
+				<artifactId>pureeats-geo-service</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>

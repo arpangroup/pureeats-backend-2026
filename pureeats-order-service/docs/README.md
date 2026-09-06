@@ -25,7 +25,7 @@ There is **no persisted `Cart` entity** — the client owns cart state and sends
 `{itemId, quantity, selectedAddonIds}` lines on every call. "Cart validation" is really "is this
 client-supplied list of lines still orderable right now."
 
-The pipeline is split across two modules, wired together by direct Spring bean injection (this is a
+The pipeline is split across three modules, wired together by direct Spring bean injection (this is a
 single multi-module deployable, not separate microservices talking over HTTP):
 
 | Concern | Lives in |
@@ -34,11 +34,16 @@ single multi-module deployable, not separate microservices talking over HTTP):
 | Order placement orchestration | `pureeats-order-service` (`com.pureeats.order.service.OrderService`) |
 | Delivery-partner assignment | `pureeats-order-service` (`com.pureeats.order.service.DeliveryOrderService`) |
 | Coupon / discount validation | `pureeats-catalog-service` (`com.pureeats.catalog.service.CouponService`, `discount/*`) |
-| Distance calculation | `pureeats-catalog-service` (`com.pureeats.catalog.geo.*`) |
+| Distance calculation | `pureeats-geo-service` (`com.pureeats.geo.*`) |
 | Restaurant open/closed logic | `pureeats-catalog-service` (`RestaurantOpenStatusService`) |
 
-`pureeats-order-service` depends on `pureeats-catalog-service` and `pureeats-user-service` beans
-directly (`CouponService`, `DistanceCalculator`, `RestaurantRepository`, `AddressRepository`, ...).
+`pureeats-order-service` depends on `pureeats-catalog-service`, `pureeats-geo-service` and
+`pureeats-user-service` beans directly (`CouponService`, `DistanceCalculator`,
+`RestaurantRepository`, `AddressRepository`, ...). `pureeats-catalog-service` also depends on
+`pureeats-geo-service` directly (`RestaurantService.checkDeliveryArea`/`findNearby`) — distance math
+was extracted into its own module (mirroring how `domain` already works) so it's shared
+infrastructure both services depend on, not something order-service reaches through catalog-service
+for. See **[Roadmap / future considerations](#roadmap--future-considerations)** below for why.
 
 ## The two entry points, one rule engine
 
@@ -94,9 +99,10 @@ uses, so the checkout gate can never disagree with what the customer was shown o
 
 ## Address / distance / delivery-range validation
 
-Distance math is centralized behind one interface, `DistanceCalculator`
-(`com.pureeats.catalog.geo`), so every caller — pricing, the delivery-radius gate, and the
-pre-cart "can this restaurant even deliver to me" check — always agrees on the same number:
+Distance math is centralized behind one interface, `DistanceCalculator`, living in its own module
+(`pureeats-geo-service`, package `com.pureeats.geo.distance`) rather than inside catalog-service, so every
+caller — pricing, the delivery-radius gate, and the pre-cart "can this restaurant even deliver to
+me" check — always agrees on the same number:
 
 ```java
 public interface DistanceCalculator {
@@ -188,6 +194,48 @@ rider pulling a job, or an admin pushing one:
 
 `AcceptDelivery` is the actual assignment record — one row per order-to-rider assignment
 (`orderId, userId (rider), customerId, isComplete`).
+
+## Roadmap / future considerations
+
+None of this exists in the codebase today — it's captured here (and as clearly-marked "proposed,
+not implemented" boxes in **[checkout-validation-map.html](checkout-validation-map.html)**) purely
+as a record of ideas worth revisiting later.
+
+**More `CartValidationRule` implementations** — the 8 rules above cover today's needs, but the same
+plug-in pattern (a new `@Component implements CartValidationRule`, nothing else changes) would fit:
+`MaximumOrderAmountRule` (the inverse of the existing minimum), `MaxItemQuantityRule` (anti-bulk-buy),
+`RestaurantCapacityRule` (block new orders once a kitchen's pending-order backlog crosses a
+threshold), `DuplicateOrderRule` (reject an identical cart resubmitted within seconds — a
+double-tap guard distinct from `OrderFrequencyRule`'s raw count), `AgeRestrictedItemRule`,
+`UserOutstandingDuesRule` (block new COD orders for users with unpaid past COD dues),
+`AllergenConflictRule` (the one that would *warn* rather than hard-block), and `ScheduledSlotRule`
+(for pre-scheduled orders, validate the requested slot against the restaurant's *future* hours).
+
+**A fuller `DistanceCalculator` API** — today it's a single `distanceKm(...)` method. It could grow
+into something closer to a location-database API: `nearby(...)`, `topNNearest(...)`,
+`isWithinRadius(...)`, `etaMinutes(...)` (real travel time, not straight-line), `boundingBox(...)`,
+`geocode(...)`/`reverseGeocode(...)`, `distanceMatrix(...)` (batch, matching Google's real API
+shape), and — the one that matters most — `nearestAvailableRider(pickup, candidateRiders)`, which
+would finally put `DeliveryGuyDetail.isOnline/lastLat/lastLng` to use instead of leaving them read
+by nothing, closing the "no proximity-based rider matching exists today" gap noted above.
+
+**Three bigger initiatives**, roughly in the order they'd unlock each other:
+
+1. ~~Extract the geo code into its own module, mirroring how `domain` already works.~~ **Done** —
+   `DistanceCalculator` and its three implementations now live in `pureeats-geo-service`
+   (`com.pureeats.geo.distance`), depended on directly by both `pureeats-order-service` and
+   `pureeats-catalog-service`. This was pulled forward ahead of the next two items landing, since it's
+   the shared foundation both would build on.
+2. **A routing engine** (GraphHopper-style, or a hand-rolled Dijkstra/A* over a road graph) for real
+   road-network distance and ETA instead of straight-line Haversine or a paid, rate-limited
+   third-party API. Would become a new `DistanceCalculator` implementation in `pureeats-geo-service`
+   and could eventually replace `GoogleDistanceMatrixCalculator` outright.
+3. **Store delivery boundaries via polygon mapping** — replace the single `deliveryRadius` number
+   (a circle) with an actual drawn shape per restaurant, checked with a point-in-polygon test
+   instead of `distanceKm <= radius`. A circle can't account for rivers, highways, or one-way road
+   networks; a polygon can, and could support per-zone delivery pricing (e.g. Zone A free, Zone B
+   +₹20). Needs a spatial library (e.g. JTS) and an admin-side map UI to draw/edit the shapes —
+   would also live in `pureeats-geo-service` once built.
 
 ## Key supporting types
 

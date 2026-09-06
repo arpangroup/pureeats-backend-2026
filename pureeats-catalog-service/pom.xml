@@ -22,6 +22,10 @@
 		</dependency>
 		<dependency>
 			<groupId>com.pureeats</groupId>
+			<artifactId>pureeats-geo-service</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.pureeats</groupId>
 			<artifactId>pureeats-user-service</artifactId>
 		</dependency>
 		<dependency>

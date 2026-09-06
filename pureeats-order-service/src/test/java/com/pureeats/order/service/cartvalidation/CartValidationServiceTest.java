@@ -1,7 +1,7 @@
 package com.pureeats.order.service.cartvalidation;
 
 import com.pureeats.catalog.dto.CouponApplyResponse;
-import com.pureeats.catalog.geo.HaversineDistanceCalculator;
+import com.pureeats.geo.distance.HaversineDistanceCalculator;
 import com.pureeats.catalog.repository.AddonCategoryItemRepository;
 import com.pureeats.catalog.repository.AddonRepository;
 import com.pureeats.catalog.repository.ItemRepository;
