@@ -1,6 +1,6 @@
 package com.pureeats.order.service;
 
-import com.pureeats.catalog.geo.DistanceCalculator;
+import com.pureeats.geo.distance.DistanceCalculator;
 import com.pureeats.domain.entity.Restaurant;
 import com.pureeats.order.dto.DeliveryChargeResult;
 import lombok.RequiredArgsConstructor;

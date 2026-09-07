@@ -1,0 +1,432 @@
+<meta charset="utf-8">
+<title>Geo Service Architecture Map</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --bg:#f2f3f7;
+    --surface:#ffffff;
+    --surface-alt:#e9ebf1;
+    --border:#d6d9e2;
+    --ink:#171a24;
+    --ink-soft:#4c5165;
+    --ink-faint:#7d8296;
+    --accent:#0e7f8c;
+    --accent-strong:#0a5f69;
+    --accent-soft:#dcf1f1;
+    --accent-soft-border:#a9d9d9;
+    --core-fill:#123a41;
+    --core-ink:#eafbfa;
+    --ok:#2f8f5b;
+    --ok-fill:#e1f3e8;
+    --ok-border:#9bcfb0;
+    --warn:#a8650a;
+    --warn-fill:#fbf0dc;
+    --warn-border:#e3c07f;
+    --ref:#5b4b9e;
+    --ref-fill:#eeeafc;
+    --ref-border:#c9bdf0;
+    --line:#8a90a6;
+    --line-dashed:#a9aebd;
+    --shadow: 0 1px 2px rgba(23,26,36,0.05), 0 10px 26px -14px rgba(23,26,36,0.16);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0e1017;
+      --surface:#171a24;
+      --surface-alt:#1e222f;
+      --border:#2c303f;
+      --ink:#e9ebf3;
+      --ink-soft:#aeb2c4;
+      --ink-faint:#787d92;
+      --accent:#3fd0c9;
+      --accent-strong:#5fe0d9;
+      --accent-soft:#123632;
+      --accent-soft-border:#245a54;
+      --core-fill:#0e2e33;
+      --core-ink:#c9f5f1;
+      --ok:#5cc98c;
+      --ok-fill:#12271e;
+      --ok-border:#2f6b48;
+      --warn:#e0a545;
+      --warn-fill:#2c2210;
+      --warn-border:#5c481f;
+      --ref:#a99bea;
+      --ref-fill:#211c38;
+      --ref-border:#4a3f7c;
+      --line:#565c72;
+      --line-dashed:#454a5e;
+      --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 10px 26px -14px rgba(0,0,0,0.55);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0e1017; --surface:#171a24; --surface-alt:#1e222f; --border:#2c303f;
+    --ink:#e9ebf3; --ink-soft:#aeb2c4; --ink-faint:#787d92;
+    --accent:#3fd0c9; --accent-strong:#5fe0d9; --accent-soft:#123632; --accent-soft-border:#245a54;
+    --core-fill:#0e2e33; --core-ink:#c9f5f1;
+    --ok:#5cc98c; --ok-fill:#12271e; --ok-border:#2f6b48;
+    --warn:#e0a545; --warn-fill:#2c2210; --warn-border:#5c481f;
+    --ref:#a99bea; --ref-fill:#211c38; --ref-border:#4a3f7c;
+    --line:#565c72; --line-dashed:#454a5e;
+    --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 10px 26px -14px rgba(0,0,0,0.55);
+  }
+
+  *{box-sizing:border-box;}
+  body{ background:var(--bg); color:var(--ink); font-family:'IBM Plex Sans', system-ui, sans-serif; }
+  a{ color:var(--accent-strong); }
+  :root[data-theme="dark"] a, :root:not([data-theme="light"]) a{ color:var(--accent); }
+  .shell{ max-width:1980px; margin:0 auto; padding:28px 24px 60px; position:relative; }
+
+  .print-btn{
+    position:absolute; top:28px; right:24px;
+    font-family:'IBM Plex Sans',sans-serif; font-size:13px; font-weight:600;
+    color:#fff; background:var(--accent-strong); border:none; border-radius:8px;
+    padding:10px 18px; cursor:pointer; box-shadow:var(--shadow);
+    display:inline-flex; align-items:center; gap:8px;
+  }
+  .print-btn:hover{ background:var(--accent); }
+  .print-btn svg{ width:15px; height:15px; flex-shrink:0; }
+
+  .doc-header{ display:flex; flex-direction:column; gap:8px; padding-bottom:20px; margin-bottom:28px; border-bottom:1px solid var(--border); }
+  .eyebrow{ font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.05em; text-transform:uppercase; color:var(--accent-strong); }
+  :root[data-theme="dark"] .eyebrow, :root:not([data-theme="light"]) .eyebrow{ color:var(--accent); }
+  h1{ font-size:clamp(24px,3.4vw,32px); margin:0; letter-spacing:-0.01em; text-wrap:balance; }
+  code{ font-family:'IBM Plex Mono',monospace; background:var(--surface-alt); border:1px solid var(--border); border-radius:4px; padding:1px 6px; font-size:12.5px; color:var(--ink); }
+
+  /* ============ per-page sections - each one prints as its own landscape page ============ */
+  .page{ margin-bottom:48px; }
+  .page:last-of-type{ margin-bottom:0; }
+  .page-header{ display:flex; align-items:baseline; gap:12px; margin-bottom:14px; }
+  .page-header h2{ font-size:clamp(18px,2.4vw,24px); margin:0; letter-spacing:-0.01em; }
+
+  .diagram-frame{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    box-shadow:var(--shadow); overflow-x:auto; padding:8px;
+  }
+  .diagram-frame svg{ display:block; width:100%; height:auto; }
+
+  /* legend */
+  .legend{ display:flex; flex-wrap:wrap; gap:24px; margin-top:18px; padding:16px 20px; background:var(--surface); border:1px solid var(--border); border-radius:10px; box-shadow:var(--shadow); }
+  .legend-group{ display:flex; flex-direction:column; gap:8px; }
+  .legend-title{ font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); }
+  .legend-row{ display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--ink-soft); }
+  .swatch{ width:16px; height:12px; border-radius:3px; flex-shrink:0; }
+  .sw-iface{ background:var(--surface); border:1.5px dashed var(--accent-strong); }
+  .sw-impl{ background:var(--surface); border:1.5px solid var(--border); }
+  .sw-ref{ background:var(--ref-fill); border:1.5px dashed var(--ref-border); }
+  .sw-warn{ background:var(--warn-fill); border:1.5px dashed var(--warn-border); }
+
+  footer{ margin-top:26px; padding-top:16px; border-top:1px solid var(--border); font-size:12px; color:var(--ink-faint); font-family:'IBM Plex Mono',monospace; display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+
+  /* SVG text/box styling via classes */
+  .box{ fill:var(--surface); stroke:var(--border); stroke-width:1.5; }
+  .box-iface{ fill:var(--surface); stroke:var(--accent-strong); stroke-width:1.5; stroke-dasharray:5,4; }
+  .box-ref{ fill:var(--ref-fill); stroke:var(--ref-border); stroke-width:1.5; stroke-dasharray:5,4; }
+  .box-warn{ fill:var(--warn-fill); stroke:var(--warn-border); stroke-width:1.5; stroke-dasharray:3,3; }
+
+  .lbl{ font-family:'IBM Plex Sans',sans-serif; font-weight:600; fill:var(--ink); font-size:17px; }
+  .lbl-mono{ font-family:'IBM Plex Mono',monospace; font-weight:600; fill:var(--ink); font-size:16px; }
+  .lbl-iface{ font-family:'IBM Plex Mono',monospace; font-weight:600; fill:var(--accent-strong); font-size:15px; }
+  .sub{ font-family:'IBM Plex Mono',monospace; fill:var(--ink-soft); font-size:13px; }
+  .field{ font-family:'IBM Plex Mono',monospace; fill:var(--ink-soft); font-size:12px; }
+  .zone{ font-family:'IBM Plex Mono',monospace; font-weight:600; letter-spacing:.08em; fill:var(--ink-faint); font-size:13.5px; text-transform:uppercase; }
+
+  .conn{ stroke:var(--line); stroke-width:1.5; fill:none; marker-end:url(#arrow); }
+  .conn-dash{ stroke:var(--line-dashed); stroke-width:1.5; fill:none; stroke-dasharray:5,4; marker-end:url(#arrowDash); }
+  .conn-label{ font-family:'IBM Plex Mono',monospace; fill:var(--ink-faint); font-size:11px; }
+
+  /* ============ PRINT: each .page becomes its own landscape page, no margins, light theme forced ============ */
+  @media print{
+    @page{ size:landscape; margin:0; }
+
+    :root, :root[data-theme="dark"], :root[data-theme="light"]{
+      --bg:#ffffff; --surface:#ffffff; --surface-alt:#e9ebf1; --border:#d6d9e2;
+      --ink:#171a24; --ink-soft:#4c5165; --ink-faint:#7d8296;
+      --accent:#0e7f8c; --accent-strong:#0a5f69; --accent-soft:#dcf1f1; --accent-soft-border:#a9d9d9;
+      --ok:#2f8f5b; --ok-fill:#e1f3e8; --ok-border:#9bcfb0;
+      --warn:#a8650a; --warn-fill:#fbf0dc; --warn-border:#e3c07f;
+      --ref:#5b4b9e; --ref-fill:#eeeafc; --ref-border:#c9bdf0;
+      --line:#8a90a6; --line-dashed:#a9aebd;
+      --shadow:none;
+    }
+    *{ -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; color-adjust:exact !important; }
+
+    html, body{ width:100%; height:100%; margin:0; padding:0; background:#fff; }
+    .no-print{ display:none !important; }
+
+    .shell{ max-width:none; width:100%; margin:0; padding:0; }
+
+    .page{
+      page-break-after:always; break-after:page;
+      width:100%; height:100vh; box-sizing:border-box; margin:0; padding:4mm 6mm;
+      display:flex; flex-direction:column;
+    }
+    .page:last-of-type{ page-break-after:auto; break-after:auto; }
+
+    .page-header{ flex:0 0 auto; padding-bottom:4px; margin-bottom:4px; border-bottom:1px solid #ccc; }
+    .page-header .eyebrow{ font-size:9px; }
+    .page-header h2{ font-size:15px; }
+
+    .diagram-frame{ flex:1 1 auto; min-height:0; border:none; box-shadow:none; padding:0; overflow:visible;
+      display:flex; align-items:center; justify-content:center; }
+    .diagram-frame svg{ min-width:0 !important; width:auto; height:100%; max-width:100%; max-height:100%; }
+
+    .legend{ flex:0 0 auto; box-shadow:none; border:1px solid #ccc; border-radius:6px;
+      margin-top:4px; padding:4px 10px; gap:14px; }
+    .legend-title{ font-size:7px; }
+    .legend-row{ font-size:8px; gap:5px; }
+    .swatch{ width:11px; height:8px; }
+
+    footer{ display:none; }
+  }
+</style>
+
+<div class="shell">
+  <button class="print-btn no-print" onclick="window.print()" type="button">
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2M6 14h12v7H6v-7z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path>
+    </svg>
+    Print diagram
+  </button>
+  <header class="doc-header no-print">
+    <div class="eyebrow">pureeats-geo-service &nbsp;/&nbsp; architecture</div>
+    <h1>Geo Service Architecture Map</h1>
+  </header>
+
+  <!-- ============================================================================================ -->
+  <!-- PAGE 1 — DISTANCE & ROUTING                                                                    -->
+  <!-- ============================================================================================ -->
+  <section class="page">
+    <div class="page-header">
+      <h2>Distance &amp; Routing</h2>
+    </div>
+
+    <div class="diagram-frame">
+<svg viewBox="0 0 1900 850" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Distance and routing architecture diagram">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"></path>
+    </marker>
+    <marker id="arrowDash" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--line-dashed)"></path>
+    </marker>
+  </defs>
+
+  <!-- ============ ROW: DISTANCECALCULATOR INTERFACE ============ -->
+  <rect class="box box-iface" x="100" y="40" width="1500" height="216" rx="8"></rect>
+  <text class="lbl-iface" x="850" y="64" text-anchor="middle">«interface» DistanceCalculator</text>
+  <text class="field" x="150" y="86">distanceKm(lat1, lng1, lat2, lng2): BigDecimal — never throws; unparseable input always yields ZERO</text>
+  <text class="field" x="150" y="106">topNNearest(originLatLng, candidateList, n, locationOf): List&lt;Ranked&lt;T&gt;&gt;</text>
+  <text class="field" x="150" y="126">nearby(lat, lng, radiusKm, limit): List&lt;LatLng&gt;</text>
+  <text class="field" x="150" y="146">etaMinutes(lat1, lng1, lat2, lng2): int</text>
+  <rect class="box box-iface" x="150" y="156" width="1400" height="1" rx="8"></rect>
+  <text class="field" x="150" y="176">isWithinRadius(centerLatLng, pointLatLng, radiusKm): boolean</text>
+  <text class="field" x="150" y="196">boundingBox(centerLatLng, radiusKm): BoundingBox</text>
+  <text class="field" x="150" y="216">distanceMatrix(origins, destinations): DistanceMatrixResult</text>
+  <text class="field" x="150" y="240" font-weight="600">geocode / reverseGeocode — <tspan style="fill:var(--ink-faint);font-weight:700">[THROWS]</tspan> needs an external geocoding provider</text>
+
+  <line class="conn" x1="340"  y1="256" x2="340"  y2="280"></line>
+  <line class="conn" x1="850"  y1="256" x2="850"  y2="280"></line>
+  <line class="conn" x1="1360" y1="256" x2="1360" y2="280"></line>
+  <text class="conn-label" x="340" y="273" text-anchor="middle">implements</text>
+  <text class="conn-label" x="1360" y="273" text-anchor="middle">implements</text>
+
+  <!-- ============ ROW: IMPLEMENTATIONS (3, full width) ============ -->
+  <rect class="box" x="100" y="280" width="480" height="118" rx="8"></rect>
+  <text class="lbl-mono" x="340" y="304" text-anchor="middle">HaversineDistanceCalculator</text>
+  <text class="sub" x="340" y="322" text-anchor="middle">default — great-circle distance</text>
+  <text class="field" x="340" y="340" text-anchor="middle">Earth radius 6371km</text>
+  <text class="field" x="340" y="358" text-anchor="middle" opacity="0.85">accurate for delivery-radius/pricing</text>
+  <text class="field" x="340" y="376" text-anchor="middle" opacity="0.85">no external call needed</text>
+
+  <rect class="box" x="610" y="280" width="480" height="118" rx="8"></rect>
+  <text class="lbl-mono" x="850" y="304" text-anchor="middle">EuclideanDistanceCalculator</text>
+  <text class="sub" x="850" y="322" text-anchor="middle">flat-plane approximation</text>
+  <text class="field" x="850" y="340" text-anchor="middle">111.32 km/degree</text>
+  <text class="field" x="850" y="358" text-anchor="middle" opacity="0.85">cheaper, accurate only over short</text>
+  <text class="field" x="850" y="376" text-anchor="middle" opacity="0.85">distances away from the poles</text>
+
+  <rect class="box" x="1120" y="280" width="480" height="118" rx="8"></rect>
+  <text class="lbl-mono" x="1360" y="304" text-anchor="middle" style="font-size:14px">GoogleDistanceMatrixCalculator</text>
+  <text class="sub" x="1360" y="322" text-anchor="middle">real road distance via Google</text>
+  <text class="field" x="1360" y="340" text-anchor="middle">Distance Matrix API</text>
+  <text class="field" x="1360" y="358" text-anchor="middle" opacity="0.85">falls back to Haversine with no</text>
+  <text class="field" x="1360" y="376" text-anchor="middle" opacity="0.85">API key configured, or on failure</text>
+
+  <!-- ============ ROW: DISTANCECALCULATORCONFIG — the switch, below the implementations ============ -->
+  <rect class="box" x="100" y="418" width="1500" height="78" rx="8"></rect>
+  <text class="lbl-mono" x="850" y="442" text-anchor="middle">DistanceCalculatorConfig — the provider switch</text>
+  <text class="sub" x="850" y="460" text-anchor="middle">pureeats.distance.provider — @ConditionalOnProperty per bean, picks exactly one of the three beans above</text>
+  <text class="field" x="850" y="480" text-anchor="middle">haversine (default, matchIfMissing)  ·  euclidean  ·  google</text>
+
+  <!-- ============ ROW: ROUTINGENGINE INTERFACE ============ -->
+  <rect class="box box-iface" x="100" y="518" width="1500" height="54" rx="8"></rect>
+  <text class="lbl-iface" x="850" y="538" text-anchor="middle">«interface» RoutingEngine</text>
+  <text class="sub" x="850" y="556" text-anchor="middle">route(lat1, lng1, lat2, lng2): Route { distanceKm, etaMinutes, polyline } — needs a road graph, separate from DistanceCalculator</text>
+
+  <line class="conn" x1="272.5"  y1="572" x2="272.5"  y2="592"></line>
+  <line class="conn" x1="657.5"  y1="572" x2="657.5"  y2="592"></line>
+  <line class="conn" x1="1042.5" y1="572" x2="1042.5" y2="592"></line>
+  <line class="conn" x1="1427.5" y1="572" x2="1427.5" y2="592"></line>
+  <text class="conn-label" x="272.5" y="587" text-anchor="middle">implements</text>
+  <text class="conn-label" x="1427.5" y="587" text-anchor="middle">implements</text>
+
+  <!-- ============ ROW: ROUTINGENGINE IMPLEMENTATIONS — narrow, 4-up, fits one printed page ============ -->
+  <rect class="box" x="100" y="592" width="345" height="92" rx="8"></rect>
+  <text class="lbl-mono" x="272.5" y="614" text-anchor="middle" style="font-size:13px">StraightLineRoutingEngine</text>
+  <text class="sub" x="272.5" y="632" text-anchor="middle" style="font-size:11px">wraps DistanceCalculator</text>
+  <text class="field" x="272.5" y="650" text-anchor="middle" style="font-size:11px" opacity="0.85">polyline = null</text>
+  <text class="field" x="272.5" y="672" text-anchor="middle" style="font-size:11px;fill:var(--ok);font-weight:700">[REAL] default</text>
+
+  <rect class="box" x="485" y="592" width="345" height="92" rx="8"></rect>
+  <text class="lbl-mono" x="657.5" y="614" text-anchor="middle" style="font-size:13px">GraphHopperRoutingEngine</text>
+  <text class="sub" x="657.5" y="632" text-anchor="middle" style="font-size:11px">self-hosted OSM routing</text>
+  <text class="field" x="657.5" y="650" text-anchor="middle" style="font-size:11px" opacity="0.85">osm-extract-path unused</text>
+  <text class="field" x="657.5" y="672" text-anchor="middle" style="font-size:11px;fill:var(--warn);font-weight:700">[PLACEHOLDER]</text>
+
+  <rect class="box" x="870" y="592" width="345" height="92" rx="8"></rect>
+  <text class="lbl-mono" x="1042.5" y="614" text-anchor="middle" style="font-size:13px">DijkstraRoutingEngine</text>
+  <text class="sub" x="1042.5" y="632" text-anchor="middle" style="font-size:11px">shortest-path road graph</text>
+  <text class="field" x="1042.5" y="650" text-anchor="middle" style="font-size:11px" opacity="0.85">no graph exists yet</text>
+  <text class="field" x="1042.5" y="672" text-anchor="middle" style="font-size:11px;fill:var(--warn);font-weight:700">[PLACEHOLDER]</text>
+
+  <rect class="box" x="1255" y="592" width="345" height="92" rx="8"></rect>
+  <text class="lbl-mono" x="1427.5" y="614" text-anchor="middle" style="font-size:13px">AStarRoutingEngine</text>
+  <text class="sub" x="1427.5" y="632" text-anchor="middle" style="font-size:11px">heuristic-guided search</text>
+  <text class="field" x="1427.5" y="650" text-anchor="middle" style="font-size:11px" opacity="0.85">faster per single query</text>
+  <text class="field" x="1427.5" y="672" text-anchor="middle" style="font-size:11px;fill:var(--warn);font-weight:700">[PLACEHOLDER]</text>
+
+  <!-- ============ ROW: ROUTINGENGINECONFIG ============ -->
+  <rect class="box" x="100" y="716" width="1500" height="78" rx="8"></rect>
+  <text class="lbl-mono" x="850" y="740" text-anchor="middle">RoutingEngineConfig — the provider switch</text>
+  <text class="sub" x="850" y="758" text-anchor="middle">pureeats.routing.provider — @ConditionalOnProperty per bean, same pattern as DistanceCalculatorConfig</text>
+  <text class="field" x="850" y="778" text-anchor="middle">straight-line (default, matchIfMissing)  ·  graphhopper  ·  dijkstra  ·  astar</text>
+</svg>
+    </div>
+    
+  </section>
+
+  <!-- ============================================================================================ -->
+  <!-- PAGE 2 — STORE DELIVERY BOUNDARIES (POLYGON MAPPING)                                           -->
+  <!-- ============================================================================================ -->
+  <section class="page">
+    <div class="page-header">
+      <h2>Store Delivery Boundaries (Polygon Mapping)</h2>
+    </div>
+
+    <div class="diagram-frame">
+<svg viewBox="0 0 1900 990" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Store delivery boundaries architecture diagram">
+  <text class="zone" x="40" y="24">Store delivery boundaries — real algorithms today, in-memory only (not yet persisted)</text>
+
+  <!-- ============ ROW: POLYGONBOUNDARYSERVICE INTERFACE ============ -->
+  <rect class="box box-iface" x="100" y="40" width="1500" height="54" rx="8"></rect>
+  <text class="lbl-iface" x="850" y="60" text-anchor="middle">«interface» PolygonBoundaryService</text>
+  <text class="sub" x="850" y="78" text-anchor="middle">containsPoint(ownerType, ownerId, lat, lng): boolean  ·  ownersContaining(ownerType, lat, lng): List&lt;Long&gt;</text>
+
+  <line class="conn" x1="850" y1="94" x2="850" y2="114"></line>
+  <text class="conn-label" x="868" y="109" text-anchor="middle">implements</text>
+
+  <!-- ============ ROW: INMEMORYPOLYGONBOUNDARYSERVICE ============ -->
+  <rect class="box" x="100" y="114" width="1500" height="112" rx="8"></rect>
+  <text class="lbl-mono" x="850" y="138" text-anchor="middle">InMemoryPolygonBoundaryService — dummy impl, real algorithm</text>
+  <text class="sub" x="850" y="156" text-anchor="middle" opacity="0.85">register(GeoBoundary) seeds data - not part of the interface; a real DB-backed impl wouldn't have it</text>
+  <text class="field" x="850" y="176" text-anchor="middle">ownersContaining(...) runs the 3-stage pipeline below - GeoHash prefilter → KD-Tree narrow → point-in-polygon validate</text>
+  <text class="field" x="850" y="194" text-anchor="middle">containsPoint(...) checks one already-known owner's boundary directly - used once a rule already knows which owner to check</text>
+  <text class="field" x="850" y="214" text-anchor="middle" style="fill:var(--ok);font-weight:700">[REAL algorithm, in-memory data]</text>
+
+  <!-- ============ ROW: GEOHASH / KDTREE / POINTINPOLYGON ============ -->
+  <line class="conn" x1="340"  y1="226" x2="340"  y2="246"></line>
+  <line class="conn" x1="850"  y1="226" x2="850"  y2="246"></line>
+  <line class="conn" x1="1360" y1="226" x2="1360" y2="246"></line>
+
+  <rect class="box" x="100" y="246" width="480" height="112" rx="8"></rect>
+  <text class="lbl-mono" x="340" y="270" text-anchor="middle">GeoHash</text>
+  <text class="sub" x="340" y="288" text-anchor="middle" opacity="0.85">static - real base32 geohash encoding</text>
+  <text class="field" x="340" y="306" text-anchor="middle">encode(lat, lng, precision): String</text>
+  <text class="field" x="340" y="324" text-anchor="middle">verified against geohash.org example</text>
+  <text class="field" x="340" y="346" text-anchor="middle" style="fill:var(--ok);font-weight:700">[REAL, tested]</text>
+
+  <rect class="box" x="610" y="246" width="480" height="112" rx="8"></rect>
+  <text class="lbl-mono" x="850" y="270" text-anchor="middle">KDTree&lt;T&gt;</text>
+  <text class="sub" x="850" y="288" text-anchor="middle" opacity="0.85">generic - real 2D nearest-neighbor index</text>
+  <text class="field" x="850" y="306" text-anchor="middle">nearest(lat,lng) / kNearest(lat,lng,k)</text>
+  <text class="field" x="850" y="324" text-anchor="middle">built from candidates, immutable</text>
+  <text class="field" x="850" y="346" text-anchor="middle" style="fill:var(--ok);font-weight:700">[REAL, tested]</text>
+
+  <rect class="box" x="1120" y="246" width="480" height="112" rx="8"></rect>
+  <text class="lbl-mono" x="1360" y="270" text-anchor="middle">PointInPolygon</text>
+  <text class="sub" x="1360" y="288" text-anchor="middle" opacity="0.85">static - real even-odd ray-casting test</text>
+  <text class="field" x="1360" y="306" text-anchor="middle">contains(vertices, lat, lng): boolean</text>
+  <text class="field" x="1360" y="324" text-anchor="middle">hand-rolled, no JTS needed</text>
+  <text class="field" x="1360" y="346" text-anchor="middle" style="fill:var(--ok);font-weight:700">[REAL, tested]</text>
+
+  <!-- ============ ROW: POLYGONBOUNDARYSERVICECONFIG (THE FEATURE FLAG) ============ -->
+  <rect class="box" x="100" y="386" width="1500" height="96" rx="8"></rect>
+  <text class="lbl-mono" x="850" y="410" text-anchor="middle">PolygonBoundaryServiceConfig — THIS is the feature flag</text>
+  <text class="sub" x="850" y="428" text-anchor="middle">pureeats.geo.polygon-boundary.enabled — no property (or false) means NO PolygonBoundaryService bean exists at all</text>
+  <text class="field" x="850" y="448" text-anchor="middle">true → InMemoryPolygonBoundaryService registers → @ConditionalOnBean consumers activate automatically</text>
+  <text class="field" x="850" y="468" text-anchor="middle" font-weight="600">false/absent → the bean doesn't exist → every conditional consumer stays inactive → zero change elsewhere</text>
+
+  <!-- ============ ROW: END-TO-END FLOW A — USER SEARCH ============ -->
+  <text class="zone" x="40" y="512">End-to-end flows</text>
+  <text class="lbl" x="40" y="534">Flow A — user search</text>
+
+  <line class="conn" x1="388"  y1="600" x2="408"  y2="600"></line>
+  <line class="conn" x1="756"  y1="600" x2="776"  y2="600"></line>
+  <line class="conn" x1="1124" y1="600" x2="1144" y2="600"></line>
+  <line class="conn" x1="1492" y1="600" x2="1512" y2="600"></line>
+
+  <rect class="box" x="40"   y="550" width="348" height="120" rx="8"></rect>
+  <text class="lbl-mono" x="214" y="572" text-anchor="middle" style="font-size:13.5px">1. User searches</text>
+  <text class="lbl-mono" x="214" y="588" text-anchor="middle" style="font-size:13.5px">nearby stores</text>
+  <text class="sub" x="214" y="604" text-anchor="middle" style="font-size:11px">customer app sends lat/lng</text>
+  <text class="field" x="214" y="624" text-anchor="middle" style="font-size:10.5px">entry point - no geo-service call yet</text>
+  <text class="field" x="214" y="642" text-anchor="middle" style="font-size:10.5px" opacity="0.85">(catalog-service's search API)</text>
+
+  <rect class="box" x="408"  y="550" width="348" height="120" rx="8"></rect>
+  <text class="lbl-mono" x="582" y="572" text-anchor="middle" style="font-size:13.5px">2. Find nearby</text>
+  <text class="lbl-mono" x="582" y="588" text-anchor="middle" style="font-size:13.5px">GeoHash buckets</text>
+  <text class="sub" x="582" y="604" text-anchor="middle" style="font-size:11px">GeoHash.encode(...)</text>
+  <text class="field" x="582" y="624" text-anchor="middle" style="font-size:10.5px">ownersContaining(...) — stage 1</text>
+  <text class="field" x="582" y="642" text-anchor="middle" style="font-size:10.5px;fill:var(--ok);font-weight:700">[REAL]</text>
+
+  <rect class="box" x="776"  y="550" width="348" height="120" rx="8"></rect>
+  <text class="lbl-mono" x="950" y="572" text-anchor="middle" style="font-size:13.5px">3. KD-Tree finds</text>
+  <text class="lbl-mono" x="950" y="588" text-anchor="middle" style="font-size:13.5px">nearest stores</text>
+  <text class="sub" x="950" y="604" text-anchor="middle" style="font-size:11px">KDTree.kNearest(...)</text>
+  <text class="field" x="950" y="624" text-anchor="middle" style="font-size:10.5px">ownersContaining(...) — stage 2</text>
+  <text class="field" x="950" y="642" text-anchor="middle" style="font-size:10.5px;fill:var(--ok);font-weight:700">[REAL]</text>
+
+  <rect class="box" x="1144" y="550" width="348" height="120" rx="8"></rect>
+  <text class="lbl-mono" x="1318" y="572" text-anchor="middle" style="font-size:13.5px">4. Validate polygon</text>
+  <text class="lbl-mono" x="1318" y="588" text-anchor="middle" style="font-size:13.5px">coverage</text>
+  <text class="sub" x="1318" y="604" text-anchor="middle" style="font-size:11px">PointInPolygon.contains(...)</text>
+  <text class="field" x="1318" y="624" text-anchor="middle" style="font-size:10.5px">ownersContaining(...) — stage 3</text>
+  <text class="field" x="1318" y="642" text-anchor="middle" style="font-size:10.5px;fill:var(--ok);font-weight:700">[REAL]</text>
+
+  <rect class="box" x="1512" y="550" width="348" height="120" rx="8"></rect>
+  <text class="lbl-mono" x="1686" y="572" text-anchor="middle" style="font-size:13.5px">5. Return only</text>
+  <text class="lbl-mono" x="1686" y="588" text-anchor="middle" style="font-size:13.5px">deliverable stores</text>
+  <text class="sub" x="1686" y="604" text-anchor="middle" style="font-size:11px">the survivors of stage 3</text>
+  <text class="field" x="1686" y="624" text-anchor="middle" style="font-size:10.5px">filters the store list shown</text>
+  <text class="field" x="1686" y="642" text-anchor="middle" style="font-size:10.5px;fill:var(--ok);font-weight:700">[REAL]</text>
+
+  <!-- ============ ROW: END-TO-END FLOW B — ORDER PLACEMENT ============ -->
+  <text class="lbl" x="40" y="722">Flow B — order placement, with the optional polygon gate</text>
+  <rect class="box box-ref" x="40" y="738" width="1820" height="140" rx="8"></rect>
+  <text class="sub" x="950" y="760" text-anchor="middle">OrderService.placeOrder → cartValidationService.assertPlaceable(...) runs every registered CartValidationRule</text>
+  <text class="field" x="60" y="782">1. DeliveryRadiusRule — always runs, always registered — distanceKm &lt;= restaurant.deliveryRadius</text>
+  <text class="field" x="60" y="800">2. DeliveryPolygonRule — proposed, conditionally registered — only runs if pureeats.geo.polygon-boundary.enabled=true</text>
+  <text class="field" x="60" y="818">3. assertPlaceable(...) throws on the FIRST issue found among ALL registered rules — both must pass</text>
+  <text class="field" x="60" y="840" font-weight="600">today: only step 1 exists — turning the flag on adds step 2 with no other code change</text>
+  <text class="field" x="60" y="858" style="fill:var(--ink-faint);font-weight:700">[step 2 NOT CREATED yet]</text>
+</svg>
+    </div>
+
+  </section>
+
+  <footer>
+    <span>pureeats-geo-service · see also <a href="README.md">README.md</a> · <a href="../../pureeats-order-service/docs/checkout-validation-map.html">order-service's checkout-validation-map.html</a> for how DistanceCalculator is consumed</span>
+    <span>generated from source, September 2026</span>
+  </footer>
+</div>

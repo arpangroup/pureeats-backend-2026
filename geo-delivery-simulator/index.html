@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Geo Delivery Simulator</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+
+<style>
+  :root{
+    --bg:#f2f3f7; --surface:#ffffff; --surface-alt:#e9ebf1; --border:#d6d9e2;
+    --ink:#171a24; --ink-soft:#4c5165; --ink-faint:#7d8296;
+    --accent:#0e7f8c; --accent-strong:#0a5f69; --accent-soft:#dcf1f1;
+    --ok:#2f8f5b; --ok-fill:#e1f3e8; --ok-border:#9bcfb0;
+    --warn:#a8650a; --warn-fill:#fbf0dc; --warn-border:#e3c07f;
+    --danger:#b3261e; --danger-fill:#fbe4e2;
+    --nearby:#8856a7;
+    --shadow: 0 1px 2px rgba(23,26,36,0.05), 0 10px 26px -14px rgba(23,26,36,0.20);
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; margin:0; }
+  body{
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--ink);
+    display:flex; flex-direction:column; height:100vh; overflow:hidden;
+  }
+
+  header{
+    padding:12px 20px; border-bottom:1px solid var(--border); background:var(--surface);
+    display:flex; flex-direction:column; gap:8px; flex:0 0 auto;
+  }
+  .header-top{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  header h1{ font-size:18px; margin:0; letter-spacing:-0.01em; flex:0 0 auto; }
+  header p{ margin:0; color:var(--ink-soft); font-size:12.5px; max-width:100ch; }
+
+  .search-box{ position:relative; flex:1 1 280px; max-width:440px; }
+  .search-box input{
+    width:100%; font-size:13px; padding:8px 32px 8px 12px; border-radius:8px;
+    border:1px solid var(--border); background:var(--surface-alt); color:var(--ink);
+  }
+  .search-box input:focus{ outline:2px solid var(--accent); outline-offset:-1px; background:var(--surface); }
+  .search-icon{ position:absolute; right:10px; top:50%; transform:translateY(-50%); font-size:13px; pointer-events:none; opacity:.6; }
+  .search-dropdown{
+    position:absolute; top:calc(100% + 4px); left:0; right:0; background:var(--surface);
+    border:1px solid var(--border); border-radius:8px; box-shadow:var(--shadow); z-index:2500;
+    max-height:280px; overflow-y:auto; display:none;
+  }
+  .search-dropdown.open{ display:block; }
+  .search-item{ padding:9px 12px; font-size:12.5px; cursor:pointer; border-bottom:1px dashed var(--border); }
+  .search-item:last-child{ border-bottom:none; }
+  .search-item:hover, .search-item.active{ background:var(--accent-soft); }
+  .search-item .s-title{ font-weight:600; color:var(--ink); }
+  .search-item .s-sub{ color:var(--ink-faint); font-size:11.5px; margin-top:1px; }
+  .search-empty{ padding:9px 12px; font-size:12px; color:var(--ink-faint); }
+
+  .backend-row{ display:flex; align-items:center; gap:8px; font-size:12px; color:var(--ink-soft); margin-left:auto; }
+  .backend-row input[type=text]{ width:150px; font-size:11.5px; padding:5px 7px; border-radius:5px; border:1px solid var(--border); }
+  .status-dot{ width:8px; height:8px; border-radius:50%; background:var(--ink-faint); flex:0 0 auto; }
+  .status-dot.ok{ background:var(--ok); }
+  .status-dot.bad{ background:var(--danger); }
+  #backendStatusLabel{ min-width:210px; }
+
+  .layout{ flex:1 1 auto; display:flex; min-height:0; position:relative; }
+
+  #map{ flex:1 1 auto; min-width:0; }
+
+  aside{
+    width:380px; flex:0 0 auto; background:var(--surface); border-left:1px solid var(--border);
+    display:flex; flex-direction:column; overflow-y:auto; padding-bottom:44px;
+  }
+  .panel{ padding:14px 18px; border-bottom:1px solid var(--border); }
+  .panel h2{ font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-faint); margin:0 0 10px; }
+
+  .btn{
+    display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600;
+    padding:7px 11px; border-radius:7px; border:1px solid var(--border); background:var(--surface);
+    color:var(--ink); cursor:pointer; transition:background .12s;
+  }
+  .btn:hover{ background:var(--surface-alt); }
+  .btn.primary{ background:var(--accent-strong); border-color:var(--accent-strong); color:#fff; }
+  .btn.primary:hover{ background:var(--accent); }
+  .btn.active{ background:var(--accent-soft); border-color:var(--accent); color:var(--accent-strong); }
+  .btn.danger{ color:var(--danger); border-color:var(--danger-fill); }
+  .btn.danger:hover{ background:var(--danger-fill); }
+  .btn-row{ display:flex; flex-wrap:wrap; gap:8px; }
+
+  select{
+    font-size:13px; padding:6px 8px; border-radius:6px; border:1px solid var(--border); background:var(--surface);
+  }
+  label.inline{ font-size:12.5px; color:var(--ink-soft); display:flex; align-items:center; gap:6px; }
+
+  .field-row{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px; }
+  .field-input{
+    font-size:12.5px; padding:7px 9px; border-radius:6px; border:1px solid var(--border); background:var(--surface);
+    color:var(--ink); flex:1 1 90px; min-width:0;
+  }
+  .field-label{ font-size:11.5px; font-weight:600; color:var(--ink-soft); display:block; margin:10px 0 6px; }
+  textarea.json-input{
+    width:100%; font-family:'IBM Plex Mono',Consolas,monospace; font-size:11px; line-height:1.5;
+    padding:8px; border-radius:6px; border:1px solid var(--border); background:var(--surface-alt); color:var(--ink);
+    resize:vertical;
+  }
+
+  .hint{ font-size:12px; color:var(--ink-faint); margin-top:8px; line-height:1.5; }
+
+  #storeList{ font-size:13px; }
+  .store-row{ display:flex; align-items:center; justify-content:space-between; padding:6px 0; border-bottom:1px dashed var(--border); }
+  .store-row:last-child{ border-bottom:none; }
+  .store-dot{ width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:8px; flex:0 0 auto; }
+  .store-name{ flex:1; }
+  .store-remove{ cursor:pointer; color:var(--ink-faint); font-size:12px; background:none; border:none; }
+  .store-remove:hover{ color:var(--danger); }
+
+  .pipeline-log{
+    font-family:'IBM Plex Mono',Consolas,monospace; font-size:11.5px; line-height:1.7; white-space:pre-wrap;
+    background:var(--surface-alt); border:1px solid var(--border); border-radius:8px; padding:12px;
+  }
+  .pipeline-log .stage{ color:var(--accent-strong); font-weight:700; }
+  .pipeline-log .ok{ color:var(--ok); font-weight:700; }
+  .pipeline-log .no{ color:var(--danger); font-weight:700; }
+  .pipeline-log .dim{ color:var(--ink-faint); }
+
+  .legend-row{ display:flex; align-items:center; gap:8px; font-size:12px; color:var(--ink-soft); margin-bottom:6px; }
+  .swatch{ width:16px; height:12px; border-radius:3px; flex:0 0 auto; }
+
+  .mode-banner{
+    position:absolute; top:14px; left:50%; transform:translateX(-50%); z-index:1000;
+    background:var(--accent-strong); color:#fff; padding:8px 16px; border-radius:20px; font-size:13px; font-weight:600;
+    box-shadow:var(--shadow); display:none; pointer-events:none;
+  }
+
+  /* leaflet.draw only offers a polygon tool; hide the rest of its default toolbar noise */
+  .leaflet-draw-toolbar a{ background-image:none !important; }
+
+  .pin-marker-icon{ background:none !important; border:none !important; filter:drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
+  .store-label{ font-weight:600; color:#c2410c; }
+  .user-label{ font-weight:700; color:#0a5f69; }
+
+  .map-provider-notice{
+    position:absolute; top:14px; left:14px; right:14px; z-index:1000;
+    background:var(--warn-fill); border:1px solid var(--warn-border); color:var(--warn);
+    padding:9px 36px 9px 14px; border-radius:8px; font-size:12.5px; line-height:1.5; box-shadow:var(--shadow);
+  }
+  .map-provider-notice code{ background:rgba(0,0,0,0.06); padding:0 3px; border-radius:3px; }
+  .map-provider-notice button{
+    position:absolute; top:6px; right:8px; border:none; background:none; cursor:pointer;
+    font-size:16px; line-height:1; color:var(--warn); opacity:.7;
+  }
+  .map-provider-notice button:hover{ opacity:1; }
+
+  /* ---- bottom results sheet ---------------------------------------------------------- */
+  .sheet{
+    position:fixed; left:0; right:0; bottom:0; z-index:1400; background:var(--surface);
+    border-top:1px solid var(--border); box-shadow:0 -6px 24px -14px rgba(23,26,36,0.35);
+    display:flex; flex-direction:column; max-height:48vh; transform:translateY(calc(100% - 40px));
+    transition:transform .22s ease;
+  }
+  .sheet.open{ transform:translateY(0); }
+  .sheet-handle{
+    flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:10px 20px; cursor:pointer; user-select:none; font-size:13px; font-weight:700; height:40px;
+  }
+  .sheet-handle .chev{ display:inline-block; transition:transform .2s; color:var(--ink-faint); font-size:11px; }
+  .sheet.open .sheet-handle .chev{ transform:rotate(180deg); }
+  .sheet-body{ flex:1 1 auto; overflow-y:auto; padding:0 20px 18px; border-top:1px solid var(--border); }
+  .sheet-empty{ font-size:12.5px; color:var(--ink-faint); padding:12px 0; }
+
+  table.result-table{ width:100%; border-collapse:collapse; font-size:12.5px; margin:8px 0 14px; }
+  table.result-table th{ text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-faint); padding:5px 8px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  table.result-table td{ text-align:left; padding:6px 8px; border-bottom:1px dashed var(--border); }
+  table.result-table tr.best td{ background:var(--ok-fill); font-weight:600; }
+  table.result-table td.num{ text-align:left; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .matrix-scroll{ overflow-x:auto; }
+  .pill{ display:inline-block; padding:1px 7px; border-radius:10px; font-size:10px; font-weight:700; margin-left:6px; vertical-align:middle; }
+  .pill.best{ background:var(--ok-fill); color:var(--ok); }
+  .pill.alt{ background:var(--surface-alt); color:var(--ink-faint); }
+  .pill.live{ background:var(--accent-soft); color:var(--accent-strong); }
+  .pill.sim{ background:var(--surface-alt); color:var(--ink-soft); }
+  .sub-heading{ font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-faint); margin:14px 0 6px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-top">
+    <h1>Geo Delivery Simulator</h1>
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="Search a place to jump there (e.g. HiTech City, Hyderabad)" autocomplete="off">
+      <span class="search-icon">&#128269;</span>
+      <div class="search-dropdown" id="searchDropdown"></div>
+    </div>
+    <div class="backend-row">
+      <label class="inline"><input type="checkbox" id="backendToggle"> Live backend</label>
+      <input type="text" id="backendUrlInput" value="http://localhost:8081" title="Base URL of a running pureeats-app">
+      <span class="status-dot" id="backendStatusDot"></span>
+      <span id="backendStatusLabel">off</span>
+    </div>
+  </div>
+  <!--<p>Draws directly on the same pipeline documented in <code>pureeats-geo-service/docs/architecture-map.html</code>:
+    GeoHash prefilter &rarr; nearest-candidate narrowing &rarr; point-in-polygon validation, plus
+    <code>topNNearest</code> / <code>distanceMatrix</code> / routing. The base map is Google Maps by default -
+    switch to OpenStreetMap any time by changing the single <code>MAP_PROVIDER</code> constant near the top of
+    the script; every feature below (drawing, search, GeoHash grid, routing) runs unchanged on Leaflet either
+    way. Location search uses OpenStreetMap's Nominatim; road routes use OSRM's public demo router - both
+    free, no key, best-effort public services, independent of the base map. "Live backend" calls the real
+    <code>DistanceCalculator</code> / <code>RoutingEngine</code> beans on a running <code>pureeats-app</code>
+    (with dummy restaurant data); otherwise everything below runs as a client-side JS port of the same
+    algorithms.</p>-->
+</header>
+
+<div class="layout">
+  <div id="map"></div>
+  <div id="modeBanner" class="mode-banner"></div>
+  <div id="mapProviderNotice" class="map-provider-notice" style="display:none;">
+    Google Maps is the default base map, but no <code>GOOGLE_MAPS_API_KEY</code> is set - showing
+    OpenStreetMap instead. Paste a key near the top of the <code>&lt;script&gt;</code> in
+    <code>index.html</code> to switch (one line: <code>GOOGLE_MAPS_API_KEY</code>).
+    <button id="dismissMapNotice" aria-label="Dismiss">&times;</button>
+  </div>
+
+  <aside>
+    <div class="panel">
+      <h2>Setup data</h2>
+      <span class="field-label">My location</span>
+      <div class="field-row">
+        <input type="text" class="field-input" id="myLocationLatInput" placeholder="Latitude" style="flex-basis:110px;">
+        <input type="text" class="field-input" id="myLocationLngInput" placeholder="Longitude" style="flex-basis:110px;">
+        <input type="text" class="field-input" id="myLocationLabelInput" placeholder="Label (optional)" style="flex-basis:120px;">
+        <button class="btn primary" id="btnSetMyLocation">Go</button>
+      </div>
+      <p class="hint" style="margin-top:0;">Sets <code>MY_LOCATION</code> and flies the map there - leave blank
+        to keep the current label.</p>
+
+      <span class="field-label">Known stores (JSON array)</span>
+      <textarea class="json-input" id="storesJsonInput" rows="7"></textarea>
+      <div class="field-row" style="margin-top:8px;">
+        <button class="btn primary" id="btnLoadStoresJson">Load stores</button>
+        <button class="btn" id="btnResetStoresJson">Reset to defaults</button>
+      </div>
+      <p class="hint">Paste an array of <code>{name, lat, lng, radiusKm}</code> objects (same shape shown here,
+        pre-filled with the current <code>KNOWN_STORES</code>) and click Load - replaces every store pin,
+        delivery-radius circle, and candidate list used by the panels below, immediately.</p>
+    </div>
+
+    <div class="panel">
+      <h2>1 &middot; Delivery zones</h2>
+      <div class="btn-row">
+        <button class="btn primary" id="btnDrawZone">Draw a delivery zone</button>
+        <button class="btn" id="btnSampleData">Load sample zones</button>
+        <button class="btn danger" id="btnClearZones">Clear zones</button>
+      </div>
+      <p class="hint">Click "Draw a delivery zone", then click points on the map to trace a polygon and
+        double-click to finish. You'll be asked to name it - that's one <code>GeoBoundary</code>
+        (<code>ownerType=RESTAURANT</code>). Zone centroids also stand in as "restaurant locations"
+        for panels 4 and 5 below when the live backend is off.</p>
+      <div id="storeList" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="panel">
+      <h2>2 &middot; GeoHash grid</h2>
+      <div class="btn-row">
+        <label class="inline">Precision
+          <select id="geohashPrecision">
+            <option value="5">5 (~4.9km cell)</option>
+            <option value="6" selected>6 (~1.2km &times; 0.6km)</option>
+            <option value="7">7 (~153m cell)</option>
+          </select>
+        </label>
+        <button class="btn" id="btnToggleGrid">Show grid</button>
+      </div>
+      <p class="hint">Overlays the GeoHash cells covering the current map view, at the chosen precision - exactly
+        what <code>GeoHash.encode(lat, lng, precision)</code> buckets a point into.</p>
+    </div>
+
+    <div class="panel">
+      <h2>3 &middot; Simulate a user search</h2>
+      <div class="btn-row">
+        <button class="btn primary" id="btnSimulate">Click map to search here</button>
+        <button class="btn" id="btnClearSearch">Clear search</button>
+      </div>
+      <p class="hint">Runs the exact pipeline from <code>InMemoryPolygonBoundaryService.ownersContaining(...)</code>:
+        GeoHash prefilter, nearest-N narrowing (a sorted-distance stand-in for the real KD-Tree - behaviorally
+        identical on a handful of demo points), then containment on the survivors - point-in-polygon for
+        drawn zones, <code>isWithinRadius</code> for each <code>KNOWN_STORES</code> pin's own delivery radius
+        (always active, no drawing needed). Result appears in the panel at the bottom of the screen.</p>
+    </div>
+
+    <div class="panel">
+      <h2>4 &middot; Nearby restaurants</h2>
+      <div class="btn-row">
+        <button class="btn primary" id="btnPickNearbyOrigin">Pick user location</button>
+        <button class="btn" id="btnClearNearby">Clear</button>
+      </div>
+      <p class="hint">Ranks the <code>KNOWN_STORES</code> pins (plus any drawn zone centroids) by distance from
+        the point you click - exactly <code>DistanceCalculator.topNNearest</code> plus
+        <code>distanceMatrix</code>; ETA uses the same naive 25&nbsp;km/h <code>etaMinutes</code> default. Works
+        immediately, no drawing needed - or turn on "Live backend" to use its own dummy restaurants instead.</p>
+    </div>
+
+    <div class="panel">
+      <h2>5 &middot; Route simulator</h2>
+      <div class="btn-row">
+        <button class="btn" id="btnPickRouteStart">Pick start</button>
+        <button class="btn" id="btnPickRouteEnd">Pick end</button>
+        <button class="btn primary" id="btnFindRoutes">Find routes</button>
+        <button class="btn danger" id="btnClearRoute">Clear</button>
+      </div>
+      <div class="btn-row" style="margin-top:8px;">
+        <button class="btn" id="btnToggleAllRoutes">Show all routes</button>
+      </div>
+      <p class="hint">Compares a straight-line reference (and, with the live backend on, the real
+        <code>RoutingEngine</code>) against real road routes and alternatives from OSRM's public routing API.
+        Only the shortest road route is drawn on the map by default - click "Show all routes" to draw every
+        alternative too (all are always listed in the results table below either way).</p>
+    </div>
+
+    <div class="panel">
+      <h2>Known stores</h2>
+      <div class="btn-row">
+        <button class="btn" id="btnToggleStoreRadius">Show delivery radius</button>
+      </div>
+      <p class="hint">Store pins are always shown; their dashed delivery-radius circles
+        (<code>KNOWN_STORES[].radiusKm</code>, editable per store) are off by default to keep the map
+        uncluttered - toggle them on here when you actually want to see coverage.</p>
+    </div>
+
+    <div class="panel">
+      <h2>Legend</h2>
+      <div class="legend-row"><span class="swatch" style="background:#0a5f69;border:1.5px solid #0a5f69;border-radius:50% 50% 50% 0;transform:rotate(-45deg);"></span> Your location (teal pin)</div>
+      <div class="legend-row"><span class="swatch" style="background:#e6550d;border:1.5px solid #e6550d;border-radius:50% 50% 50% 0;transform:rotate(-45deg);"></span> Store / restaurant (orange pin)</div>
+      <div class="legend-row"><span class="swatch" style="background:rgba(230,85,13,0.08);border:1.5px dashed #e6550d;"></span> Store's delivery radius (toggle above, per-store in <code>KNOWN_STORES</code>)</div>
+      <div class="legend-row"><span class="swatch" style="background:#3182bd;border:1.5px solid #1c5a86;"></span> Delivery zone polygon</div>
+      <div class="legend-row"><span class="swatch" style="background:#e1f3e8;border:1.5px solid #2f8f5b;"></span> GeoHash grid cell</div>
+      <div class="legend-row"><span class="swatch" style="background:#2f8f5b;border:1.5px solid #1f6b40;"></span> Deliverable (point-in-polygon = true)</div>
+      <div class="legend-row"><span class="swatch" style="background:#b3261e;border:1.5px solid #7d1a15;"></span> Nearest, but not covered</div>
+      <div class="legend-row"><span class="swatch" style="background:#8856a7;border:1.5px solid #5f3c76;"></span> Nearby-search user location</div>
+      <div class="legend-row"><span class="swatch" style="background:#0a5f69;border:1.5px solid #0a5f69;"></span> Shortest route</div>
+      <div class="legend-row"><span class="swatch" style="background:#7d8296;border:1.5px dashed #7d8296;"></span> Alternative / reference route</div>
+    </div>
+  </aside>
+</div>
+
+<div class="sheet" id="sheet">
+  <div class="sheet-handle" id="sheetHandle">
+    <span id="sheetTitle">Results</span>
+    <span class="chev">&#9650;</span>
+  </div>
+  <div class="sheet-body" id="sheetBody">
+    <div class="sheet-empty">Run a search, nearby lookup, or route simulation to see results here.</div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<!-- Only activates when MAP_PROVIDER='google' below - wraps the real Google Maps JS API as a Leaflet
+     base layer, so every existing Leaflet feature (draw, markers, polylines) keeps working unchanged
+     regardless of which provider is mounted. Harmless to load even when unused. -->
+<script src="https://cdn.jsdelivr.net/npm/leaflet.gridlayer.googlemutant@0.14.3/dist/Leaflet.GoogleMutant.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  // ===========================================================================================
+  // Map provider config - change MAP_PROVIDER alone to switch base maps. Everything else
+  // (drawing, search, GeoHash grid, nearby/routing simulation) is plain Leaflet API calls, so it
+  // keeps working unchanged no matter which base layer is mounted underneath.
+  // ===========================================================================================
+  const MAP_PROVIDER = 'google'; // 'google' | 'osm'
+  const GOOGLE_MAPS_API_KEY = ''; // paste a Google Maps JavaScript API key here to use 'google'
+
+  // ===========================================================================================
+  // Real algorithms, ported from pureeats-geo-service - kept as close to the Java source as
+  // JS syntax allows, so this is a faithful visual model of the backend, not a fresh invention.
+  // ===========================================================================================
+
+  // Port of com.pureeats.geo.index.GeoHash
+  const GEOHASH_BASE32 = '0123456789bcdefghjkmnpqrstuvwxyz';
+
+  function geohashEncode(lat, lng, precision) {
+    let latRange = [-90, 90], lngRange = [-180, 180];
+    let hash = '', evenBit = true, bit = 0, ch = 0;
+    while (hash.length < precision) {
+      if (evenBit) {
+        const mid = (lngRange[0] + lngRange[1]) / 2;
+        if (lng >= mid) { ch |= (1 << (4 - bit)); lngRange[0] = mid; } else { lngRange[1] = mid; }
+      } else {
+        const mid = (latRange[0] + latRange[1]) / 2;
+        if (lat >= mid) { ch |= (1 << (4 - bit)); latRange[0] = mid; } else { latRange[1] = mid; }
+      }
+      evenBit = !evenBit;
+      if (bit < 4) { bit++; } else { hash += GEOHASH_BASE32[ch]; bit = 0; ch = 0; }
+    }
+    return hash;
+  }
+
+  // Inverse of encode - not present in the Java version (it never needed to draw a cell), but
+  // it's the same standard geohash algorithm run in reverse, needed here purely to visualize
+  // "what area does this hash string cover" as a rectangle on the map.
+  function geohashBounds(hash) {
+    let latRange = [-90, 90], lngRange = [-180, 180];
+    let evenBit = true;
+    for (const c of hash) {
+      const idx = GEOHASH_BASE32.indexOf(c);
+      for (let n = 4; n >= 0; n--) {
+        const bitN = (idx >> n) & 1;
+        if (evenBit) {
+          const mid = (lngRange[0] + lngRange[1]) / 2;
+          if (bitN === 1) { lngRange[0] = mid; } else { lngRange[1] = mid; }
+        } else {
+          const mid = (latRange[0] + latRange[1]) / 2;
+          if (bitN === 1) { latRange[0] = mid; } else { latRange[1] = mid; }
+        }
+        evenBit = !evenBit;
+      }
+    }
+    return { minLat: latRange[0], maxLat: latRange[1], minLng: lngRange[0], maxLng: lngRange[1] };
+  }
+
+  // Port of com.pureeats.geo.distance.HaversineDistanceCalculator
+  function haversineKm(lat1, lng1, lat2, lng2) {
+    const R = 6371.0;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2
+      + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  // Port of com.pureeats.geo.polygon.PointInPolygon - even-odd ray casting, vertices as [lat,lng] pairs.
+  function pointInPolygon(vertices, lat, lng) {
+    let inside = false;
+    const n = vertices.length;
+    if (n < 3) return false;
+    for (let i = 0, j = n - 1; i < n; j = i++) {
+      const [latI, lngI] = vertices[i];
+      const [latJ, lngJ] = vertices[j];
+      const edgeCrossesRay = (lngI > lng) !== (lngJ > lng);
+      if (edgeCrossesRay) {
+        const latAtCrossing = (latJ - latI) * (lng - lngI) / (lngJ - lngI) + latI;
+        if (lat < latAtCrossing) inside = !inside;
+      }
+    }
+    return inside;
+  }
+
+  function centroidOf(vertices) {
+    let latSum = 0, lngSum = 0;
+    vertices.forEach(([lat, lng]) => { latSum += lat; lngSum += lng; });
+    return [latSum / vertices.length, lngSum / vertices.length];
+  }
+
+  // Port of DistanceCalculator.etaMinutes's default - naive flat 25 km/h assumption.
+  function etaMinutesNaive(distanceKm) {
+    return Math.ceil(distanceKm / 25.0 * 60);
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  // A colored teardrop pin (SVG, no image assets) with a glyph inside - used to make "you" vs
+  // "a store" visually unmistakable at a glance, regardless of base map (OSM tiles or Google's).
+  function pinIcon(color, glyph, size) {
+    size = size || 34;
+    const w = size, h = Math.round(size * 1.4);
+    const svg = `<svg width="${w}" height="${h}" viewBox="0 0 30 42" xmlns="http://www.w3.org/2000/svg">
+        <path d="M15 0.5C7 0.5 0.5 7 0.5 15c0 10.5 14.5 26 14.5 26s14.5-15.5 14.5-26C29.5 7 23 0.5 15 0.5z"
+              fill="${color}" stroke="#ffffff" stroke-width="2"/>
+      </svg>`;
+    return L.divIcon({
+      html: `<div style="position:relative;width:${w}px;height:${h}px;">${svg}<span style="position:absolute;top:0;left:0;width:${w}px;height:${Math.round(w * 0.85)}px;display:flex;align-items:center;justify-content:center;font-size:${Math.round(size * 0.5)}px;line-height:1;">${glyph}</span></div>`,
+      className: 'pin-marker-icon',
+      iconSize: [w, h],
+      iconAnchor: [w / 2, h],
+      popupAnchor: [0, -h + 6]
+    });
+  }
+
+  // ===========================================================================================
+  // App state - everything from here down runs inside initApp(), which is invoked either
+  // immediately (OSM) or once Google's JS API finishes its own async load (see the bottom of
+  // this file), so every feature below can safely assume the map + base layer already exist.
+  // ===========================================================================================
+
+  function initApp() {
+
+  const STORE_COLORS = ['#3182bd', '#8856a7', '#e6550d', '#31a354', '#c51b8a', '#636363'];
+  let nextStoreId = 1;
+  let nextColorIdx = 0;
+  const stores = []; // {id, name, color, vertices:[[lat,lng]...], layer, marker}
+
+  const MY_LOCATION_AMBIKA = { lat: 17.450543452302867, lng: 78.36666891800905, label: 'Ambika Mens PG' };
+  const MY_LOCATION_NANDAKURIYA = { lat: 21.972465254396397, lng: 87.37314055591959, label: 'Nandakuriya - Arpan House' };
+
+  // `let`, not `const` - the "Setup data" panel's "Go" button reassigns this and re-renders the
+  // marker below, so MY_LOCATION can change at runtime without editing source.
+  let MY_LOCATION = MY_LOCATION_NANDAKURIYA;
+  const map = L.map('map').setView([MY_LOCATION.lat, MY_LOCATION.lng], 13);
+
+  const usingGoogle = MAP_PROVIDER === 'google' && window.google && window.google.maps;
+  if (usingGoogle) {
+    L.gridLayer.googleMutant({ type: 'roadmap' }).addTo(map);
+  } else {
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+    if (MAP_PROVIDER === 'google') {
+      const notice = document.getElementById('mapProviderNotice');
+      notice.style.display = 'block';
+      document.getElementById('dismissMapNotice').addEventListener('click', () => { notice.style.display = 'none'; });
+    }
+  }
+
+  // Persistent pin at MY_LOCATION (matches the initial map center above) so it's clear at a glance
+  // where "you" are on the map, independent of the click-to-place nearby/route/search markers below.
+  // Teal person-pin, deliberately a different shape+color+glyph from the orange store pins below.
+  const userIcon = pinIcon('#0a5f69', '🧑', 36);
+  let myLocationMarker = null;
+  function renderMyLocationMarker() {
+    if (myLocationMarker) map.removeLayer(myLocationMarker);
+    myLocationMarker = L.marker([MY_LOCATION.lat, MY_LOCATION.lng], { icon: userIcon }).addTo(map)
+      .bindTooltip(MY_LOCATION.label, { permanent: true, direction: 'top', className: 'user-label' })
+      .bindPopup(`${MY_LOCATION.label}<br>${MY_LOCATION.lat.toFixed(6)}, ${MY_LOCATION.lng.toFixed(6)}`);
+  }
+  renderMyLocationMarker();
+
+  document.getElementById('myLocationLatInput').value = MY_LOCATION.lat;
+  document.getElementById('myLocationLngInput').value = MY_LOCATION.lng;
+  document.getElementById('btnSetMyLocation').addEventListener('click', () => {
+    const lat = parseFloat(document.getElementById('myLocationLatInput').value);
+    const lng = parseFloat(document.getElementById('myLocationLngInput').value);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+      alert('Enter a valid latitude (-90 to 90) and longitude (-180 to 180).');
+      return;
+    }
+    const label = document.getElementById('myLocationLabelInput').value.trim() || MY_LOCATION.label;
+    MY_LOCATION = { lat, lng, label };
+    renderMyLocationMarker();
+    map.flyTo([lat, lng], map.getZoom(), { duration: 0.8 });
+  });
+
+  // Known store/restaurant locations - radiusKm is each store's own delivery radius, used both for
+  // the circle drawn on the map and as the real containment test in panel 3's search simulation.
+  // `let` (not `const`): the "Setup data" panel's JSON textarea reassigns this at runtime, and
+  // every panel below reads the variable fresh each time it runs, so a reload isn't needed.
+  let KNOWN_STORES = [
+    { name: 'Sabra Mandir Bajar Store', lat: 21.983581768085354, lng: 87.40826344350626, radiusKm: 2 },
+    { name: 'Sabra School Store', lat: 21.98553956053051, lng: 87.41425156879863, radiusKm: 2 },
+    { name: 'Titia Rajendra Store', lat: 21.981158175982724, lng: 87.37945613956965, radiusKm: 3 },
+    { name: 'Keshrambha School Store', lat: 21.983463651628316, lng: 87.35504506169886, radiusKm: 2 },
+    { name: 'Haria Bhati Store', lat: 21.992627136704034, lng: 87.30254549037984, radiusKm: 4 },
+    { name: 'Dhaneswarpur PetrolPump Store', lat: 22.00574019170965, lng: 87.41883208466344, radiusKm: 3 },
+    { name: 'Khakurda BDO Office Store', lat: 22.012073850092378, lng: 87.4180096354884, radiusKm: 2 },
+    { name: 'Khakurda Bazar', lat: 22.012877750002225, lng: 87.41690683673161, radiusKm: 3 },
+    { name: 'Bastupur Bazar', lat: 22.00197734302303, lng: 87.3942766926036, radiusKm: 2 },
+    { name: 'Nandakuria Bazar', lat: 21.98171523505345, lng:  87.3704416601436, radiusKm: 3 },
+    { name: 'Renuka Enterprize', lat: 21.977794026782767, lng:  87.3672953150021, radiusKm: 2 },
+    { name: 'Gopinathpur Primary\nSchool Bazar', lat: 21.962791940708435, lng:  87.37758639736062, radiusKm: 2 },
+    { name: 'Sadichak Bazar', lat: 21.95765016889123, lng:  87.37561834255983, radiusKm: 3 },
+    { name: 'Talda Temple Bazar', lat: 21.954918370084403, lng:  87.36364798666594, radiusKm: 2 },
+    { name: 'Turka HighSchool', lat: 21.939710295853445, lng:  87.39349912216132, radiusKm: 3 }
+  ];
+  const storeIcon = pinIcon('#e6550d', '🏬', 32);
+  const knownStoresLayer = L.layerGroup().addTo(map);
+  // Delivery-radius circles live in their own layer, off the map by default - the "Known stores"
+  // panel's toggle is the only thing that adds/removes it, so the map starts uncluttered and a
+  // viewer opts into the overlay only when they actually want to see coverage.
+  const storeRadiusLayer = L.layerGroup();
+
+  function renderKnownStores() {
+    knownStoresLayer.clearLayers();
+    storeRadiusLayer.clearLayers();
+    KNOWN_STORES.forEach(s => {
+      L.circle([s.lat, s.lng], {
+        radius: s.radiusKm * 1000,
+        color: '#e6550d',
+        weight: 1.5,
+        fillColor: '#e6550d',
+        fillOpacity: 0.08,
+        dashArray: '5,5'
+      }).addTo(storeRadiusLayer).bindTooltip(`${s.name} - ${s.radiusKm} km delivery radius`, { sticky: true });
+      L.marker([s.lat, s.lng], { icon: storeIcon }).addTo(knownStoresLayer)
+        .bindTooltip(s.name, { permanent: true, direction: 'top', className: 'store-label' })
+        .bindPopup(`${s.name}<br>${s.lat.toFixed(6)}, ${s.lng.toFixed(6)}<br>Delivery radius: ${s.radiusKm} km`);
+    });
+  }
+  renderKnownStores();
+
+  let storeRadiusVisible = false;
+  document.getElementById('btnToggleStoreRadius').addEventListener('click', () => {
+    storeRadiusVisible = !storeRadiusVisible;
+    const btn = document.getElementById('btnToggleStoreRadius');
+    if (storeRadiusVisible) {
+      btn.textContent = 'Hide delivery radius';
+      btn.classList.add('active');
+      map.addLayer(storeRadiusLayer);
+    } else {
+      btn.textContent = 'Show delivery radius';
+      btn.classList.remove('active');
+      map.removeLayer(storeRadiusLayer);
+    }
+  });
+
+  // ---- Load a custom KNOWN_STORES array from the "Setup data" panel's JSON textarea -------------
+  const storesJsonInput = document.getElementById('storesJsonInput');
+  const DEFAULT_KNOWN_STORES_JSON = JSON.stringify(KNOWN_STORES, null, 2);
+  storesJsonInput.value = DEFAULT_KNOWN_STORES_JSON;
+
+  document.getElementById('btnLoadStoresJson').addEventListener('click', () => {
+    let parsed;
+    try {
+      parsed = JSON.parse(storesJsonInput.value);
+    } catch (err) {
+      alert('That is not valid JSON: ' + err.message);
+      return;
+    }
+    if (!Array.isArray(parsed)) {
+      alert('Expected a JSON array of { name, lat, lng, radiusKm } objects.');
+      return;
+    }
+    const bad = parsed.find(s => !s || typeof s.name !== 'string' || typeof s.lat !== 'number' || typeof s.lng !== 'number');
+    if (bad) {
+      alert('Every entry needs at least: name (string), lat (number), lng (number). radiusKm is optional (defaults to 2 km).');
+      return;
+    }
+    KNOWN_STORES = parsed.map(s => ({
+      name: s.name, lat: s.lat, lng: s.lng,
+      radiusKm: typeof s.radiusKm === 'number' && s.radiusKm > 0 ? s.radiusKm : 2
+    }));
+    renderKnownStores();
+    if (KNOWN_STORES.length) {
+      map.flyToBounds(L.latLngBounds(KNOWN_STORES.map(s => [s.lat, s.lng])).pad(0.3), { duration: 0.8 });
+    }
+  });
+
+  document.getElementById('btnResetStoresJson').addEventListener('click', () => {
+    KNOWN_STORES = JSON.parse(DEFAULT_KNOWN_STORES_JSON);
+    storesJsonInput.value = DEFAULT_KNOWN_STORES_JSON;
+    renderKnownStores();
+  });
+
+  const zonesLayer = L.featureGroup().addTo(map); // featureGroup (not layerGroup) so getBounds() works for "fit to zones"
+  const gridLayer = L.layerGroup();
+  const searchLayer = L.layerGroup().addTo(map);
+  const nearbyLayer = L.layerGroup().addTo(map);
+  const routeLayer = L.layerGroup().addTo(map); // start/end markers only
+  const routePathLayer = L.layerGroup().addTo(map); // computed route polylines - kept separate so toggling "show all routes" doesn't touch the markers
+
+  const drawnItems = new L.FeatureGroup();
+  map.addLayer(drawnItems);
+  const drawControl = new L.Draw.Polygon(map, { shapeOptions: { color: '#1c5a86', weight: 2 } });
+
+  const modeBanner = document.getElementById('modeBanner');
+  function setBanner(text) {
+    modeBanner.textContent = text;
+    modeBanner.style.display = text ? 'block' : 'none';
+  }
+
+  // A single click-to-place mode so the 4 map-click features (polygon search, nearby-user,
+  // route-start, route-end) never fight over the same map click.
+  let pendingClick = null; // null | 'polygon-search' | 'nearby-origin' | 'route-start' | 'route-end'
+
+  map.on('click', (e) => {
+    if (!pendingClick) return;
+    const mode = pendingClick;
+    pendingClick = null;
+    setBanner('');
+    if (mode === 'polygon-search') runSearch(e.latlng.lat, e.latlng.lng);
+    else if (mode === 'nearby-origin') setNearbyOrigin(e.latlng.lat, e.latlng.lng);
+    else if (mode === 'route-start') setRoutePoint('start', e.latlng.lat, e.latlng.lng);
+    else if (mode === 'route-end') setRoutePoint('end', e.latlng.lat, e.latlng.lng);
+  });
+
+  // ---- Bottom results sheet ----------------------------------------------------------------
+  const sheet = document.getElementById('sheet');
+  const sheetTitle = document.getElementById('sheetTitle');
+  const sheetBody = document.getElementById('sheetBody');
+  document.getElementById('sheetHandle').addEventListener('click', () => sheet.classList.toggle('open'));
+
+  function renderSheet(title, html) {
+    sheetTitle.textContent = title;
+    sheetBody.innerHTML = html;
+    sheet.classList.add('open');
+  }
+  function sheetEmpty(title) {
+    sheetTitle.textContent = title || 'Results';
+    sheetBody.innerHTML = '<div class="sheet-empty">Run a search, nearby lookup, or route simulation to see results here.</div>';
+  }
+
+  // ---- Drawing a delivery zone -----------------------------------------------------------
+  document.getElementById('btnDrawZone').addEventListener('click', () => {
+    setBanner('Click points on the map to trace a polygon, double-click to finish');
+    drawControl.enable();
+  });
+
+  map.on(L.Draw.Event.CREATED, (e) => {
+    setBanner('');
+    const latlngs = e.layer.getLatLngs()[0].map(p => [p.lat, p.lng]);
+    const name = window.prompt('Name this delivery zone (e.g. "Hitech City Zone"):', 'Zone ' + nextStoreId) || ('Zone ' + nextStoreId);
+    addStore(name, latlngs);
+  });
+
+  function addStore(name, vertices) {
+    const color = STORE_COLORS[nextColorIdx % STORE_COLORS.length];
+    nextColorIdx++;
+    const id = nextStoreId++;
+    const layer = L.polygon(vertices, { color, weight: 2, fillOpacity: 0.15 }).addTo(zonesLayer);
+    layer.bindTooltip(name, { permanent: false });
+    const [cLat, cLng] = centroidOf(vertices);
+    const marker = L.circleMarker([cLat, cLng], { radius: 4, color, fillColor: color, fillOpacity: 1 }).addTo(zonesLayer);
+    stores.push({ id, name, color, vertices, layer, marker });
+    renderStoreList();
+  }
+
+  function renderStoreList() {
+    const el = document.getElementById('storeList');
+    if (stores.length === 0) { el.innerHTML = '<div class="hint">No delivery zones yet.</div>'; return; }
+    el.innerHTML = stores.map(s => `
+      <div class="store-row">
+        <span><span class="store-dot" style="background:${s.color}"></span><span class="store-name">${escapeHtml(s.name)}</span></span>
+        <button class="store-remove" data-id="${s.id}">remove</button>
+      </div>`).join('');
+    el.querySelectorAll('.store-remove').forEach(btn => {
+      btn.addEventListener('click', () => removeStore(parseInt(btn.dataset.id, 10)));
+    });
+  }
+
+  function removeStore(id) {
+    const idx = stores.findIndex(s => s.id === id);
+    if (idx === -1) return;
+    zonesLayer.removeLayer(stores[idx].layer);
+    zonesLayer.removeLayer(stores[idx].marker);
+    stores.splice(idx, 1);
+    renderStoreList();
+  }
+
+  document.getElementById('btnClearZones').addEventListener('click', () => {
+    if (stores.length && !confirm('Remove all delivery zones?')) return;
+    stores.forEach(s => { zonesLayer.removeLayer(s.layer); zonesLayer.removeLayer(s.marker); });
+    stores.length = 0;
+    renderStoreList();
+  });
+
+  // ---- Sample data, matching the README/diagram's worked example -------------------------
+  document.getElementById('btnSampleData').addEventListener('click', () => {
+    addStore('Hyderabad Downtown Zone', [
+      [17.378, 78.478], [17.392, 78.478], [17.392, 78.494], [17.378, 78.494]
+    ]);
+    addStore('HiTech City Zone', [
+      [17.440, 78.372], [17.452, 78.372], [17.452, 78.392], [17.440, 78.392]
+    ]);
+    addStore('Jubilee Hills Zone', [
+      [17.425, 78.400], [17.436, 78.405], [17.430, 78.420], [17.418, 78.415]
+    ]);
+    map.fitBounds(zonesLayer.getBounds().pad(0.3));
+  });
+
+  // ---- GeoHash grid overlay ----------------------------------------------------------------
+  let gridVisible = false;
+  document.getElementById('btnToggleGrid').addEventListener('click', () => {
+    gridVisible = !gridVisible;
+    const btn = document.getElementById('btnToggleGrid');
+    if (gridVisible) {
+      btn.textContent = 'Hide grid';
+      btn.classList.add('active');
+      drawGeohashGrid();
+      map.addLayer(gridLayer);
+    } else {
+      btn.textContent = 'Show grid';
+      btn.classList.remove('active');
+      map.removeLayer(gridLayer);
+    }
+  });
+  document.getElementById('geohashPrecision').addEventListener('change', () => { if (gridVisible) drawGeohashGrid(); });
+  map.on('moveend', () => { if (gridVisible) drawGeohashGrid(); });
+
+  function currentPrecision() {
+    return parseInt(document.getElementById('geohashPrecision').value, 10);
+  }
+
+  function drawGeohashGrid() {
+    gridLayer.clearLayers();
+    const precision = currentPrecision();
+    const bounds = map.getBounds();
+    const sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
+
+    const sample = geohashBounds(geohashEncode((sw.lat + ne.lat) / 2, (sw.lng + ne.lng) / 2, precision));
+    const latStep = sample.maxLat - sample.minLat;
+    const lngStep = sample.maxLng - sample.minLng;
+
+    const maxCells = 500;
+    const estCells = Math.ceil((ne.lat - sw.lat) / latStep) * Math.ceil((ne.lng - sw.lng) / lngStep);
+    if (estCells > maxCells) {
+      L.popup().setLatLng(map.getCenter()).setContent('Zoom in for a readable GeoHash grid at this precision.').openOn(map);
+      return;
+    }
+
+    const seen = new Set();
+    for (let lat = sw.lat; lat <= ne.lat + latStep; lat += latStep) {
+      for (let lng = sw.lng; lng <= ne.lng + lngStep; lng += lngStep) {
+        const hash = geohashEncode(lat, lng, precision);
+        if (seen.has(hash)) continue;
+        seen.add(hash);
+        const b = geohashBounds(hash);
+        const rect = L.rectangle([[b.minLat, b.minLng], [b.maxLat, b.maxLng]], {
+          color: '#2f8f5b', weight: 1, fillOpacity: 0.03, dashArray: '3,3'
+        });
+        rect.bindTooltip(hash, { permanent: true, direction: 'center', className: 'geohash-label' });
+        gridLayer.addLayer(rect);
+      }
+    }
+  }
+
+  // ---- Panel 3: search simulation - the 3-stage pipeline -----------------------------------
+  document.getElementById('btnSimulate').addEventListener('click', () => {
+    pendingClick = 'polygon-search';
+    setBanner('Click anywhere on the map to simulate a user search there');
+  });
+  document.getElementById('btnClearSearch').addEventListener('click', () => {
+    searchLayer.clearLayers();
+    log('Cleared.');
+  });
+
+  function log(html) {
+    renderSheet('Delivery search result (point-in-polygon pipeline)', `<div class="pipeline-log">${html}</div>`);
+  }
+
+  // Unifies hand-drawn polygon zones with KNOWN_STORES' circular delivery radius into one list of
+  // "delivery zones" the search pipeline below can run against - polygon containment via
+  // pointInPolygon, circle containment via haversineKm(...) <= radiusKm (the same test
+  // DistanceCalculator.isWithinRadius does). This is what lets a click anywhere on the map
+  // simulate against the always-visible store pins with zero setup (no drawing/loading needed).
+  function buildCandidateZones() {
+    const drawn = stores.map(s => ({
+      name: s.name,
+      center: centroidOf(s.vertices),
+      contains: (qLat, qLng) => pointInPolygon(s.vertices, qLat, qLng),
+      highlight: (ok) => L.polygon(s.vertices, {
+        color: ok ? '#1f6b40' : '#7d1a15', weight: 3,
+        fillColor: ok ? '#2f8f5b' : '#b3261e', fillOpacity: ok ? 0.35 : 0.15
+      })
+    }));
+    const known = KNOWN_STORES.map(s => ({
+      name: `${s.name} (${s.radiusKm} km radius)`,
+      center: [s.lat, s.lng],
+      contains: (qLat, qLng) => haversineKm(s.lat, s.lng, qLat, qLng) <= s.radiusKm,
+      highlight: (ok) => L.circle([s.lat, s.lng], {
+        radius: s.radiusKm * 1000, weight: 3,
+        color: ok ? '#1f6b40' : '#7d1a15',
+        fillColor: ok ? '#2f8f5b' : '#b3261e', fillOpacity: ok ? 0.35 : 0.15
+      })
+    }));
+    return drawn.concat(known);
+  }
+
+  function runSearch(lat, lng) {
+    searchLayer.clearLayers();
+    const precision = currentPrecision();
+    const lines = [];
+
+    L.marker([lat, lng]).addTo(searchLayer).bindTooltip('User location', { permanent: true, direction: 'top' });
+
+    const zones = buildCandidateZones();
+    if (zones.length === 0) {
+      log('No delivery zones registered yet - draw one first, or click "Load sample zones".');
+      return;
+    }
+
+    // Stage 1: GeoHash prefilter (InMemoryPolygonBoundaryService.ownersContaining, stage 1)
+    const queryHash = geohashEncode(lat, lng, precision);
+    lines.push(`<span class="stage">Stage 1 - GeoHash prefilter</span>  query point hash (precision ${precision}): <b>${queryHash}</b>`);
+    const withHash = zones.map(z => ({ zone: z, hash: geohashEncode(...z.center, precision) }));
+    let candidates = withHash.filter(x => x.hash === queryHash).map(x => x.zone);
+    if (candidates.length === 0) {
+      lines.push(`<span class="dim">no zone center shares this exact cell - falling back to all ${zones.length} registered zone(s), same as the Java fallback for sparse data</span>`);
+      candidates = zones.slice();
+    } else {
+      lines.push(`${candidates.length} of ${zones.length} zone(s) share this cell: ${candidates.map(z => z.name).join(', ')}`);
+    }
+
+    // Stage 2: nearest-N narrowing (KD-Tree.kNearest in the real backend; a sort is
+    // behaviorally identical for a handful of demo points, so that's what runs here)
+    const K = Math.min(5, candidates.length);
+    const ranked = candidates
+      .map(z => ({ zone: z, distanceKm: haversineKm(lat, lng, ...z.center) }))
+      .sort((a, b) => a.distanceKm - b.distanceKm)
+      .slice(0, K);
+    lines.push(`<span class="stage">Stage 2 - nearest-neighbor narrowing</span>  (KD-Tree in the real backend; sorted here) top ${K}:`);
+    ranked.forEach(r => {
+      lines.push(`&nbsp;&nbsp;${r.zone.name} - ${r.distanceKm.toFixed(2)} km`);
+      L.polyline([[lat, lng], r.zone.center], { color: '#7d8296', weight: 1, dashArray: '4,4' }).addTo(searchLayer);
+    });
+
+    // Stage 3: exact containment - point-in-polygon for drawn zones, radius check for known stores
+    lines.push(`<span class="stage">Stage 3 - point-in-polygon / radius validation</span>`);
+    const deliverable = [];
+    ranked.forEach(r => {
+      const contains = r.zone.contains(lat, lng);
+      const highlight = r.zone.highlight(contains).addTo(searchLayer);
+      highlight.bindTooltip(r.zone.name, { permanent: false });
+      lines.push(contains
+        ? `&nbsp;&nbsp;<span class="ok">&#10003; ${r.zone.name} - contains the point (deliverable)</span>`
+        : `&nbsp;&nbsp;<span class="no">&#10007; ${r.zone.name} - does not contain the point</span>`);
+      if (contains) deliverable.push(r.zone.name);
+    });
+
+    lines.push('');
+    lines.push(deliverable.length
+      ? `<span class="ok">Result: deliverable from ${deliverable.length} store(s) - ${deliverable.join(', ')}</span>`
+      : `<span class="no">Result: no registered zone actually covers this point</span>`);
+
+    log(lines.join('\n'));
+  }
+
+  // ===========================================================================================
+  // Header search bar - OpenStreetMap Nominatim autosuggest, flies the map to the pick
+  // ===========================================================================================
+  const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
+  let searchDebounce = null;
+  let searchResults = [];
+  let searchActiveIdx = -1;
+  let searchResultMarker = null;
+
+  const searchInput = document.getElementById('searchInput');
+  const searchDropdown = document.getElementById('searchDropdown');
+
+  searchInput.addEventListener('input', () => {
+    const q = searchInput.value.trim();
+    clearTimeout(searchDebounce);
+    if (q.length < 3) { closeSearchDropdown(); return; }
+    searchDebounce = setTimeout(() => runGeocodeSearch(q), 380);
+  });
+  searchInput.addEventListener('keydown', (e) => {
+    if (!searchDropdown.classList.contains('open')) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); moveSearchActive(1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); moveSearchActive(-1); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (searchActiveIdx >= 0) selectSearchResult(searchResults[searchActiveIdx]); }
+    else if (e.key === 'Escape') { closeSearchDropdown(); }
+  });
+  document.addEventListener('click', (e) => { if (!e.target.closest('.search-box')) closeSearchDropdown(); });
+
+  function closeSearchDropdown() {
+    searchDropdown.classList.remove('open');
+    searchDropdown.innerHTML = '';
+    searchActiveIdx = -1;
+  }
+
+  function moveSearchActive(delta) {
+    if (!searchResults.length) return;
+    searchActiveIdx = (searchActiveIdx + delta + searchResults.length) % searchResults.length;
+    renderSearchDropdown();
+  }
+
+  async function runGeocodeSearch(q) {
+    const b = map.getBounds();
+    const viewbox = `${b.getWest()},${b.getNorth()},${b.getEast()},${b.getSouth()}`;
+    const url = `${NOMINATIM_URL}?format=json&limit=6&addressdetails=0&viewbox=${viewbox}&bounded=0&q=${encodeURIComponent(q)}`;
+    try {
+      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      searchResults = await res.json();
+      searchActiveIdx = -1;
+      renderSearchDropdown();
+    } catch (err) {
+      searchDropdown.innerHTML = '<div class="search-empty">Search unavailable right now (Nominatim public API).</div>';
+      searchDropdown.classList.add('open');
+    }
+  }
+
+  function renderSearchDropdown() {
+    if (!searchResults.length) {
+      searchDropdown.innerHTML = '<div class="search-empty">No matches.</div>';
+      searchDropdown.classList.add('open');
+      return;
+    }
+    searchDropdown.innerHTML = searchResults.map((r, i) => {
+      const parts = String(r.display_name).split(',');
+      const title = parts[0];
+      const sub = parts.slice(1, 4).join(',').trim();
+      return `<div class="search-item ${i === searchActiveIdx ? 'active' : ''}" data-idx="${i}">
+        <div class="s-title">${escapeHtml(title)}</div><div class="s-sub">${escapeHtml(sub)}</div>
+      </div>`;
+    }).join('');
+    searchDropdown.classList.add('open');
+    searchDropdown.querySelectorAll('.search-item').forEach(el => {
+      el.addEventListener('click', () => selectSearchResult(searchResults[parseInt(el.dataset.idx, 10)]));
+    });
+  }
+
+  function selectSearchResult(r) {
+    if (!r) return;
+    const lat = parseFloat(r.lat), lng = parseFloat(r.lon);
+    map.flyTo([lat, lng], 15, { duration: 0.8 });
+    if (searchResultMarker) map.removeLayer(searchResultMarker);
+    const title = String(r.display_name).split(',')[0];
+    searchResultMarker = L.marker([lat, lng]).addTo(map).bindTooltip(title, { permanent: true, direction: 'top' }).openTooltip();
+    searchInput.value = title;
+    closeSearchDropdown();
+  }
+
+  // ===========================================================================================
+  // Optional live backend - pureeats-app's GeoSimulatorController, real DistanceCalculator /
+  // RoutingEngine beans + dummy restaurant data. Falls back to client-side simulation whenever
+  // it's off, unreachable, or a call fails.
+  // ===========================================================================================
+  let backendConnected = false;
+  const backendToggle = document.getElementById('backendToggle');
+  const backendUrlInput = document.getElementById('backendUrlInput');
+  const backendStatusDot = document.getElementById('backendStatusDot');
+  const backendStatusLabel = document.getElementById('backendStatusLabel');
+
+  function backendBase() {
+    return (backendUrlInput.value.trim() || 'http://localhost:8081').replace(/\/$/, '');
+  }
+
+  async function pingBackend() {
+    backendStatusDot.className = 'status-dot';
+    backendStatusLabel.textContent = 'checking...';
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 2500);
+      const res = await fetch(backendBase() + '/api/v1/geo/simulator/restaurants', { signal: ctrl.signal });
+      clearTimeout(t);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const body = await res.json();
+      backendConnected = true;
+      backendStatusDot.className = 'status-dot ok';
+      backendStatusLabel.textContent = `connected - ${(body.data || []).length} dummy restaurants`;
+    } catch (err) {
+      backendConnected = false;
+      backendStatusDot.className = 'status-dot bad';
+      backendStatusLabel.textContent = 'unreachable - using client-side simulation';
+    }
+  }
+
+  backendToggle.addEventListener('change', () => {
+    if (backendToggle.checked) { pingBackend(); }
+    else { backendConnected = false; backendStatusDot.className = 'status-dot'; backendStatusLabel.textContent = 'off'; }
+  });
+  backendUrlInput.addEventListener('change', () => { if (backendToggle.checked) pingBackend(); });
+
+  // ===========================================================================================
+  // Panel 4: nearby restaurants - topNNearest + distanceMatrix + etaMinutes
+  // ===========================================================================================
+  let nearbyOriginMarker = null;
+
+  document.getElementById('btnPickNearbyOrigin').addEventListener('click', () => {
+    pendingClick = 'nearby-origin';
+    setBanner('Click a point on the map to use as the customer/user location');
+  });
+  document.getElementById('btnClearNearby').addEventListener('click', () => {
+    nearbyLayer.clearLayers();
+    if (nearbyOriginMarker) { map.removeLayer(nearbyOriginMarker); nearbyOriginMarker = null; }
+    sheetEmpty();
+  });
+
+  async function setNearbyOrigin(lat, lng) {
+    nearbyLayer.clearLayers();
+    if (nearbyOriginMarker) map.removeLayer(nearbyOriginMarker);
+    nearbyOriginMarker = L.circleMarker([lat, lng], { radius: 7, weight: 2, color: '#5f3c76', fillColor: '#8856a7', fillOpacity: 1 })
+      .addTo(nearbyLayer).bindTooltip('User location', { permanent: true, direction: 'top' });
+
+    if (backendConnected) {
+      try {
+        const base = backendBase();
+        const [nearbyBody, matrixBody] = await Promise.all([
+          fetch(`${base}/api/v1/geo/simulator/nearby?lat=${lat}&lng=${lng}&limit=6`).then(r => r.json()),
+          fetch(`${base}/api/v1/geo/simulator/distance-matrix?lat=${lat}&lng=${lng}`).then(r => r.json())
+        ]);
+        const ranked = nearbyBody.data.map(x => ({
+          name: x.restaurant.name,
+          lat: parseFloat(x.restaurant.lat),
+          lng: parseFloat(x.restaurant.lng),
+          distanceKm: parseFloat(x.distanceKm),
+          etaMinutes: x.etaMinutes
+        }));
+        renderNearbyResults(lat, lng, ranked, matrixBody.data.distancesKm[0], true);
+        return;
+      } catch (err) {
+        // fall through to client-side simulation below
+      }
+    }
+
+    // Candidates: KNOWN_STORES (always available, no setup needed) plus any hand-drawn zones.
+    const candidates = KNOWN_STORES.map(s => ({ name: s.name, lat: s.lat, lng: s.lng }))
+      .concat(stores.map(s => {
+        const [cLat, cLng] = centroidOf(s.vertices);
+        return { name: s.name, lat: cLat, lng: cLng };
+      }));
+    if (candidates.length === 0) {
+      renderSheet('Nearby restaurants', '<div class="sheet-empty">No delivery zones registered yet - draw one, or click "Load sample zones" first. Or turn on "Live backend" to use its own dummy restaurants instead.</div>');
+      return;
+    }
+    const ranked = candidates.map(c => {
+      const d = haversineKm(lat, lng, c.lat, c.lng);
+      return { name: c.name, lat: c.lat, lng: c.lng, distanceKm: d, etaMinutes: etaMinutesNaive(d) };
+    }).sort((a, b) => a.distanceKm - b.distanceKm).slice(0, 6); // topNNearest(..., n=6) - matches the live backend's default limit
+    renderNearbyResults(lat, lng, ranked, ranked.map(r => r.distanceKm), false);
+  }
+
+  function renderNearbyResults(lat, lng, ranked, matrixRow, live) {
+    ranked.forEach((r, i) => {
+      const strength = 1 - i / Math.max(ranked.length, 4);
+      L.polyline([[lat, lng], [r.lat, r.lng]], { color: '#8856a7', weight: 2, opacity: 0.25 + 0.5 * strength }).addTo(nearbyLayer);
+    });
+    const rows = ranked.map((r, i) => `
+      <tr class="${i === 0 ? 'best' : ''}">
+        <td>${i + 1}</td><td>${escapeHtml(r.name)}</td>
+        <td class="num">${r.distanceKm.toFixed(2)} km</td>
+        <td class="num">${r.etaMinutes} min</td>
+      </tr>`).join('');
+    const matrixHeader = ranked.map(r => `<th>${escapeHtml(r.name)}</th>`).join('');
+    const matrixRowHtml = matrixRow.map(d => `<td class="num">${(typeof d === 'number' ? d : parseFloat(d)).toFixed(2)} km</td>`).join('');
+    const html = `
+      <p class="hint">${live ? '<span class="pill live">LIVE BACKEND</span>' : '<span class="pill sim">CLIENT-SIDE</span>'}
+        ${live ? 'DistanceCalculator.topNNearest / distanceMatrix / etaMinutes, called for real on the running pureeats-app, over its dummy restaurant list.'
+                : 'Client-side JS port of topNNearest + distanceMatrix, over KNOWN_STORES plus any drawn delivery zones; ETA uses the naive etaMinutes default (25 km/h flat speed).'}</p>
+      <table class="result-table">
+        <thead><tr><th>#</th><th>Restaurant</th><th>Distance</th><th>ETA</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="sub-heading">distanceMatrix(origins=[user location], destinations=[restaurants])</div>
+      <div class="matrix-scroll">
+        <table class="result-table"><thead><tr><th>origin</th>${matrixHeader}</tr></thead>
+        <tbody><tr><td>user</td>${matrixRowHtml}</tr></tbody></table>
+      </div>`;
+    renderSheet(`Nearby restaurants from (${lat.toFixed(4)}, ${lng.toFixed(4)})`, html);
+  }
+
+  // ===========================================================================================
+  // Panel 5: route simulator - straight-line reference + live RoutingEngine + OSRM alternatives
+  // ===========================================================================================
+  const OSRM_URL = 'https://router.project-osrm.org/route/v1/driving';
+  let routeStart = null, routeEnd = null;
+  let routeStartMarker = null, routeEndMarker = null;
+  let lastRouteResult = null; // { all, bestIdx } from the most recent findRoutes() - redrawn by the toggle without refetching
+  let showAllRoutes = false;
+
+  document.getElementById('btnPickRouteStart').addEventListener('click', () => { pendingClick = 'route-start'; setBanner('Click the route START point'); });
+  document.getElementById('btnPickRouteEnd').addEventListener('click', () => { pendingClick = 'route-end'; setBanner('Click the route END point'); });
+  document.getElementById('btnFindRoutes').addEventListener('click', () => findRoutes());
+  document.getElementById('btnClearRoute').addEventListener('click', () => clearRoute());
+  document.getElementById('btnToggleAllRoutes').addEventListener('click', () => {
+    showAllRoutes = !showAllRoutes;
+    const btn = document.getElementById('btnToggleAllRoutes');
+    btn.textContent = showAllRoutes ? 'Show shortest only' : 'Show all routes';
+    btn.classList.toggle('active', showAllRoutes);
+    drawRoutePaths();
+  });
+
+  function setRoutePoint(which, lat, lng) {
+    const color = which === 'start' ? '#2f8f5b' : '#b3261e';
+    const marker = L.circleMarker([lat, lng], { radius: 7, weight: 2, color: '#1f2937', fillColor: color, fillOpacity: 1 })
+      .addTo(routeLayer).bindTooltip(which === 'start' ? 'Route start' : 'Route end', { permanent: true, direction: 'top' });
+    if (which === 'start') { if (routeStartMarker) routeLayer.removeLayer(routeStartMarker); routeStartMarker = marker; routeStart = { lat, lng }; }
+    else { if (routeEndMarker) routeLayer.removeLayer(routeEndMarker); routeEndMarker = marker; routeEnd = { lat, lng }; }
+  }
+
+  // Draws only the shortest route by default; "Show all routes" flips showAllRoutes and this
+  // redraws from the already-fetched lastRouteResult - no re-fetch of OSRM/backend needed.
+  function drawRoutePaths() {
+    routePathLayer.clearLayers();
+    if (!lastRouteResult) return;
+    const { all, bestIdx } = lastRouteResult;
+    all.forEach((r, i) => {
+      const isBest = i === bestIdx;
+      if (!showAllRoutes && !isBest) return;
+      const layer = L.polyline(r.path, {
+        color: isBest ? '#0a5f69' : (r.live ? '#a8650a' : '#7d8296'),
+        weight: isBest ? 6 : 3,
+        opacity: isBest ? 0.95 : 0.6,
+        dashArray: r.dashed ? '6,8' : null
+      }).addTo(routePathLayer);
+      layer.bindTooltip(`${r.label} - ${r.distanceKm.toFixed(2)} km, ${r.etaMinutes} min`, { sticky: true });
+      if (isBest) layer.bringToFront();
+    });
+  }
+
+  function clearRoute() {
+    routeLayer.clearLayers();
+    routePathLayer.clearLayers();
+    routeStartMarker = null; routeEndMarker = null;
+    routeStart = null; routeEnd = null;
+    lastRouteResult = null;
+    sheetEmpty();
+  }
+
+  async function findRoutes() {
+    if (!routeStart || !routeEnd) {
+      renderSheet('Route simulator', '<div class="sheet-empty">Pick both a start and an end point on the map first.</div>');
+      return;
+    }
+
+    const straightKm = haversineKm(routeStart.lat, routeStart.lng, routeEnd.lat, routeEnd.lng);
+    const candidates = [{
+      label: 'Straight-line reference (DistanceCalculator.distanceKm)',
+      distanceKm: straightKm, etaMinutes: etaMinutesNaive(straightKm),
+      path: [[routeStart.lat, routeStart.lng], [routeEnd.lat, routeEnd.lng]],
+      dashed: true, live: false
+    }];
+
+    if (backendConnected) {
+      try {
+        const base = backendBase();
+        const body = await fetch(`${base}/api/v1/geo/simulator/route?fromLat=${routeStart.lat}&fromLng=${routeStart.lng}&toLat=${routeEnd.lat}&toLng=${routeEnd.lng}`).then(r => r.json());
+        const rt = body.data;
+        candidates.push({
+          label: 'Backend RoutingEngine (live, straight-line provider)',
+          distanceKm: parseFloat(rt.distanceKm), etaMinutes: rt.etaMinutes,
+          path: [[routeStart.lat, routeStart.lng], [routeEnd.lat, routeEnd.lng]],
+          dashed: true, live: true
+        });
+      } catch (err) { /* the client-side straight-line reference above already covers this */ }
+    }
+
+    let osrmRoutes = [];
+    let osrmFailed = false;
+    try {
+      const url = `${OSRM_URL}/${routeStart.lng},${routeStart.lat};${routeEnd.lng},${routeEnd.lat}?alternatives=true&overview=full&geometries=geojson`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.code === 'Ok' && data.routes && data.routes.length) {
+        osrmRoutes = data.routes.map((r, i) => ({
+          label: `Road route ${i + 1} (OSRM)`,
+          distanceKm: r.distance / 1000, etaMinutes: Math.ceil(r.duration / 60),
+          path: r.geometry.coordinates.map(([lng, lat]) => [lat, lng]),
+          dashed: false, live: false
+        }));
+      } else { osrmFailed = true; }
+    } catch (err) { osrmFailed = true; }
+
+    const all = candidates.concat(osrmRoutes);
+    // "Shortest" is decided among real road-route alternatives only - a straight-line reference
+    // (client-side or the live backend's straight-line RoutingEngine) is always <= any actual road
+    // route by construction, so including it here would make it "win" every time and defeat the
+    // whole point of comparing road-route alternatives. Fall back to comparing everything only when
+    // no real road route came back at all (OSRM unavailable), so something is still highlighted.
+    const routeIdxs = all.map((r, i) => i).filter(i => !all[i].dashed);
+    const poolForBest = routeIdxs.length ? routeIdxs : all.map((r, i) => i);
+    let bestIdx = poolForBest[0];
+    poolForBest.forEach(i => { if (all[i].distanceKm < all[bestIdx].distanceKm) bestIdx = i; });
+
+    lastRouteResult = { all, bestIdx };
+    drawRoutePaths();
+
+    const rows = all.map((r, i) => {
+      let tag = '<span class="pill alt">alt</span>';
+      if (i === bestIdx) tag = '<span class="pill best">SHORTEST</span>';
+      else if (r.live) tag = '<span class="pill live">LIVE reference</span>';
+      else if (r.dashed) tag = '<span class="pill alt">reference</span>';
+      return `<tr class="${i === bestIdx ? 'best' : ''}">
+        <td>${escapeHtml(r.label)}${tag}</td>
+        <td class="num">${r.distanceKm.toFixed(2)} km</td>
+        <td class="num">${r.etaMinutes} min</td>
+      </tr>`;
+    }).join('');
+    const osrmNote = osrmRoutes.length
+      ? `${osrmRoutes.length} real road route${osrmRoutes.length > 1 ? 's' : ''} via the public OSRM demo routing API.`
+      : `Road routing (OSRM public demo) was unavailable just now${osrmFailed ? ' or returned no route for this pair' : ''} - only the straight-line reference is shown; try again in a moment.`;
+    const html = `
+      <p class="hint">${osrmNote} The bold teal line is the shortest candidate, always drawn; click
+        "${showAllRoutes ? 'Show shortest only' : 'Show all routes'}" ${showAllRoutes ? 'to hide' : 'to also draw'}
+        the dashed straight-line references and the thin gray alternative road paths.</p>
+      <table class="result-table">
+        <thead><tr><th>Route</th><th>Distance</th><th>ETA</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    renderSheet(`Route: (${routeStart.lat.toFixed(4)}, ${routeStart.lng.toFixed(4)}) &rarr; (${routeEnd.lat.toFixed(4)}, ${routeEnd.lng.toFixed(4)})`, html);
+  }
+
+  renderStoreList();
+
+  } // end initApp()
+
+  // ===========================================================================================
+  // Bootstrap - OSM starts synchronously; Google Maps loads its JS API asynchronously first and
+  // only then calls initApp(), since googleMutant needs window.google.maps to already exist.
+  // ===========================================================================================
+  if (MAP_PROVIDER === 'google' && GOOGLE_MAPS_API_KEY) {
+    window.__geoSimInitApp = initApp;
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(GOOGLE_MAPS_API_KEY)}&callback=__geoSimInitApp`;
+    script.onerror = () => {
+      console.warn('Google Maps JS API failed to load - falling back to OpenStreetMap.');
+      initApp();
+    };
+    document.head.appendChild(script);
+  } else {
+    if (MAP_PROVIDER === 'google') {
+      console.warn('MAP_PROVIDER is "google" but GOOGLE_MAPS_API_KEY is empty - falling back to OpenStreetMap. Paste a key near the top of the <script> in index.html to use real Google Maps.');
+    }
+    initApp();
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 package com.pureeats.catalog.service;
 
 import com.pureeats.catalog.dto.*;
-import com.pureeats.catalog.geo.DistanceCalculator;
+import com.pureeats.geo.distance.DistanceCalculator;
 import com.pureeats.catalog.repository.RestaurantCategoryRepository;
 import com.pureeats.catalog.repository.RestaurantCategoryRestaurantRepository;
 import com.pureeats.catalog.repository.RestaurantRepository;

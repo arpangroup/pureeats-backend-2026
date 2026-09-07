@@ -1,4 +1,4 @@
-package com.pureeats.catalog.geo;
+package com.pureeats.geo.distance;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;

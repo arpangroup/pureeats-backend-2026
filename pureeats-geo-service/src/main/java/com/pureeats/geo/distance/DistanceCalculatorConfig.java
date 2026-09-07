@@ -1,4 +1,4 @@
-package com.pureeats.catalog.geo;
+package com.pureeats.geo.distance;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
