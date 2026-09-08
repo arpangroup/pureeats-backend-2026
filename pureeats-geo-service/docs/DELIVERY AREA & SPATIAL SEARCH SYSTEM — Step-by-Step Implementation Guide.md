@@ -1,4 +1,12 @@
 # DELIVERY AREA & SPATIAL SEARCH SYSTEM
+You will build:
+- ✅ Polygon drawing system
+- ✅ Delivery zone management
+- ✅ GeoHash optimization
+- ✅ KD-Tree optimization
+- ✅ Point-in-polygon detection
+- ✅ Spatial search engine
+
 
 ## Table of Contents
 
