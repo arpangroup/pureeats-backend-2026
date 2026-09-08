@@ -92,109 +92,107 @@ Driver Matching + Pricing
 
 ## Table of Contents
 
-1. What Are We Building?
-2. What Is ETA?
-3. Why ETA Matters
-4. Basic Rule-Based ETA
-5. Why Rule-Based ETA Fails
-6. The Problem With `Distance / Speed`
-7. What a Production ETA System Must Predict
-8. ETA vs Routing
-9. ETA vs Route Optimization
-10. ETA Prediction Architecture
-11. Complete ETA Flow
-12. ETA Input Data
-13. Spatial Features
-14. Temporal Features
-15. Traffic Features
-16. Driver Features
-17. Weather Features
-18. Region Features
-19. Order Features
-20. Route Complexity Features
-21. Feature Vector
-22. Example Feature Vector
-23. Feature Normalization
-24. Feature Store
-25. Historical Data
-26. ETA Training Dataset
-27. Label Generation
-28. Training Example
-29. Data Leakage
-30. Training Pipeline
-31. Model Options
-32. Linear Regression
-33. Random Forest
-34. Gradient Boosting
-35. XGBoost
-36. Neural Networks
-37. Deep Spatio-Temporal Models
-38. Why XGBoost Is a Good Starting Point
-39. ETA Model Input
-40. ETA Model Output
-41. Simple Java Simulation
-42. ETA Prediction Service
-43. Real ML Architecture
-44. Python ML Model Server
-45. Spring Boot → ML Server
-46. REST vs gRPC
-47. Kafka-Based ETA Architecture
-48. Feature Builder Service
-49. ETA Prediction Service
-50. ETA Prediction Request
-51. ETA Prediction Response
-52. Complete Prediction Flow
-53. Driver-Specific ETA
-54. Traffic-Aware ETA
-55. Time-of-Day ETA
-56. Weather-Aware ETA
-57. Road-Type ETA
-58. Region-Aware ETA
-59. Store Preparation Time
-60. Pickup ETA
-61. Delivery ETA
-62. Total Order ETA
-63. Multi-Stop ETA
-64. ETA for Multi-Drop Routes
-65. ETA Confidence
-66. ETA Range
-67. ETA Error
-68. Measuring Model Accuracy
-69. MAE
-70. RMSE
-71. MAPE
-72. Prediction Error Monitoring
-73. Real-Time ETA Updates
-74. Driver GPS Integration
-75. ETA Recalculation
-76. Traffic Change
-77. Driver Route Deviation
-78. New Order Assignment
-79. Order Cancellation
-80. Store Delay
-81. Weather Change
-82. Kafka Integration
-83. Redis Integration
-84. WebSocket Integration
-85. Customer ETA
-86. Driver ETA
-87. Operations Dashboard
-88. ETA and Driver Matching
-89. ETA and Route Optimization
-90. ETA and Surge Pricing
-91. ETA and Store Matching
-92. ML Model Retraining
-93. Model Versioning
-94. Production ML Architecture
-95. Failure Handling
-96. Fallback ETA
-97. Complete End-to-End Architecture
-98. Implementation Phases
-99. Final Architecture
-100. Final Success Criteria
-101. Key Architectural Principle
-
----
+1. [What Are We Building?](#1-what-are-we-building)
+2. [What Is ETA?](#2-what-is-eta)
+3. [Why ETA Matters](#3-why-eta-matters)
+4. [Basic Rule-Based ETA](#4-basic-rule-based-eta)
+5. [Why Rule-Based ETA Fails](#5-why-rule-based-eta-fails)
+6. [The Problem With `Distance / Speed`](#6-the-problem-with-distance-speed)
+7. [What a Production ETA System Must Predict](#7-what-a-production-eta-system-must-predict)
+8. [ETA vs Routing](#8-eta-vs-routing)
+9. [ETA vs Route Optimization](#9-eta-vs-route-optimization)
+10. [ETA Prediction Architecture](#10-eta-prediction-architecture)
+11. [Complete ETA Flow](#11-complete-eta-flow)
+12. [ETA Input Data](#12-eta-input-data)
+13. [Spatial Features](#13-spatial-features)
+14. [Temporal Features](#14-temporal-features)
+15. [Traffic Features](#15-traffic-features)
+16. [Driver Features](#16-driver-features)
+17. [Weather Features](#17-weather-features)
+18. [Region Features](#18-region-features)
+19. [Order Features](#19-order-features)
+20. [Route Complexity Features](#20-route-complexity-features)
+21. [Feature Vector](#21-feature-vector)
+22. [Example Feature Vector](#22-example-feature-vector)
+23. [Feature Normalization](#23-feature-normalization)
+24. [Feature Store](#24-feature-store)
+25. [Historical Data](#25-historical-data)
+26. [ETA Training Dataset](#26-eta-training-dataset)
+27. [Label Generation](#27-label-generation)
+28. [Training Example](#28-training-example)
+29. [Data Leakage](#29-data-leakage)
+30. [Training Pipeline](#30-training-pipeline)
+31. [Model Options](#31-model-options)
+32. [Linear Regression](#32-linear-regression)
+33. [Random Forest](#33-random-forest)
+34. [Gradient Boosting](#34-gradient-boosting)
+35. [XGBoost](#35-xgboost)
+36. [Neural Networks](#36-neural-networks)
+37. [Deep Spatio-Temporal Models](#37-deep-spatio-temporal-models)
+38. [Why XGBoost Is a Good Starting Point](#38-why-xgboost-is-a-good-starting-point)
+39. [ETA Model Input](#39-eta-model-input)
+40. [ETA Model Output](#40-eta-model-output)
+41. [Simple Java Simulation](#41-simple-java-simulation)
+42. [ETA Prediction Service](#42-eta-prediction-service)
+43. [Real ML Architecture](#43-real-ml-architecture)
+44. [Python ML Model Server](#44-python-ml-model-server)
+45. [Spring Boot → ML Server](#45-spring-boot-ml-server)
+46. [REST vs gRPC](#46-rest-vs-grpc)
+47. [Kafka-Based ETA Architecture](#47-kafka-based-eta-architecture)
+48. [Feature Builder Service](#48-feature-builder-service)
+49. [ETA Prediction Service](#49-eta-prediction-service)
+50. [ETA Prediction Request](#50-eta-prediction-request)
+51. [ETA Prediction Response](#51-eta-prediction-response)
+52. [Complete Prediction Flow](#52-complete-prediction-flow)
+53. [Driver-Specific ETA](#53-driver-specific-eta)
+54. [Traffic-Aware ETA](#54-traffic-aware-eta)
+55. [Time-of-Day ETA](#55-time-of-day-eta)
+56. [Weather-Aware ETA](#56-weather-aware-eta)
+57. [Road-Type ETA](#57-road-type-eta)
+58. [Region-Aware ETA](#58-region-aware-eta)
+59. [Store Preparation Time](#59-store-preparation-time)
+60. [Pickup ETA](#60-pickup-eta)
+61. [Delivery ETA](#61-delivery-eta)
+62. [Total Order ETA](#62-total-order-eta)
+63. [Multi-Stop ETA](#63-multi-stop-eta)
+64. [ETA for Multi-Drop Routes](#64-eta-for-multi-drop-routes)
+65. [ETA Confidence](#65-eta-confidence)
+66. [ETA Range](#66-eta-range)
+67. [ETA Error](#67-eta-error)
+68. [Measuring Model Accuracy](#68-measuring-model-accuracy)
+69. [MAE](#69-mae)
+70. [RMSE](#70-rmse)
+71. [MAPE](#71-mape)
+72. [Prediction Error Monitoring](#72-prediction-error-monitoring)
+73. [Real-Time ETA Updates](#73-real-time-eta-updates)
+74. [Driver GPS Integration](#74-driver-gps-integration)
+75. [ETA Recalculation](#75-eta-recalculation)
+76. [Traffic Change](#76-traffic-change)
+77. [Driver Route Deviation](#77-driver-route-deviation)
+78. [New Order Assignment](#78-new-order-assignment)
+79. [Order Cancellation](#79-order-cancellation)
+80. [Store Delay](#80-store-delay)
+81. [Weather Change](#81-weather-change)
+82. [Kafka Integration](#82-kafka-integration)
+83. [Redis Integration](#83-redis-integration)
+84. [WebSocket Integration](#84-websocket-integration)
+85. [Customer ETA](#85-customer-eta)
+86. [Driver ETA](#86-driver-eta)
+87. [Operations Dashboard](#87-operations-dashboard)
+88. [ETA and Driver Matching](#88-eta-and-driver-matching)
+89. [ETA and Route Optimization](#89-eta-and-route-optimization)
+90. [ETA and Surge Pricing](#90-eta-and-surge-pricing)
+91. [ETA and Store Matching](#91-eta-and-store-matching)
+92. [ML Model Retraining](#92-ml-model-retraining)
+93. [Model Versioning](#93-model-versioning)
+94. [Production ML Architecture](#94-production-ml-architecture)
+95. [Failure Handling](#95-failure-handling)
+96. [Fallback ETA](#96-fallback-eta)
+97. [Complete End-to-End Architecture](#97-complete-end-to-end-architecture)
+98. [Implementation Phases](#98-implementation-phases)
+99. [Final Architecture](#99-final-architecture)
+100. [Final Success Criteria](#100-final-success-criteria)
+101. [Key Architectural Principle](#101-key-architectural-principle)
 
 # 1. What Are We Building?
 

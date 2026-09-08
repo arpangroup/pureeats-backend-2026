@@ -74,8 +74,8 @@ Use:
 13. [Order](#13-order)
 14. [Route State](#14-route-state)
 15. [Route Representation](#15-route-representation)
-16. [Basic A → B Routing](#16-basic-a--b-routing)
-17. [A → B → C Routing](#17-a--b--c-routing)
+16. [Basic A → B Routing](#16-basic-a-b-routing)
+17. [A → B → C Routing](#17-a-b-c-routing)
 18. [Why Stop Ordering Matters](#18-why-stop-ordering-matters)
 19. [Nearest Neighbor Algorithm](#19-nearest-neighbor-algorithm)
 20. [Nearest Neighbor Example](#20-nearest-neighbor-example)
@@ -130,10 +130,10 @@ Use:
 69. [Failed Delivery](#69-failed-delivery)
 70. [Driver Capacity Changes](#70-driver-capacity-changes)
 71. [Multi-Driver Route Optimization](#71-multi-driver-route-optimization)
-72. [Driver Selection + Route Optimization](#72-driver-selection--route-optimization)
-73. [Store + Driver + Route Optimization](#73-store--driver--route-optimization)
+72. [Driver Selection + Route Optimization](#72-driver-selection-route-optimization)
+73. [Store + Driver + Route Optimization](#73-store-driver-route-optimization)
 74. [Polygon-Aware Route Optimization](#74-polygon-aware-route-optimization)
-75. [Surge + Route Optimization](#75-surge--route-optimization)
+75. [Surge + Route Optimization](#75-surge-route-optimization)
 76. [Redis Integration](#76-redis-integration)
 77. [Kafka Integration](#77-kafka-integration)
 78. [WebSocket Integration](#78-websocket-integration)
@@ -149,15 +149,13 @@ Use:
 88. [ML Feature Engineering](#88-ml-feature-engineering)
 89. [Production ML Architecture](#89-production-ml-architecture)
 90. [Complete Multi-Drop Flow](#90-complete-multi-drop-flow)
-91. [Complete Store + Driver + Route Flow](#91-complete-store--driver--route-flow)
+91. [Complete Store + Driver + Route Flow](#91-complete-store-driver-route-flow)
 92. [Complete Real-Time Flow](#92-complete-real-time-flow)
 93. [Production Architecture](#93-production-architecture)
 94. [Implementation Phases](#94-implementation-phases)
 95. [Final Architecture](#95-final-architecture)
 96. [Final Success Criteria](#96-final-success-criteria)
 97. [The Key Architectural Principle](#97-the-key-architectural-principle)
-
----
 
 # 1. What Are We Building?
 

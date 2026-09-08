@@ -97,7 +97,7 @@ is effectively saying:
 40. [Fulfillment Strategy](#40-fulfillment-strategy)
 41. [Order Splitting](#41-order-splitting)
 42. [Driver Assignment Impact](#42-driver-assignment-impact)
-43. [Store + Driver Joint Optimization](#43-store--driver-joint-optimization)
+43. [Store + Driver Joint Optimization](#43-store-driver-joint-optimization)
 44. [Production Matching Pipeline](#44-production-matching-pipeline)
 45. [Java Matching Engine](#45-java-matching-engine)
 46. [Store Candidate Service](#46-store-candidate-service)
@@ -125,14 +125,12 @@ is effectively saying:
 68. [Production ML Architecture](#68-production-ml-architecture)
 69. [Complete Order Flow](#69-complete-order-flow)
 70. [Complete Multi-Store Flow](#70-complete-multi-store-flow)
-71. [Complete Store + Driver Flow](#71-complete-store--driver-flow)
+71. [Complete Store + Driver Flow](#71-complete-store-driver-flow)
 72. [Production Considerations](#72-production-considerations)
 73. [Implementation Phases](#73-implementation-phases)
 74. [Final Architecture](#74-final-architecture)
 75. [Final Success Criteria](#75-final-success-criteria)
 76. [The Key Architectural Principle](#76-the-key-architectural-principle)
-
----
 
 # 1. What Are We Building?
 

@@ -157,14 +157,12 @@ public class SurgePricingService {
 81. [Production ML Architecture](#81-production-ml-architecture)
 82. [Complete Polygon Surge Flow](#82-complete-polygon-surge-flow)
 83. [Complete Order Pricing Flow](#83-complete-order-pricing-flow)
-84. [Complete Store + Driver + Surge Flow](#84-complete-store--driver--surge-flow)
+84. [Complete Store + Driver + Surge Flow](#84-complete-store-driver-surge-flow)
 85. [Production Architecture](#85-production-architecture)
 86. [Implementation Phases](#86-implementation-phases)
 87. [Final Architecture](#87-final-architecture)
 88. [Final Success Criteria](#88-final-success-criteria)
 89. [The Key Architectural Principle](#89-the-key-architectural-principle)
-
----
 
 # 1. What Are We Building?
 

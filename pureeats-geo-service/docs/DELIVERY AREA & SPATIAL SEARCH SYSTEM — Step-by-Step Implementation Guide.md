@@ -10,110 +10,108 @@ You will build:
 
 ## Table of Contents
 
-1. What Are We Building?
-2. The Delivery Area Problem
-3. Why a Delivery Polygon?
-4. Circle vs Polygon
-5. Complete System Architecture
-6. Core Concepts
-7. Latitude and Longitude
-8. Coordinate Ordering
-9. GeoJSON
-10. WKT
-11. PostGIS
-12. JTS
-13. STEP 1 — Create the Map
-14. STEP 2 — Add Leaflet
-15. STEP 3 — Enable Polygon Drawing
-16. STEP 4 — Capture Drawn Polygon
-17. STEP 5 — Edit and Delete Polygon
-18. STEP 6 — Convert Polygon to GeoJSON
-19. STEP 7 — Send Polygon to Backend
-20. Polygon Request DTO
-21. STEP 8 — Create Delivery Zone API
-22. Controller Layer
-23. Service Layer
-24. STEP 9 — Validate Polygon
-25. Polygon Must Be Closed
-26. Minimum Number of Points
-27. Invalid Polygon Detection
-28. Polygon Self-Intersection
-29. STEP 10 — Create PostgreSQL Database
-30. Enable PostGIS
-31. Delivery Zone Table
-32. Geometry Column
-33. SRID 4326
-34. STEP 11 — Store Polygon Using JTS
-35. GeometryFactory
-36. Polygon Builder
-37. STEP 12 — Store Polygon Using WKT
-38. GeoJSON → WKT
-39. Save Polygon with PostGIS
-40. STEP 13 — Retrieve Polygon
-41. PostGIS → GeoJSON
-42. Render Saved Polygon
-43. STEP 14 — Update Delivery Area
-44. STEP 15 — Delete Delivery Area
-45. STEP 16 — Check Customer Delivery Eligibility
-46. Point-In-Polygon
-47. ST_Contains
-48. ST_Within
-49. ST_Covers
-50. Boundary Considerations
-51. STEP 17 — Create Spatial Index
-52. Why Spatial Index?
-53. GiST Index
-54. Spatial Query Optimization
-55. STEP 18 — Nearby Store Search
-56. Why Point-In-Polygon Alone Is Not Enough
-57. GeoHash
-58. STEP 19 — Generate GeoHash Buckets
-59. Polygon → GeoHash Cells
-60. Store GeoHash References
-61. STEP 20 — GeoHash Prefilter
-62. STEP 21 — KD-Tree
-63. What KD-Tree Solves
-64. Store Location Index
-65. User Search with KD-Tree
-66. STEP 22 — Complete Spatial Search
-67. STEP 23 — Point-In-Polygon Validation
-68. Complete Search Example
-69. STEP 24 — Render Supported Areas
-70. STEP 25 — Render Multiple Store Polygons
-71. STEP 26 — Store Owner Dashboard
-72. STEP 27 — Customer Map
-73. STEP 28 — Real-Time Delivery Area
-74. Dynamic Delivery Zones
-75. Traffic-Aware Zones
-76. Driver Availability
-77. Weather-Aware Zones
-78. Demand-Aware Zones
-79. Polygon Simplification
-80. Douglas-Peucker Algorithm
-81. H3 as an Alternative
-82. GeoHash vs H3
-83. Redis Integration
-84. Kafka Integration
-85. WebSocket Integration
-86. Multi-Store Delivery Areas
-87. Overlapping Polygons
-88. Store Priority
-89. Delivery Fee by Polygon
-90. Minimum Order by Polygon
-91. Polygon-Based Surge Pricing
-92. Polygon Versioning
-93. Audit History
-94. Security
-95. Performance Considerations
-96. Failure Handling
-97. Complete Store Owner Flow
-98. Complete Customer Search Flow
-99. Complete Production Architecture
-100. Implementation Phases
-101. Final Success Criteria
-102. Key Architectural Principle
-
----
+1. [What Are We Building?](#1-what-are-we-building)
+2. [The Delivery Area Problem](#2-the-delivery-area-problem)
+3. [Why a Delivery Polygon?](#3-why-a-delivery-polygon)
+4. [Circle vs Polygon](#4-circle-vs-polygon)
+5. [Complete System Architecture](#5-complete-system-architecture)
+6. [Core Concepts](#6-core-concepts)
+7. [Latitude and Longitude](#7-latitude-and-longitude)
+8. [Coordinate Ordering](#8-coordinate-ordering)
+9. [GeoJSON](#9-geojson)
+10. [WKT](#10-wkt)
+11. [PostGIS](#11-postgis)
+12. [JTS](#12-jts)
+13. [STEP 1 — Create the Map](#13-step-1-create-the-map)
+14. [STEP 2 — Add Leaflet](#14-step-2-add-leaflet)
+15. [STEP 3 — Enable Polygon Drawing](#15-step-3-enable-polygon-drawing)
+16. [STEP 4 — Capture Drawn Polygon](#16-step-4-capture-drawn-polygon)
+17. [STEP 5 — Edit and Delete Polygon](#17-step-5-edit-and-delete-polygon)
+18. [STEP 6 — Convert Polygon to GeoJSON](#18-step-6-convert-polygon-to-geojson)
+19. [STEP 7 — Send Polygon to Backend](#19-step-7-send-polygon-to-backend)
+20. [Polygon Request DTO](#20-polygon-request-dto)
+21. [STEP 8 — Create Delivery Zone API](#21-step-8-create-delivery-zone-api)
+22. [Controller Layer](#22-controller-layer)
+23. [Service Layer](#23-service-layer)
+24. [STEP 9 — Validate Polygon](#24-step-9-validate-polygon)
+25. [Polygon Must Be Closed](#25-polygon-must-be-closed)
+26. [Minimum Number of Points](#26-minimum-number-of-points)
+27. [Invalid Polygon Detection](#27-invalid-polygon-detection)
+28. [Polygon Self-Intersection](#28-polygon-self-intersection)
+29. [STEP 10 — Create PostgreSQL Database](#29-step-10-create-postgresql-database)
+30. [Enable PostGIS](#30-enable-postgis)
+31. [Delivery Zone Table](#31-delivery-zone-table)
+32. [Geometry Column](#32-geometry-column)
+33. [SRID 4326](#33-srid-4326)
+34. [STEP 11 — Store Polygon Using JTS](#34-step-11-store-polygon-using-jts)
+35. [GeometryFactory](#35-geometryfactory)
+36. [Polygon Builder](#36-polygon-builder)
+37. [STEP 12 — Store Polygon Using WKT](#37-step-12-store-polygon-using-wkt)
+38. [GeoJSON → WKT](#38-geojson-wkt)
+39. [Save Polygon with PostGIS](#39-save-polygon-with-postgis)
+40. [STEP 13 — Retrieve Polygon](#40-step-13-retrieve-polygon)
+41. [PostGIS → GeoJSON](#41-postgis-geojson)
+42. [Render Saved Polygon](#42-render-saved-polygon)
+43. [STEP 14 — Update Delivery Area](#43-step-14-update-delivery-area)
+44. [STEP 15 — Delete Delivery Area](#44-step-15-delete-delivery-area)
+45. [STEP 16 — Check Customer Delivery Eligibility](#45-step-16-check-customer-delivery-eligibility)
+46. [Point-In-Polygon](#46-point-in-polygon)
+47. [ST_Contains](#47-st_contains)
+48. [ST_Within](#48-st_within)
+49. [ST_Covers](#49-st_covers)
+50. [Boundary Considerations](#50-boundary-considerations)
+51. [STEP 17 — Create Spatial Index](#51-step-17-create-spatial-index)
+52. [Why Spatial Index?](#52-why-spatial-index)
+53. [GiST Index](#53-gist-index)
+54. [Spatial Query Optimization](#54-spatial-query-optimization)
+55. [STEP 18 — Nearby Store Search](#55-step-18-nearby-store-search)
+56. [Why Point-In-Polygon Alone Is Not Enough](#56-why-point-in-polygon-alone-is-not-enough)
+57. [GeoHash](#57-geohash)
+58. [STEP 19 — Generate GeoHash Buckets](#58-step-19-generate-geohash-buckets)
+59. [Polygon → GeoHash Cells](#59-polygon-geohash-cells)
+60. [Store GeoHash References](#60-store-geohash-references)
+61. [STEP 20 — GeoHash Prefilter](#61-step-20-geohash-prefilter)
+62. [STEP 21 — KD-Tree](#62-step-21-kd-tree)
+63. [What KD-Tree Solves](#63-what-kd-tree-solves)
+64. [Store Location Index](#64-store-location-index)
+65. [User Search with KD-Tree](#65-user-search-with-kd-tree)
+66. [STEP 22 — Complete Spatial Search](#66-step-22-complete-spatial-search)
+67. [STEP 23 — Point-In-Polygon Validation](#67-step-23-point-in-polygon-validation)
+68. [Complete Search Example](#68-complete-search-example)
+69. [STEP 24 — Render Supported Areas](#69-step-24-render-supported-areas)
+70. [STEP 25 — Render Multiple Store Polygons](#70-step-25-render-multiple-store-polygons)
+71. [STEP 26 — Store Owner Dashboard](#71-step-26-store-owner-dashboard)
+72. [STEP 27 — Customer Map](#72-step-27-customer-map)
+73. [STEP 28 — Real-Time Delivery Area](#73-step-28-real-time-delivery-area)
+74. [Dynamic Delivery Zones](#74-dynamic-delivery-zones)
+75. [Traffic-Aware Zones](#75-traffic-aware-zones)
+76. [Driver Availability](#76-driver-availability)
+77. [Weather-Aware Zones](#77-weather-aware-zones)
+78. [Demand-Aware Zones](#78-demand-aware-zones)
+79. [Polygon Simplification](#79-polygon-simplification)
+80. [Douglas-Peucker Algorithm](#80-douglas-peucker-algorithm)
+81. [H3 as an Alternative](#81-h3-as-an-alternative)
+82. [GeoHash vs H3](#82-geohash-vs-h3)
+83. [Redis Integration](#83-redis-integration)
+84. [Kafka Integration](#84-kafka-integration)
+85. [WebSocket Integration](#85-websocket-integration)
+86. [Multi-Store Delivery Areas](#86-multi-store-delivery-areas)
+87. [Overlapping Polygons](#87-overlapping-polygons)
+88. [Store Priority](#88-store-priority)
+89. [Delivery Fee by Polygon](#89-delivery-fee-by-polygon)
+90. [Minimum Order by Polygon](#90-minimum-order-by-polygon)
+91. [Polygon-Based Surge Pricing](#91-polygon-based-surge-pricing)
+92. [Polygon Versioning](#92-polygon-versioning)
+93. [Audit History](#93-audit-history)
+94. [Security](#94-security)
+95. [Performance Considerations](#95-performance-considerations)
+96. [Failure Handling](#96-failure-handling)
+97. [Complete Store Owner Flow](#97-complete-store-owner-flow)
+98. [Complete Customer Search Flow](#98-complete-customer-search-flow)
+99. [Complete Production Architecture](#99-complete-production-architecture)
+100. [Implementation Phases](#100-implementation-phases)
+101. [Final Success Criteria](#101-final-success-criteria)
+102. [Key Architectural Principle](#102-key-architectural-principle)
 
 # 1. What Are We Building?
 

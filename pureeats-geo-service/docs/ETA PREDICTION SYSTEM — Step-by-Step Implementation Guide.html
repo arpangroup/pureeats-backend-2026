@@ -1,0 +1,2284 @@
+<meta charset="utf-8">
+<title>ETA Prediction System</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --bg:#f2f3f7; --surface:#ffffff; --surface-alt:#e9ebf1; --border:#d6d9e2;
+    --ink:#171a24; --ink-soft:#4c5165; --ink-faint:#7d8296;
+    --accent:#0e7f8c; --accent-strong:#0a5f69; --accent-soft:#dcf1f1; --accent-soft-border:#a9d9d9;
+    --code-bg:#eef1f4;
+    --shadow: 0 1px 2px rgba(23,26,36,0.05), 0 10px 26px -14px rgba(23,26,36,0.16);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0e1017; --surface:#171a24; --surface-alt:#1e222f; --border:#2c303f;
+      --ink:#e9ebf3; --ink-soft:#aeb2c4; --ink-faint:#787d92;
+      --accent:#3fd0c9; --accent-strong:#5fe0d9; --accent-soft:#123632; --accent-soft-border:#245a54;
+      --code-bg:#1b1f2a;
+      --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 10px 26px -14px rgba(0,0,0,0.55);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0e1017; --surface:#171a24; --surface-alt:#1e222f; --border:#2c303f;
+    --ink:#e9ebf3; --ink-soft:#aeb2c4; --ink-faint:#787d92;
+    --accent:#3fd0c9; --accent-strong:#5fe0d9; --accent-soft:#123632; --accent-soft-border:#245a54;
+    --code-bg:#1b1f2a;
+    --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 10px 26px -14px rgba(0,0,0,0.55);
+  }
+
+  *{ box-sizing:border-box; }
+  html{ scroll-behavior:smooth; }
+  html,body{ margin:0; }
+  body{ background:var(--bg); color:var(--ink); font-family:'IBM Plex Sans', system-ui, sans-serif; font-size:16px; line-height:1.65; }
+  a{ color:var(--accent-strong); }
+  :root[data-theme="dark"] a, :root:not([data-theme="light"]) a{ color:var(--accent); }
+
+  .shell{ max-width:1240px; margin:0 auto; padding:0 24px 90px; }
+
+  header.doc-header{
+    display:flex; align-items:flex-start; justify-content:space-between; gap:20px; flex-wrap:wrap;
+    padding:36px 0 26px; margin-bottom:32px;
+    border-bottom:1px solid var(--border);
+    background:linear-gradient(180deg, var(--accent-soft) 0%, transparent 100%);
+    margin-left:-24px; margin-right:-24px; padding-left:24px; padding-right:24px;
+  }
+  .doc-header .title-block{ flex:1 1 380px; min-width:0; }
+  .eyebrow{ font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent-strong); font-weight:600; }
+  :root[data-theme="dark"] .eyebrow, :root:not([data-theme="light"]) .eyebrow{ color:var(--accent); }
+  h1{ font-size:clamp(26px,4vw,38px); margin:8px 0 10px; letter-spacing:-0.015em; line-height:1.15; }
+  .dek{ margin:0; color:var(--ink-soft); font-size:15.5px; max-width:62ch; }
+
+  .print-btn{
+    flex:0 0 auto; margin-top:4px;
+    font-family:'IBM Plex Sans',sans-serif; font-size:13.5px; font-weight:600;
+    color:#fff; background:var(--accent-strong); border:none; border-radius:9px;
+    padding:11px 20px; cursor:pointer; box-shadow:var(--shadow);
+    display:inline-flex; align-items:center; gap:8px; transition:background .15s,transform .1s;
+  }
+  .print-btn:hover{ background:var(--accent); transform:translateY(-1px); }
+  .print-btn:active{ transform:translateY(0); }
+  .print-btn svg{ width:15px; height:15px; flex-shrink:0; }
+
+  .layout{ display:flex; gap:44px; align-items:flex-start; }
+  main.article{ flex:1 1 auto; min-width:0; max-width:760px; }
+
+  .sidebar-toc{
+    flex:0 0 280px; position:sticky; top:24px; align-self:flex-start;
+    max-height:calc(100vh - 48px); overflow-y:auto;
+    background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    box-shadow:var(--shadow); padding:6px 20px 20px;
+  }
+  .sidebar-toc summary{
+    font-size:11.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-faint); font-weight:700;
+    cursor:pointer; list-style:none; padding:14px 0; display:flex; align-items:center; justify-content:space-between;
+    user-select:none;
+  }
+  .sidebar-toc summary::-webkit-details-marker{ display:none; }
+  .sidebar-toc summary::after{ content:'\2212'; color:var(--ink-faint); font-size:14px; }
+  .sidebar-toc details:not([open]) summary::after{ content:'+'; }
+  .sidebar-toc .toc-body{ padding-top:2px; }
+  .sidebar-toc ol, .sidebar-toc ul{ list-style:none; margin:0; padding-left:0; }
+  .sidebar-toc ol{ counter-reset:toc-phase; }
+  .sidebar-toc ul ul, .sidebar-toc ol ul{ padding-left:18px; margin-top:2px; margin-bottom:10px; }
+  .sidebar-toc li{ margin:0 0 2px; }
+  .sidebar-toc .toc-lvl-2{ counter-increment:toc-phase; font-weight:600; margin-top:14px; }
+  .sidebar-toc .toc-lvl-2:first-child{ margin-top:2px; }
+  .sidebar-toc .toc-lvl-3{ font-size:13px; }
+  .sidebar-toc .toc-lvl-4{ font-size:12px; color:var(--ink-faint); }
+  .sidebar-toc a{
+    text-decoration:none; display:block; padding:5px 10px; border-radius:7px; color:var(--ink-soft);
+    transition:background .12s,color .12s;
+  }
+  .sidebar-toc .toc-lvl-2 > a{ padding-left:8px; }
+  .sidebar-toc .toc-lvl-2 > a::before{
+    content:counter(toc-phase) '.'; display:inline-block; min-width:20px; margin-right:4px;
+    color:var(--accent); font-weight:700; font-variant-numeric:tabular-nums;
+  }
+  .sidebar-toc a:hover{ background:var(--surface-alt); color:var(--accent-strong); }
+  .sidebar-toc a.active{ background:var(--accent-soft); color:var(--accent-strong); font-weight:600; }
+
+  @media (max-width:1000px){
+    .layout{ flex-direction:column; }
+    .sidebar-toc{
+      position:static; max-height:none; overflow:visible; width:100%; flex-basis:auto; align-self:stretch;
+      margin-bottom:8px;
+    }
+    main.article{ max-width:none; }
+  }
+  @media (max-width:640px){
+    .shell{ padding:0 16px 60px; }
+    header.doc-header{ margin-left:-16px; margin-right:-16px; padding-left:16px; padding-right:16px; padding-top:26px; }
+    .print-btn{ padding:9px 16px; font-size:13px; }
+    main.article h2{ font-size:21px; margin-top:36px; }
+    main.article h3{ font-size:17.5px; }
+  }
+
+  main.article h2{ font-size:25px; margin:48px 0 16px; padding-bottom:10px; border-bottom:2px solid var(--accent-soft-border); color:var(--accent-strong); scroll-margin-top:16px; letter-spacing:-0.01em; }
+  main.article h3{ font-size:19px; margin:34px 0 10px; scroll-margin-top:16px; }
+  main.article h4{ font-size:16px; margin:24px 0 8px; color:var(--ink-soft); scroll-margin-top:16px; }
+  main.article p{ margin:0 0 15px; }
+  main.article ul, main.article ol{ margin:0 0 15px; padding-left:26px; }
+  main.article li{ margin:0 0 6px; }
+  main.article li > ul, main.article li > ol{ margin-top:6px; }
+
+  code{ font-family:'IBM Plex Mono',monospace; background:var(--code-bg); border:1px solid var(--border); border-radius:4px; padding:1px 5px; font-size:0.88em; color:var(--ink); }
+
+  .code-wrap{ position:relative; margin:0 0 18px; }
+  .code-lang{
+    position:absolute; top:9px; right:12px; font-family:'IBM Plex Mono',monospace; font-size:10px;
+    letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); background:var(--surface);
+    border:1px solid var(--border); border-radius:5px; padding:2px 7px; pointer-events:none;
+  }
+  pre.code-block{
+    background:var(--code-bg); border:1px solid var(--border); border-left:3px solid var(--accent-soft-border);
+    border-radius:8px; padding:14px 16px; margin:0; overflow-x:auto;
+  }
+  pre.code-block code{ background:none; border:none; padding:0; font-size:13px; line-height:1.55; color:var(--ink); white-space:pre; }
+
+  .math-block{
+    background:var(--code-bg); border:1px solid var(--border); border-radius:8px;
+    padding:14px 18px; margin:0 0 18px; text-align:center;
+  }
+  .math-block div{ font-family:'IBM Plex Mono',monospace; font-style:italic; color:var(--accent-strong); font-size:14px; line-height:1.7; }
+  .math{ font-family:'IBM Plex Mono',monospace; font-style:italic; color:var(--accent-strong); }
+
+  blockquote{
+    margin:0 0 18px; padding:6px 16px; border-left:3px solid var(--accent-soft-border);
+    color:var(--ink-soft); font-style:italic; background:var(--surface-alt); border-radius:0 6px 6px 0;
+  }
+  blockquote p{ margin:0; }
+
+  .table-wrap{ overflow-x:auto; margin:0 0 18px; }
+  table{ width:100%; border-collapse:collapse; font-size:13.5px; }
+  th, td{ border:1px solid var(--border); padding:8px 10px; text-align:left; vertical-align:top; }
+  th{ background:var(--accent-soft); color:var(--accent-strong); font-weight:600; }
+  tr:nth-child(even) td{ background:var(--surface-alt); }
+
+  .fig{ margin:0 0 22px; text-align:center; }
+  .fig img{ max-width:100%; border:1px solid var(--border); border-radius:8px; box-shadow:var(--shadow); }
+  .fig figcaption{ margin-top:8px; font-size:12.5px; color:var(--ink-faint); font-style:italic; }
+
+  hr{ border:none; border-top:1px solid var(--border); margin:36px 0; }
+
+  footer{ margin-top:40px; padding-top:16px; border-top:1px solid var(--border); font-size:12px; color:var(--ink-faint); font-family:'IBM Plex Mono',monospace; }
+
+  @media print{
+    @page{ size:A4; margin:16mm 14mm; }
+    :root, :root[data-theme="dark"], :root[data-theme="light"]{
+      --bg:#ffffff; --surface:#ffffff; --surface-alt:#f2f3f5; --border:#d6d9e2;
+      --ink:#171a24; --ink-soft:#4c5165; --ink-faint:#7d8296;
+      --accent:#0e7f8c; --accent-strong:#0a5f69; --accent-soft:#dcf1f1; --accent-soft-border:#a9d9d9;
+      --code-bg:#f2f3f5; --shadow:none;
+    }
+    *{ -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; color-adjust:exact !important; }
+    html, body{ background:#fff; }
+    .no-print{ display:none !important; }
+    .shell{ max-width:none; padding:0; }
+    header.doc-header{ background:none; margin:0 0 16px; padding:0 0 12px; }
+    .layout{ display:block; }
+    .sidebar-toc{ position:static; max-height:none; overflow:visible; box-shadow:none; break-after:page; width:100%; }
+    .sidebar-toc summary::after{ display:none; }
+    .sidebar-toc details:not([open]) .toc-body{ display:block !important; }
+    .sidebar-toc a{ padding:2px 0; background:none !important; }
+    .sidebar-toc a.active{ color:var(--ink); font-weight:400; background:none; }
+    main.article{ max-width:none; }
+    main.article h2{ break-after:avoid; break-before:auto; }
+    main.article h3, main.article h4{ break-after:avoid; }
+    pre.code-block, .math-block, table, .fig, blockquote{ break-inside:avoid; }
+    pre.code-block code{ white-space:pre-wrap; overflow-wrap:anywhere; }
+    a{ color:var(--ink); text-decoration:none; }
+  }
+</style>
+
+<div class="shell">
+  <header class="doc-header">
+    <div class="title-block">
+      <div class="eyebrow">pureeats-geo-service &nbsp;/&nbsp; reference guide</div>
+      <h1>ETA Prediction System</h1>
+      <p class="dek">A step-by-step guide to predicting delivery times, from naive distance-based estimates to a full feature-driven prediction pipeline.</p>
+    </div>
+    <button class="print-btn no-print" onclick="window.print()" type="button">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2M6 14h12v7H6v-7z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path>
+      </svg>
+      Print
+    </button>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar-toc" aria-label="Table of contents">
+      <details open>
+        <summary>Table of Contents</summary>
+        <div class="toc-body"><ol><li class="toc-lvl-2"><a href="#1-what-are-we-building">What Are We Building?</a></li><li class="toc-lvl-2"><a href="#2-what-is-eta">What Is ETA?</a></li><li class="toc-lvl-2"><a href="#3-why-eta-matters">Why ETA Matters</a></li><li class="toc-lvl-2"><a href="#4-basic-rule-based-eta">Basic Rule-Based ETA</a></li><li class="toc-lvl-2"><a href="#5-why-rule-based-eta-fails">Why Rule-Based ETA Fails</a></li><li class="toc-lvl-2"><a href="#6-the-problem-with-distance-speed">The Problem With <code>Distance / Speed</code></a></li><li class="toc-lvl-2"><a href="#7-what-a-production-eta-system-must-predict">What a Production ETA System Must Predict</a></li><li class="toc-lvl-2"><a href="#8-eta-vs-routing">ETA vs Routing</a></li><li class="toc-lvl-2"><a href="#9-eta-vs-route-optimization">ETA vs Route Optimization</a></li><li class="toc-lvl-2"><a href="#10-eta-prediction-architecture">ETA Prediction Architecture</a></li><li class="toc-lvl-2"><a href="#11-complete-eta-flow">Complete ETA Flow</a></li><li class="toc-lvl-2"><a href="#12-eta-input-data">ETA Input Data</a></li><li class="toc-lvl-2"><a href="#13-spatial-features">Spatial Features</a></li><li class="toc-lvl-2"><a href="#14-temporal-features">Temporal Features</a></li><li class="toc-lvl-2"><a href="#15-traffic-features">Traffic Features</a></li><li class="toc-lvl-2"><a href="#16-driver-features">Driver Features</a></li><li class="toc-lvl-2"><a href="#17-weather-features">Weather Features</a></li><li class="toc-lvl-2"><a href="#18-region-features">Region Features</a></li><li class="toc-lvl-2"><a href="#19-order-features">Order Features</a></li><li class="toc-lvl-2"><a href="#20-route-complexity-features">Route Complexity Features</a></li><li class="toc-lvl-2"><a href="#21-feature-vector">Feature Vector</a></li><li class="toc-lvl-2"><a href="#22-example-feature-vector">Example Feature Vector</a></li><li class="toc-lvl-2"><a href="#23-feature-normalization">Feature Normalization</a></li><li class="toc-lvl-2"><a href="#24-feature-store">Feature Store</a></li><li class="toc-lvl-2"><a href="#25-historical-data">Historical Data</a></li><li class="toc-lvl-2"><a href="#26-eta-training-dataset">ETA Training Dataset</a></li><li class="toc-lvl-2"><a href="#27-label-generation">Label Generation</a></li><li class="toc-lvl-2"><a href="#28-training-example">Training Example</a></li><li class="toc-lvl-2"><a href="#29-data-leakage">Data Leakage</a></li><li class="toc-lvl-2"><a href="#30-training-pipeline">Training Pipeline</a></li><li class="toc-lvl-2"><a href="#31-model-options">Model Options</a></li><li class="toc-lvl-2"><a href="#32-linear-regression">Linear Regression</a></li><li class="toc-lvl-2"><a href="#33-random-forest">Random Forest</a></li><li class="toc-lvl-2"><a href="#34-gradient-boosting">Gradient Boosting</a></li><li class="toc-lvl-2"><a href="#35-xgboost">XGBoost</a></li><li class="toc-lvl-2"><a href="#36-neural-networks">Neural Networks</a></li><li class="toc-lvl-2"><a href="#37-deep-spatio-temporal-models">Deep Spatio-Temporal Models</a></li><li class="toc-lvl-2"><a href="#38-why-xgboost-is-a-good-starting-point">Why XGBoost Is a Good Starting Point</a></li><li class="toc-lvl-2"><a href="#39-eta-model-input">ETA Model Input</a></li><li class="toc-lvl-2"><a href="#40-eta-model-output">ETA Model Output</a></li><li class="toc-lvl-2"><a href="#41-simple-java-simulation">Simple Java Simulation</a></li><li class="toc-lvl-2"><a href="#42-eta-prediction-service">ETA Prediction Service</a></li><li class="toc-lvl-2"><a href="#43-real-ml-architecture">Real ML Architecture</a></li><li class="toc-lvl-2"><a href="#44-python-ml-model-server">Python ML Model Server</a></li><li class="toc-lvl-2"><a href="#45-spring-boot-ml-server">Spring Boot → ML Server</a></li><li class="toc-lvl-2"><a href="#46-rest-vs-grpc">REST vs gRPC</a></li><li class="toc-lvl-2"><a href="#47-kafka-based-eta-architecture">Kafka-Based ETA Architecture</a></li><li class="toc-lvl-2"><a href="#48-feature-builder-service">Feature Builder Service</a></li><li class="toc-lvl-2"><a href="#49-eta-prediction-service">ETA Prediction Service</a></li><li class="toc-lvl-2"><a href="#50-eta-prediction-request">ETA Prediction Request</a></li><li class="toc-lvl-2"><a href="#51-eta-prediction-response">ETA Prediction Response</a></li><li class="toc-lvl-2"><a href="#52-complete-prediction-flow">Complete Prediction Flow</a></li><li class="toc-lvl-2"><a href="#53-driver-specific-eta">Driver-Specific ETA</a></li><li class="toc-lvl-2"><a href="#54-traffic-aware-eta">Traffic-Aware ETA</a></li><li class="toc-lvl-2"><a href="#55-time-of-day-eta">Time-of-Day ETA</a></li><li class="toc-lvl-2"><a href="#56-weather-aware-eta">Weather-Aware ETA</a></li><li class="toc-lvl-2"><a href="#57-road-type-eta">Road-Type ETA</a></li><li class="toc-lvl-2"><a href="#58-region-aware-eta">Region-Aware ETA</a></li><li class="toc-lvl-2"><a href="#59-store-preparation-time">Store Preparation Time</a></li><li class="toc-lvl-2"><a href="#60-pickup-eta">Pickup ETA</a></li><li class="toc-lvl-2"><a href="#61-delivery-eta">Delivery ETA</a></li><li class="toc-lvl-2"><a href="#62-total-order-eta">Total Order ETA</a></li><li class="toc-lvl-2"><a href="#63-multi-stop-eta">Multi-Stop ETA</a></li><li class="toc-lvl-2"><a href="#64-eta-for-multi-drop-routes">ETA for Multi-Drop Routes</a></li><li class="toc-lvl-2"><a href="#65-eta-confidence">ETA Confidence</a></li><li class="toc-lvl-2"><a href="#66-eta-range">ETA Range</a></li><li class="toc-lvl-2"><a href="#67-eta-error">ETA Error</a></li><li class="toc-lvl-2"><a href="#68-measuring-model-accuracy">Measuring Model Accuracy</a></li><li class="toc-lvl-2"><a href="#69-mae">MAE</a></li><li class="toc-lvl-2"><a href="#70-rmse">RMSE</a></li><li class="toc-lvl-2"><a href="#71-mape">MAPE</a></li><li class="toc-lvl-2"><a href="#72-prediction-error-monitoring">Prediction Error Monitoring</a></li><li class="toc-lvl-2"><a href="#73-real-time-eta-updates">Real-Time ETA Updates</a></li><li class="toc-lvl-2"><a href="#74-driver-gps-integration">Driver GPS Integration</a></li><li class="toc-lvl-2"><a href="#75-eta-recalculation">ETA Recalculation</a></li><li class="toc-lvl-2"><a href="#76-traffic-change">Traffic Change</a></li><li class="toc-lvl-2"><a href="#77-driver-route-deviation">Driver Route Deviation</a></li><li class="toc-lvl-2"><a href="#78-new-order-assignment">New Order Assignment</a></li><li class="toc-lvl-2"><a href="#79-order-cancellation">Order Cancellation</a></li><li class="toc-lvl-2"><a href="#80-store-delay">Store Delay</a></li><li class="toc-lvl-2"><a href="#81-weather-change">Weather Change</a></li><li class="toc-lvl-2"><a href="#82-kafka-integration">Kafka Integration</a></li><li class="toc-lvl-2"><a href="#83-redis-integration">Redis Integration</a></li><li class="toc-lvl-2"><a href="#84-websocket-integration">WebSocket Integration</a></li><li class="toc-lvl-2"><a href="#85-customer-eta">Customer ETA</a></li><li class="toc-lvl-2"><a href="#86-driver-eta">Driver ETA</a></li><li class="toc-lvl-2"><a href="#87-operations-dashboard">Operations Dashboard</a></li><li class="toc-lvl-2"><a href="#88-eta-and-driver-matching">ETA and Driver Matching</a></li><li class="toc-lvl-2"><a href="#89-eta-and-route-optimization">ETA and Route Optimization</a></li><li class="toc-lvl-2"><a href="#90-eta-and-surge-pricing">ETA and Surge Pricing</a></li><li class="toc-lvl-2"><a href="#91-eta-and-store-matching">ETA and Store Matching</a></li><li class="toc-lvl-2"><a href="#92-ml-model-retraining">ML Model Retraining</a></li><li class="toc-lvl-2"><a href="#93-model-versioning">Model Versioning</a></li><li class="toc-lvl-2"><a href="#94-production-ml-architecture">Production ML Architecture</a></li><li class="toc-lvl-2"><a href="#95-failure-handling">Failure Handling</a></li><li class="toc-lvl-2"><a href="#96-fallback-eta">Fallback ETA</a></li><li class="toc-lvl-2"><a href="#97-complete-end-to-end-architecture">Complete End-to-End Architecture</a></li><li class="toc-lvl-2"><a href="#98-implementation-phases">Implementation Phases</a></li><li class="toc-lvl-2"><a href="#99-final-architecture">Final Architecture</a></li><li class="toc-lvl-2"><a href="#100-final-success-criteria">Final Success Criteria</a></li><li class="toc-lvl-2"><a href="#101-key-architectural-principle">Key Architectural Principle</a></li></ol></div>
+      </details>
+    </aside>
+
+    <main class="article">
+      <h4 id="why-simple-rule-base-eta-fails">Why Simple Rule base ETA fails?</h4>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>ETA = distance / speed</code></pre></div>
+<h4 id="problems">❌ Problems:</h4>
+<ul><li>ignores traffic</li><li>ignores time of day</li><li>ignores road type</li><li>ignores weather</li><li>ignores driver behavior</li></ul>
+<h4 id="real-uber-approach">REAL UBER APPROACH</h4>
+<p>Uber uses ML model:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>ETA = f(distance, traffic, road, driver, time, region)</code></pre></div>
+<h4 id="feature-engineering-most-important">FEATURE ENGINEERING (MOST IMPORTANT)</h4>
+<p>We convert ride into features:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>distance_km
+route_curvature
+number_of_turns Temporal:
+hour_of_day
+day_of_week
+peak_hour_flag Traffic:
+congestion_level
+avg_speed_zone Driver:
+driver_speed_avg
+driver_history_delay Context:
+rain / weather
+event zone</code></pre></div>
+<p>FEATURE VECTOR</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>X = [
+ distance,
+ hour,
+ traffic,
+ driver_speed,
+ road_complexity
+]</code></pre></div>
+<h4 id="simple-working-model-java-simulation">SIMPLE WORKING MODEL (JAVA SIMULATION)</h4>
+<div class="code-wrap"><span class="code-lang">Java</span><pre class="code-block"><code>@Service
+public class EtaPredictionService {
+
+    public double predictETA(
+            double distanceKm,
+            int hourOfDay,
+            double trafficLevel,
+            double driverSpeed,
+            double roadComplexity
+    ) {
+
+        // Simulated ML weights (like regression model)
+        double eta =
+                (distanceKm * 2.5) +
+                (trafficLevel * 8) +
+                (roadComplexity * 3) -
+                (driverSpeed * 1.2) +
+                (isPeakHour(hourOfDay) ? 5 : 0);
+
+        return Math.max(1, eta); // minutes
+    }
+
+    private boolean isPeakHour(int hour) {
+        return (hour &gt;= 8 &amp;&amp; hour &lt;= 11) ||
+               (hour &gt;= 17 &amp;&amp; hour &lt;= 21);
+    }
+}</code></pre></div>
+<p>REAL CALL FLOW</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Ride Request
+   ↓
+Feature Builder Service
+   ↓
+ML Model Server (Python)
+   ↓
+ETA Prediction
+   ↓
+Driver Matching + Pricing</code></pre></div>
+<h2 id="1-what-are-we-building">1. What Are We Building?</h2>
+<p>We are building an <strong>ML-Based ETA Prediction System</strong>.</p>
+<p>The system predicts:</p>
+<blockquote>&quot;How long will this delivery actually take?&quot;</blockquote>
+<p>Instead of calculating ETA using only distance and speed, the system considers:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Distance
+Traffic
+Road
+Time
+Driver
+Weather
+Region
+Route complexity
+Store preparation
+Historical behavior</code></pre></div>
+<p>The goal is:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Input
+  ↓
+Build Features
+  ↓
+ML Model
+  ↓
+Predicted Travel Time
+  ↓
+ETA</code></pre></div>
+<hr>
+<h2 id="2-what-is-eta">2. What Is ETA?</h2>
+<p>ETA means:</p>
+<blockquote>Estimated Time of Arrival</blockquote>
+<p>For a delivery platform, ETA can mean:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Order placed
+      ↓
+Store preparation
+      ↓
+Driver reaches store
+      ↓
+Pickup
+      ↓
+Travel
+      ↓
+Customer arrival</code></pre></div>
+<p>Therefore:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Total ETA =
+Preparation Time
++ Driver Arrival Time
++ Pickup Time
++ Travel Time
++ Delivery Buffer</code></pre></div>
+<p>For example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Preparation       = 15 min
+Driver arrival    = 5 min
+Pickup             = 3 min
+Travel             = 18 min
+Buffer             = 4 min
+--------------------------------
+Total ETA          = 45 min</code></pre></div>
+<hr>
+<h2 id="3-why-eta-matters">3. Why ETA Matters</h2>
+<p>ETA affects almost every part of a delivery platform.</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>ETA
+ │
+ ├── Customer experience
+ │
+ ├── Driver matching
+ │
+ ├── Route optimization
+ │
+ ├── Order assignment
+ │
+ ├── Store selection
+ │
+ ├── Pricing
+ │
+ └── Operations dashboard</code></pre></div>
+<p>A bad ETA causes:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Customer expects 25 min
+Actual delivery = 45 min
+
+        ↓
+
+Customer dissatisfaction</code></pre></div>
+<p>Accurate ETA is therefore one of the most important prediction systems in a delivery platform.</p>
+<hr>
+<h2 id="4-basic-rule-based-eta">4. Basic Rule-Based ETA</h2>
+<p>The simplest ETA calculation is:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>ETA = Distance / Speed</code></pre></div>
+<p>For example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Distance = 10 km
+Speed    = 30 km/h</code></pre></div>
+<p>Travel time:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>10 / 30 × 60
+= 20 minutes</code></pre></div>
+<p>This works for a very simple system.</p>
+<p>But real roads are not simple.</p>
+<hr>
+<h2 id="5-why-rule-based-eta-fails">5. Why Rule-Based ETA Fails</h2>
+<p>Earlier we used:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>ETA = distance / speed</code></pre></div>
+<p>Problems:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>❌ ignores traffic
+❌ ignores time of day
+❌ ignores road type
+❌ ignores weather
+❌ ignores driver behavior
+❌ ignores route complexity
+❌ ignores historical delivery patterns
+❌ ignores store preparation delays
+❌ ignores local events</code></pre></div>
+<p>For example:</p>
+<h4 id="scenario-a">Scenario A</h4>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Distance = 5 km
+Time = 3 AM
+Traffic = Low</code></pre></div>
+<p>Maybe:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>ETA = 10 minutes</code></pre></div>
+<h4 id="scenario-b">Scenario B</h4>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Distance = 5 km
+Time = 8:30 AM
+Traffic = High</code></pre></div>
+<p>Actual:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>ETA = 25 minutes</code></pre></div>
+<p>Same distance.</p>
+<p>Completely different ETA.</p>
+<p>Therefore:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Distance alone
+        ↓
+Not enough</code></pre></div>
+<hr>
+<h2 id="6-the-problem-with-distance-speed">6. The Problem With <code>Distance / Speed</code></h2>
+<p>Consider two roads.</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Road A
+Distance = 5 km
+Speed = 40 km/h
+
+Road B
+Distance = 5 km
+Speed = 20 km/h</code></pre></div>
+<p>The distance is identical.</p>
+<p>But the travel time is different.</p>
+<p>Now add:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Traffic
+Turns
+Signals
+Road quality
+Congestion
+Time of day
+Weather</code></pre></div>
+<p>The relationship becomes much more complex.</p>
+<p>Therefore:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>ETA ≠ simple mathematical formula</code></pre></div>
+<p>Instead:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>ETA = f(all relevant conditions)</code></pre></div>
+<hr>
+<h2 id="7-what-a-production-eta-system-must-predict">7. What a Production ETA System Must Predict</h2>
+<p>A production ETA system should estimate:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Expected travel time</code></pre></div>
+<p>based on many features.</p>
+<p>Conceptually:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>ETA = f(
+    distance,
+    traffic,
+    road,
+    driver,
+    time,
+    weather,
+    region,
+    route,
+    store,
+    historical_data
+)</code></pre></div>
+<p>This is where Machine Learning becomes useful.</p>
+<hr>
+<h2 id="8-eta-vs-routing">8. ETA vs Routing</h2>
+<p>These two systems are related but different.</p>
+<h4 id="routing">Routing</h4>
+<p>Answers:</p>
+<blockquote>Which road should we take?</blockquote>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>A → B</code></pre></div>
+<h4 id="eta-prediction">ETA Prediction</h4>
+<p>Answers:</p>
+<blockquote>How long will this journey take?</blockquote>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>A → B
+Expected time = 24 minutes</code></pre></div>
+<p>Architecture:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Routing Engine
+      ↓
+Road Network
+      ↓
+Route
+      ↓
+ETA Model
+      ↓
+Travel Time</code></pre></div>
+<hr>
+<h2 id="9-eta-vs-route-optimization">9. ETA vs Route Optimization</h2>
+<p>Route optimization answers:</p>
+<blockquote>In what order should we visit multiple stops?</blockquote>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Driver
+ ↓
+Store A
+ ↓
+Store B
+ ↓
+Customer C
+ ↓
+Customer D</code></pre></div>
+<p>ETA prediction answers:</p>
+<blockquote>How long will this route take?</blockquote>
+<p>Therefore:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Route Optimization
+        ↓
+Best stop sequence
+        ↓
+ETA Prediction
+        ↓
+Travel time</code></pre></div>
+<p>They work together.</p>
+<hr>
+<h2 id="10-eta-prediction-architecture">10. ETA Prediction Architecture</h2>
+<p>A production-style architecture can look like:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>                    ┌──────────────────────┐
+                    │   Order Request      │
+                    └──────────┬───────────┘
+                               ↓
+                    ┌──────────────────────┐
+                    │ Feature Builder      │
+                    └──────────┬───────────┘
+                               ↓
+                    ┌──────────────────────┐
+                    │ Feature Store        │
+                    └──────────┬───────────┘
+                               ↓
+                    ┌──────────────────────┐
+                    │ ML ETA Model         │
+                    └──────────┬───────────┘
+                               ↓
+                    ┌──────────────────────┐
+                    │ ETA Prediction       │
+                    └──────────┬───────────┘
+                               ↓
+              ┌────────────────┼────────────────┐
+              ↓                ↓                ↓
+       Driver Matching   Route Optimization   Pricing</code></pre></div>
+<hr>
+<h2 id="11-complete-eta-flow">11. Complete ETA Flow</h2>
+<p>The complete flow:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Order Created
+      ↓
+Get Store Location
+      ↓
+Get Customer Location
+      ↓
+Generate Route
+      ↓
+Calculate Route Features
+      ↓
+Get Traffic Features
+      ↓
+Get Driver Features
+      ↓
+Get Time Features
+      ↓
+Get Weather Features
+      ↓
+Build Feature Vector
+      ↓
+ML Model
+      ↓
+Predicted Travel Time
+      ↓
+Add Preparation + Pickup Time
+      ↓
+Final ETA</code></pre></div>
+<hr>
+<h2 id="12-eta-input-data">12. ETA Input Data</h2>
+<p>The ML model needs useful information.</p>
+<p>We divide features into categories:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Spatial
+Temporal
+Traffic
+Driver
+Weather
+Region
+Order
+Route
+Store</code></pre></div>
+<hr>
+<h2 id="13-spatial-features">13. Spatial Features</h2>
+<p>Spatial features describe the physical journey.</p>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>distance_km
+route_curvature
+number_of_turns
+number_of_intersections
+road_length</code></pre></div>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>distance_km = 7.5
+number_of_turns = 14
+route_curvature = 0.42</code></pre></div>
+<hr>
+<h2 id="14-temporal-features">14. Temporal Features</h2>
+<p>Time strongly affects traffic.</p>
+<p>Features:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>hour_of_day
+day_of_week
+month
+weekend_flag
+holiday_flag
+peak_hour_flag</code></pre></div>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>hour_of_day = 18
+day_of_week = 5
+peak_hour_flag = true</code></pre></div>
+<hr>
+<h2 id="15-traffic-features">15. Traffic Features</h2>
+<p>Traffic is one of the strongest ETA features.</p>
+<p>Examples:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>congestion_level
+average_speed
+current_speed
+historical_speed
+traffic_incidents
+road_blockage</code></pre></div>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>congestion_level = 0.82
+avg_speed_zone = 18 km/h</code></pre></div>
+<hr>
+<h2 id="16-driver-features">16. Driver Features</h2>
+<p>Different drivers behave differently.</p>
+<p>Features might include:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>driver_speed_avg
+driver_history_delay
+driver_delivery_count
+driver_avg_stop_time
+driver_route_adherence</code></pre></div>
+<p>For example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Driver A
+Average speed = 28 km/h
+
+Driver B
+Average speed = 21 km/h</code></pre></div>
+<p>The same route may have different ETAs.</p>
+<hr>
+<h2 id="17-weather-features">17. Weather Features</h2>
+<p>Weather can significantly affect travel time.</p>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>rain
+temperature
+visibility
+weather_severity</code></pre></div>
+<p>For example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>rain = true
+weather_severity = 0.7</code></pre></div>
+<p>Heavy rain can increase:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Traffic
+Travel time
+Pickup delay
+Delivery delay</code></pre></div>
+<hr>
+<h2 id="18-region-features">18. Region Features</h2>
+<p>Different areas behave differently.</p>
+<p>Examples:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>city
+zone
+polygon_id
+neighborhood
+road_density
+traffic_density</code></pre></div>
+<p>For example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>polygon_id = HYD_042</code></pre></div>
+<p>The model can learn that a particular region has higher travel time during certain periods.</p>
+<hr>
+<h2 id="19-order-features">19. Order Features</h2>
+<p>The order itself also affects ETA.</p>
+<p>Examples:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>order_type
+number_of_items
+order_value
+special_instructions
+pickup_complexity
+delivery_type</code></pre></div>
+<p>Large or complex orders may increase preparation or pickup time.</p>
+<hr>
+<h2 id="20-route-complexity-features">20. Route Complexity Features</h2>
+<p>Two routes with identical distances can behave differently.</p>
+<p>Features:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>number_of_turns
+number_of_signals
+number_of_intersections
+highway_ratio
+local_road_ratio
+road_complexity</code></pre></div>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Route A
+5 km
+4 turns
+
+Route B
+5 km
+17 turns</code></pre></div>
+<p>Route B may take significantly longer.</p>
+<hr>
+<h2 id="21-feature-vector">21. Feature Vector</h2>
+<p>All features are combined into a feature vector.</p>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>X = [
+    distance,
+    hour,
+    day_of_week,
+    traffic,
+    avg_speed,
+    driver_speed,
+    driver_delay,
+    road_complexity,
+    turns,
+    weather,
+    region
+]</code></pre></div>
+<p>Conceptually:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Raw Data
+   ↓
+Feature Engineering
+   ↓
+Feature Vector
+   ↓
+ML Model</code></pre></div>
+<hr>
+<h2 id="22-example-feature-vector">22. Example Feature Vector</h2>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>distance_km       = 8.2
+hour_of_day       = 18
+day_of_week       = 5
+traffic_level     = 0.75
+avg_speed_zone    = 19
+driver_speed_avg  = 24
+driver_delay      = 2.1
+road_complexity   = 0.62
+number_of_turns   = 12
+rain              = 1
+region_id         = 42</code></pre></div>
+<p>This becomes:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>X = [
+    8.2,
+    18,
+    5,
+    0.75,
+    19,
+    24,
+    2.1,
+    0.62,
+    12,
+    1,
+    42
+]</code></pre></div>
+<hr>
+<h2 id="23-feature-normalization">23. Feature Normalization</h2>
+<p>Some ML models work better when features have comparable scales.</p>
+<p>For example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>distance = 8.2
+traffic = 0.75
+turns = 12
+driver_speed = 24</code></pre></div>
+<p>We can normalize features.</p>
+<p>For example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>normalized_x =
+(x - mean) / standard_deviation</code></pre></div>
+<p>The exact preprocessing depends on the selected model.</p>
+<p>Importantly:</p>
+<blockquote>The same preprocessing used during training must be used during inference.</blockquote>
+<hr>
+<h2 id="24-feature-store">24. Feature Store</h2>
+<p>A production system can maintain frequently used features in a Feature Store.</p>
+<p>Conceptually:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>                Feature Store
+                     │
+        ┌────────────┼────────────┐
+        ↓            ↓            ↓
+      Driver       Traffic       Region
+      Features     Features      Features</code></pre></div>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>driver_speed_avg
+driver_delay_rate
+zone_avg_speed
+zone_congestion
+region_delivery_delay</code></pre></div>
+<p>This avoids rebuilding expensive features every time.</p>
+<hr>
+<h2 id="25-historical-data">25. Historical Data</h2>
+<p>Machine Learning needs historical data.</p>
+<p>For every completed delivery, we can store:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Order ID
+Driver ID
+Route
+Distance
+Traffic
+Weather
+Time
+Features
+Predicted ETA
+Actual Travel Time</code></pre></div>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>order_1001
+
+distance = 7.2 km
+traffic = 0.72
+predicted = 25 min
+actual = 28 min</code></pre></div>
+<p>This becomes training data.</p>
+<hr>
+<h2 id="26-eta-training-dataset">26. ETA Training Dataset</h2>
+<p>A simplified training dataset:</p>
+<div class="table-wrap"><table><thead><tr><th>Distance</th><th>Traffic</th><th>Hour</th><th>Driver Speed</th><th>Turns</th><th>Weather</th><th>Actual ETA</th></tr></thead><tbody><tr><td>5.2</td><td>0.2</td><td>11</td><td>28</td><td>5</td><td>0</td><td>13</td></tr><tr><td>7.4</td><td>0.7</td><td>18</td><td>22</td><td>11</td><td>0</td><td>28</td></tr><tr><td>4.1</td><td>0.8</td><td>19</td><td>20</td><td>8</td><td>1</td><td>24</td></tr><tr><td>9.2</td><td>0.4</td><td>15</td><td>26</td><td>14</td><td>0</td><td>25</td></tr></tbody></table></div>
+<p>The model learns:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Features → Actual ETA</code></pre></div>
+<hr>
+<h2 id="27-label-generation">27. Label Generation</h2>
+<p>The target variable is usually:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>actual_travel_time</code></pre></div>
+<p>For example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Prediction time = 10:00
+Arrival time    = 10:27
+
+Actual travel time = 27 minutes</code></pre></div>
+<p>Training record:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>X = route/context features
+
+Y = 27</code></pre></div>
+<p>Therefore:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>X → Y</code></pre></div>
+<hr>
+<h2 id="28-training-example">28. Training Example</h2>
+<p>Suppose we have:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>100,000 deliveries</code></pre></div>
+<p>Each delivery provides:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Features
++
+Actual outcome</code></pre></div>
+<p>The ML algorithm learns the relationship:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Traffic ↑
+       ↓
+ETA ↑
+
+Distance ↑
+       ↓
+ETA ↑
+
+Driver speed ↑
+       ↓
+ETA ↓</code></pre></div>
+<p>But unlike manually defining these rules, the model learns relationships from historical data.</p>
+<hr>
+<h2 id="29-data-leakage">29. Data Leakage</h2>
+<p>One of the most important ML problems is <strong>data leakage</strong>.</p>
+<p>Never use information that was only available after the prediction moment.</p>
+<p>For example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Actual arrival time</code></pre></div>
+<p>cannot be used as an input feature when predicting ETA.</p>
+<p>Similarly:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Post-delivery information</code></pre></div>
+<p>must not leak into training features.</p>
+<p>Correct:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Information available at prediction time
+                 ↓
+              Features
+                 ↓
+               Model
+                 ↓
+                ETA</code></pre></div>
+<hr>
+<h2 id="30-training-pipeline">30. Training Pipeline</h2>
+<p>A basic training pipeline:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Historical Orders
+       ↓
+Clean Data
+       ↓
+Remove Invalid Records
+       ↓
+Feature Engineering
+       ↓
+Train / Validation / Test Split
+       ↓
+Train Model
+       ↓
+Evaluate
+       ↓
+Register Model
+       ↓
+Deploy</code></pre></div>
+<hr>
+<h2 id="31-model-options">31. Model Options</h2>
+<p>Possible models:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Linear Regression
+Random Forest
+Gradient Boosting
+XGBoost ⭐
+LightGBM
+Neural Networks
+Deep Spatio-Temporal Models</code></pre></div>
+<hr>
+<h2 id="32-linear-regression">32. Linear Regression</h2>
+<p>The simplest ML model:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>ETA =
+w1 * distance
++ w2 * traffic
++ w3 * turns
++ w4 * driver_speed
++ bias</code></pre></div>
+<p>Advantages:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Simple
+Fast
+Easy to understand</code></pre></div>
+<p>Disadvantage:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Cannot capture highly complex relationships well.</code></pre></div>
+<p>Good for:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Prototype
+Baseline</code></pre></div>
+<hr>
+<h2 id="33-random-forest">33. Random Forest</h2>
+<p>Random Forest combines many decision trees.</p>
+<p>Conceptually:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>             Input
+               ↓
+       ┌───────┼───────┐
+       ↓       ↓       ↓
+     Tree 1  Tree 2  Tree 3
+       ↓       ↓       ↓
+       └───────┼───────┘
+               ↓
+          Final ETA</code></pre></div>
+<p>Useful for nonlinear relationships.</p>
+<hr>
+<h2 id="34-gradient-boosting">34. Gradient Boosting</h2>
+<p>Gradient boosting builds models sequentially.</p>
+<p>Each new model attempts to correct previous errors.</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Model 1
+  ↓
+Errors
+  ↓
+Model 2
+  ↓
+Errors
+  ↓
+Model 3
+  ↓
+Final Model</code></pre></div>
+<p>It performs very well on structured/tabular data.</p>
+<hr>
+<h2 id="35-xgboost">35. XGBoost</h2>
+<p>For a first production-oriented ETA model, <strong>XGBoost</strong> is an excellent choice.</p>
+<p>Why?</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Excellent for tabular data
+Handles nonlinear relationships
+Fast inference
+Strong accuracy
+Works with mixed features
+Well supported</code></pre></div>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>XGBoost
+
+Input:
+distance
+traffic
+time
+driver
+weather
+road
+
+Output:
+ETA = 27.4 minutes</code></pre></div>
+<hr>
+<h2 id="36-neural-networks">36. Neural Networks</h2>
+<p>At larger scale, neural networks can be useful.</p>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Input Features
+      ↓
+Dense Layer
+      ↓
+Dense Layer
+      ↓
+Dense Layer
+      ↓
+ETA Output</code></pre></div>
+<p>Useful when:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Large datasets
+Complex feature interactions
+Large-scale prediction</code></pre></div>
+<p>But they introduce additional complexity.</p>
+<hr>
+<h2 id="37-deep-spatio-temporal-models">37. Deep Spatio-Temporal Models</h2>
+<p>An advanced system can model both:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Spatial relationships
++
+Temporal relationships</code></pre></div>
+<p>For example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Road Network
+    +
+Historical Traffic
+    +
+Current Traffic
+    +
+Time</code></pre></div>
+<p>Advanced architectures may use:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Graph Neural Networks
+Transformers
+Temporal models
+Spatio-temporal neural networks</code></pre></div>
+<p>This is useful when modeling a large road network and evolving traffic conditions.</p>
+<hr>
+<h2 id="38-why-xgboost-is-a-good-starting-point">38. Why XGBoost Is a Good Starting Point</h2>
+<p>For this project:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Spring Boot
++
+Kafka
++
+Redis
++
+PostgreSQL</code></pre></div>
+<p>a practical architecture is:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Spring Boot
+      ↓
+Feature Builder
+      ↓
+Python
+      ↓
+XGBoost
+      ↓
+ETA</code></pre></div>
+<p>Start simple.</p>
+<p>Then improve the model when sufficient historical data is available.</p>
+<hr>
+<h2 id="39-eta-model-input">39. ETA Model Input</h2>
+<p>Example request:</p>
+<div class="code-wrap"><span class="code-lang">JSON</span><pre class="code-block"><code>{
+  &quot;distanceKm&quot;: 8.2,
+  &quot;hourOfDay&quot;: 18,
+  &quot;dayOfWeek&quot;: 5,
+  &quot;trafficLevel&quot;: 0.75,
+  &quot;avgSpeedZone&quot;: 19,
+  &quot;driverSpeedAvg&quot;: 24,
+  &quot;driverHistoryDelay&quot;: 2.1,
+  &quot;roadComplexity&quot;: 0.62,
+  &quot;numberOfTurns&quot;: 12,
+  &quot;rain&quot;: true
+}</code></pre></div>
+<hr>
+<h2 id="40-eta-model-output">40. ETA Model Output</h2>
+<p>The model can return:</p>
+<div class="code-wrap"><span class="code-lang">JSON</span><pre class="code-block"><code>{
+  &quot;etaMinutes&quot;: 27.4,
+  &quot;confidence&quot;: 0.87,
+  &quot;modelVersion&quot;: &quot;eta-xgb-v12&quot;
+}</code></pre></div>
+<p>Or:</p>
+<div class="code-wrap"><span class="code-lang">JSON</span><pre class="code-block"><code>{
+  &quot;predictedTravelTimeMinutes&quot;: 27.4,
+  &quot;lowerBoundMinutes&quot;: 24,
+  &quot;upperBoundMinutes&quot;: 32
+}</code></pre></div>
+<hr>
+<h2 id="41-simple-java-simulation">41. Simple Java Simulation</h2>
+<p>Before introducing a real ML server, we can simulate ML inference.</p>
+<div class="code-wrap"><span class="code-lang">Java</span><pre class="code-block"><code>@Service
+public class EtaPredictionService {
+
+    public double predictETA(
+            double distanceKm,
+            int hourOfDay,
+            double trafficLevel,
+            double driverSpeed,
+            double roadComplexity
+    ) {
+
+        // Simulated ML weights
+        double eta =
+                (distanceKm * 2.5) +
+                (trafficLevel * 8) +
+                (roadComplexity * 3) -
+                (driverSpeed * 1.2) +
+                (isPeakHour(hourOfDay) ? 5 : 0);
+
+        return Math.max(1, eta);
+    }
+
+    private boolean isPeakHour(int hour) {
+
+        return (hour &gt;= 8 &amp;&amp; hour &lt;= 11) ||
+               (hour &gt;= 17 &amp;&amp; hour &lt;= 21);
+    }
+}</code></pre></div>
+<p>This is <strong>not real machine learning</strong>.</p>
+<p>It simulates what a trained model might conceptually do.</p>
+<hr>
+<h2 id="42-eta-prediction-service">42. ETA Prediction Service</h2>
+<p>The service can expose:</p>
+<div class="code-wrap"><span class="code-lang">Java</span><pre class="code-block"><code>public double predictETA(EtaPredictionRequest request)</code></pre></div>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">Java</span><pre class="code-block"><code>@Service
+public class EtaPredictionService {
+
+    public EtaPredictionResponse predict(
+            EtaPredictionRequest request
+    ) {
+
+        double eta = calculatePrediction(request);
+
+        return new EtaPredictionResponse(
+                eta,
+                &quot;SIMULATED_MODEL_V1&quot;
+        );
+    }
+}</code></pre></div>
+<p>This gives us a stable application-level interface.</p>
+<p>Later, we can replace the implementation with a real ML model.</p>
+<hr>
+<h2 id="43-real-ml-architecture">43. Real ML Architecture</h2>
+<p>A real architecture can look like:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Spring Boot
+     ↓
+Kafka
+     ↓
+Feature Builder
+     ↓
+Feature Store
+     ↓
+Python ML Model
+     ↓
+XGBoost
+     ↓
+ETA Prediction</code></pre></div>
+<p>The application does not need to contain the Python model.</p>
+<p>Instead:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Java = Business/Application Layer
+
+Python = Machine Learning Layer</code></pre></div>
+<hr>
+<h2 id="44-python-ml-model-server">44. Python ML Model Server</h2>
+<p>The model can be deployed using:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Python
++
+FastAPI
++
+XGBoost</code></pre></div>
+<p>Conceptually:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>POST /predict</code></pre></div>
+<p>Request:</p>
+<div class="code-wrap"><span class="code-lang">JSON</span><pre class="code-block"><code>{
+  &quot;distance&quot;: 8.2,
+  &quot;traffic&quot;: 0.75,
+  &quot;hour&quot;: 18,
+  &quot;driver_speed&quot;: 24
+}</code></pre></div>
+<p>Response:</p>
+<div class="code-wrap"><span class="code-lang">JSON</span><pre class="code-block"><code>{
+  &quot;eta&quot;: 27.4
+}</code></pre></div>
+<hr>
+<h2 id="45-spring-boot-ml-server">45. Spring Boot → ML Server</h2>
+<p>The Spring Boot service calls the ML server.</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Spring Boot
+     |
+     | HTTP/gRPC
+     ↓
+Python ML Server
+     |
+     ↓
+XGBoost
+     |
+     ↓
+ETA</code></pre></div>
+<p>Spring Boot receives:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>27.4 minutes</code></pre></div>
+<p>and continues the business flow.</p>
+<hr>
+<h2 id="46-rest-vs-grpc">46. REST vs gRPC</h2>
+<p>For the first implementation:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>REST</code></pre></div>
+<p>is easier.</p>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>POST /ml/eta/predict</code></pre></div>
+<p>For very high-throughput internal communication:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>gRPC</code></pre></div>
+<p>can be considered.</p>
+<p>Architecture:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Spring Boot
+      ↓
+    gRPC
+      ↓
+ML Server</code></pre></div>
+<p>Use the simplest solution first.</p>
+<hr>
+<h2 id="47-kafka-based-eta-architecture">47. Kafka-Based ETA Architecture</h2>
+<p>Kafka can handle asynchronous events.</p>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>ORDER_CREATED
+DRIVER_LOCATION_UPDATED
+TRAFFIC_UPDATED
+ORDER_ASSIGNED
+STORE_PREPARATION_UPDATED</code></pre></div>
+<p>Flow:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Kafka
+ ↓
+ETA Feature Consumer
+ ↓
+Feature Builder
+ ↓
+ETA Prediction
+ ↓
+ETA Updated Event</code></pre></div>
+<hr>
+<h2 id="48-feature-builder-service">48. Feature Builder Service</h2>
+<p>The Feature Builder combines data from different systems.</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Order
+ +
+Driver
+ +
+Route
+ +
+Traffic
+ +
+Weather
+ +
+Region
+       ↓
+Feature Builder
+       ↓
+Feature Vector</code></pre></div>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">Java</span><pre class="code-block"><code>public EtaFeatures build(
+        Order order,
+        Driver driver,
+        Route route,
+        TrafficData traffic
+) {
+    // build model features
+}</code></pre></div>
+<hr>
+<h2 id="49-eta-prediction-service">49. ETA Prediction Service</h2>
+<p>The prediction service should not know how every feature is calculated.</p>
+<p>It should receive a clean feature object.</p>
+<div class="code-wrap"><span class="code-lang">Java</span><pre class="code-block"><code>public EtaPrediction predict(EtaFeatures features)</code></pre></div>
+<p>This keeps the design modular.</p>
+<p>Architecture:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>FeatureBuilder
+      ↓
+EtaFeatures
+      ↓
+EtaPredictionService
+      ↓
+EtaPrediction</code></pre></div>
+<hr>
+<h2 id="50-eta-prediction-request">50. ETA Prediction Request</h2>
+<p>Example DTO:</p>
+<div class="code-wrap"><span class="code-lang">Java</span><pre class="code-block"><code>public record EtaPredictionRequest(
+        double distanceKm,
+        double trafficLevel,
+        double averageSpeed,
+        int hourOfDay,
+        int dayOfWeek,
+        double driverSpeed,
+        double driverDelay,
+        double roadComplexity,
+        int numberOfTurns,
+        boolean rain
+) {
+}</code></pre></div>
+<hr>
+<h2 id="51-eta-prediction-response">51. ETA Prediction Response</h2>
+<div class="code-wrap"><span class="code-lang">Java</span><pre class="code-block"><code>public record EtaPredictionResponse(
+        double etaMinutes,
+        double confidence,
+        String modelVersion
+) {
+}</code></pre></div>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">JSON</span><pre class="code-block"><code>{
+  &quot;etaMinutes&quot;: 27.4,
+  &quot;confidence&quot;: 0.89,
+  &quot;modelVersion&quot;: &quot;eta-xgb-v12&quot;
+}</code></pre></div>
+<hr>
+<h2 id="52-complete-prediction-flow">52. Complete Prediction Flow</h2>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Order Created
+      ↓
+Route Generated
+      ↓
+Feature Builder
+      ↓
+Traffic Data
+      ↓
+Driver Data
+      ↓
+Weather Data
+      ↓
+Feature Vector
+      ↓
+XGBoost
+      ↓
+Predicted Travel Time
+      ↓
+Store Preparation Time
+      ↓
+Pickup Time
+      ↓
+Final ETA</code></pre></div>
+<hr>
+<h2 id="53-driver-specific-eta">53. Driver-Specific ETA</h2>
+<p>A production system should ideally consider the assigned driver&#39;s behavior.</p>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Driver A
+Historical average speed = 28 km/h
+
+Driver B
+Historical average speed = 21 km/h</code></pre></div>
+<p>Same route:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Driver A ETA = 18 min
+Driver B ETA = 24 min</code></pre></div>
+<p>This allows the model to personalize predictions.</p>
+<hr>
+<h2 id="54-traffic-aware-eta">54. Traffic-Aware ETA</h2>
+<p>Traffic should be represented using current and historical information.</p>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Current traffic = 0.85
+Historical traffic at 8 PM = 0.72</code></pre></div>
+<p>The model can combine both.</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Current condition
++
+Historical pattern
+       ↓
+ETA</code></pre></div>
+<hr>
+<h2 id="55-time-of-day-eta">55. Time-of-Day ETA</h2>
+<p>Traffic varies throughout the day.</p>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>02:00 → Low
+07:00 → Increasing
+09:00 → High
+14:00 → Medium
+18:00 → Very High
+23:00 → Low</code></pre></div>
+<p>Features:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>hour_of_day
+day_of_week
+peak_hour
+weekend
+holiday</code></pre></div>
+<hr>
+<h2 id="56-weather-aware-eta">56. Weather-Aware ETA</h2>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Normal weather:
+ETA = 20 min
+
+Heavy rain:
+ETA = 28 min</code></pre></div>
+<p>The model can learn this relationship from historical deliveries.</p>
+<hr>
+<h2 id="57-road-type-eta">57. Road-Type ETA</h2>
+<p>Road types have different characteristics.</p>
+<p>Examples:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Highway
+Main road
+Residential road
+Narrow road
+Service road</code></pre></div>
+<p>Features:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>highway_ratio
+local_road_ratio
+road_complexity
+average_speed</code></pre></div>
+<hr>
+<h2 id="58-region-aware-eta">58. Region-Aware ETA</h2>
+<p>Different regions can have different travel patterns.</p>
+<p>For example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Region A
+High traffic
+Low average speed
+
+Region B
+Low traffic
+High average speed</code></pre></div>
+<p>A region feature helps the model learn these differences.</p>
+<hr>
+<h2 id="59-store-preparation-time">59. Store Preparation Time</h2>
+<p>Delivery ETA is not only driving time.</p>
+<p>Suppose:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Travel = 20 min
+Store preparation = 15 min</code></pre></div>
+<p>Then:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Customer ETA ≠ 20 min</code></pre></div>
+<p>Instead:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>ETA = 15 + 20
+    = 35 min</code></pre></div>
+<p>Store preparation can itself become an ML prediction problem.</p>
+<hr>
+<h2 id="60-pickup-eta">60. Pickup ETA</h2>
+<p>Pickup ETA answers:</p>
+<blockquote>When will the driver reach the store?</blockquote>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Driver → Store</code></pre></div>
+<p>Model:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Distance
+Traffic
+Driver
+Road
+Time</code></pre></div>
+<p>Output:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Driver arrival = 8 minutes</code></pre></div>
+<hr>
+<h2 id="61-delivery-eta">61. Delivery ETA</h2>
+<p>Delivery ETA answers:</p>
+<blockquote>When will the customer receive the order?</blockquote>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Store
+ ↓
+Driver
+ ↓
+Customer</code></pre></div>
+<p>It includes:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Store preparation
++
+Driver arrival
++
+Pickup
++
+Travel
++
+Delivery</code></pre></div>
+<hr>
+<h2 id="62-total-order-eta">62. Total Order ETA</h2>
+<p>We can model:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Total ETA =
+Preparation ETA
++
+Driver Arrival ETA
++
+Pickup ETA
++
+Delivery Travel ETA</code></pre></div>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Preparation = 14
+Driver      = 6
+Pickup      = 3
+Travel      = 19
+------------------
+Total       = 42 min</code></pre></div>
+<hr>
+<h2 id="63-multi-stop-eta">63. Multi-Stop ETA</h2>
+<p>For multi-drop delivery:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Driver
+ ↓
+Store A
+ ↓
+Customer A
+ ↓
+Store B
+ ↓
+Customer B</code></pre></div>
+<p>ETA must consider all stops.</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>ETA =
+Travel A
++
+Pickup A
++
+Delivery A
++
+Travel B
++
+Pickup B
++
+Delivery B</code></pre></div>
+<p>This is where ETA Prediction and Route Optimization become tightly connected.</p>
+<hr>
+<h2 id="64-eta-for-multi-drop-routes">64. ETA for Multi-Drop Routes</h2>
+<p>The route optimizer provides:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Stop sequence</code></pre></div>
+<p>ETA system predicts:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Time between stops</code></pre></div>
+<p>Architecture:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Route Optimizer
+      ↓
+Stop Sequence
+      ↓
+ETA Model
+      ↓
+Travel Time Per Segment
+      ↓
+Total Route ETA</code></pre></div>
+<hr>
+<h2 id="65-eta-confidence">65. ETA Confidence</h2>
+<p>A good ETA system should not always return only one number.</p>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>ETA = 27 minutes
+Confidence = 87%</code></pre></div>
+<p>Confidence can be derived from:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Model uncertainty
+Historical prediction error
+Traffic stability
+Data quality
+Route complexity</code></pre></div>
+<hr>
+<h2 id="66-eta-range">66. ETA Range</h2>
+<p>A more useful customer-facing prediction can be:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Delivery in 25–32 minutes</code></pre></div>
+<p>instead of:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Delivery in exactly 27 minutes</code></pre></div>
+<p>The backend can maintain:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Predicted ETA = 27
+Lower = 25
+Upper = 32</code></pre></div>
+<hr>
+<h2 id="67-eta-error">67. ETA Error</h2>
+<p>After the delivery completes:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Predicted ETA = 27 min
+Actual ETA    = 31 min</code></pre></div>
+<p>Error:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>31 - 27
+= +4 minutes</code></pre></div>
+<p>This error becomes important training and monitoring data.</p>
+<hr>
+<h2 id="68-measuring-model-accuracy">68. Measuring Model Accuracy</h2>
+<p>Common metrics:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>MAE
+RMSE
+MAPE
+Median Absolute Error
+P90 Error
+P95 Error</code></pre></div>
+<p>For an ETA system, percentile error is especially useful.</p>
+<hr>
+<h2 id="69-mae">69. MAE</h2>
+<p>Mean Absolute Error:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>MAE =
+average(|actual - predicted|)</code></pre></div>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Errors:
+
+2
+4
+3
+1</code></pre></div>
+<p>MAE:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>(2 + 4 + 3 + 1) / 4
+= 2.5 minutes</code></pre></div>
+<p>Meaning:</p>
+<blockquote>On average, the prediction is off by 2.5 minutes.</blockquote>
+<hr>
+<h2 id="70-rmse">70. RMSE</h2>
+<p>RMSE penalizes larger errors more strongly.</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>RMSE =
+sqrt(
+    average(
+        (actual - predicted)^2
+    )
+)</code></pre></div>
+<p>Useful when large ETA errors are particularly costly.</p>
+<hr>
+<h2 id="71-mape">71. MAPE</h2>
+<p>MAPE:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>MAPE =
+average(
+    |actual - predicted| / actual
+)
+× 100</code></pre></div>
+<p>It expresses error as a percentage.</p>
+<p>However, MAPE can behave poorly when actual values are very small, so it should not be used blindly.</p>
+<hr>
+<h2 id="72-prediction-error-monitoring">72. Prediction Error Monitoring</h2>
+<p>Monitor:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Average error
+P50 error
+P90 error
+P95 error
+Overprediction rate
+Underprediction rate</code></pre></div>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>P50 = 2 min
+P90 = 6 min
+P95 = 9 min</code></pre></div>
+<p>This gives much better insight than only looking at average accuracy.</p>
+<hr>
+<h2 id="73-real-time-eta-updates">73. Real-Time ETA Updates</h2>
+<p>ETA should not remain fixed.</p>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Initial ETA = 35 min
+
+After 10 minutes:
+ETA = 27 min
+
+After traffic increase:
+ETA = 31 min
+
+After driver reaches store:
+ETA = 22 min</code></pre></div>
+<p>Therefore:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>ETA is dynamic.</code></pre></div>
+<hr>
+<h2 id="74-driver-gps-integration">74. Driver GPS Integration</h2>
+<p>Driver GPS provides real-time information.</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Driver GPS
+     ↓
+Redis GEO
+     ↓
+Route Progress
+     ↓
+ETA Recalculation</code></pre></div>
+<p>For example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Driver moved 2 km
+Traffic increased
+Route progress changed</code></pre></div>
+<p>The ETA is recalculated.</p>
+<hr>
+<h2 id="75-eta-recalculation">75. ETA Recalculation</h2>
+<p>Recalculate ETA when important state changes occur.</p>
+<p>Examples:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Driver location changed
+Traffic changed
+Route changed
+Store preparation changed
+Weather changed
+New stop added
+Stop completed</code></pre></div>
+<p>Do not necessarily recalculate on every GPS packet.</p>
+<p>Use controlled intervals or significant state changes to avoid unnecessary model calls.</p>
+<hr>
+<h2 id="76-traffic-change">76. Traffic Change</h2>
+<p>Suppose:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>ETA = 24 min</code></pre></div>
+<p>Traffic suddenly increases.</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Traffic ↑
+   ↓
+Feature Update
+   ↓
+ETA Model
+   ↓
+ETA = 31 min</code></pre></div>
+<hr>
+<h2 id="77-driver-route-deviation">77. Driver Route Deviation</h2>
+<p>Suppose the driver leaves the planned route.</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Planned route
+     ↓
+Driver deviates
+     ↓
+New route
+     ↓
+New features
+     ↓
+ETA prediction</code></pre></div>
+<p>The route optimizer and ETA service should work together.</p>
+<hr>
+<h2 id="78-new-order-assignment">78. New Order Assignment</h2>
+<p>When a new order is assigned:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Current Route
+      ↓
+Insert New Stop
+      ↓
+Route Optimization
+      ↓
+ETA Prediction
+      ↓
+Updated Delivery ETAs</code></pre></div>
+<p>All affected customers may receive updated ETAs.</p>
+<hr>
+<h2 id="79-order-cancellation">79. Order Cancellation</h2>
+<p>If a stop is cancelled:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Remove Stop
+     ↓
+Optimize Route
+     ↓
+Recalculate ETA</code></pre></div>
+<p>This can reduce ETA for remaining deliveries.</p>
+<hr>
+<h2 id="80-store-delay">80. Store Delay</h2>
+<p>Suppose the store reports:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Preparation delay = +10 minutes</code></pre></div>
+<p>Then:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Store Delay
+    ↓
+ETA Update
+    ↓
+Customer ETA +10 min</code></pre></div>
+<p>This is especially important for restaurant deliveries.</p>
+<hr>
+<h2 id="81-weather-change">81. Weather Change</h2>
+<p>If heavy rain begins:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Weather Update
+      ↓
+Feature Update
+      ↓
+ETA Prediction
+      ↓
+New ETA</code></pre></div>
+<p>The model can learn the effect from historical data.</p>
+<hr>
+<h2 id="82-kafka-integration">82. Kafka Integration</h2>
+<p>Useful Kafka events:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>ORDER_CREATED
+ORDER_ASSIGNED
+DRIVER_LOCATION_UPDATED
+TRAFFIC_UPDATED
+WEATHER_UPDATED
+STORE_PREPARATION_UPDATED
+ROUTE_UPDATED
+PICKUP_COMPLETED
+DELIVERY_COMPLETED
+ETA_UPDATED</code></pre></div>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>DRIVER_LOCATION_UPDATED
+          ↓
+ETA Consumer
+          ↓
+Feature Builder
+          ↓
+ETA Model
+          ↓
+ETA_UPDATED</code></pre></div>
+<hr>
+<h2 id="83-redis-integration">83. Redis Integration</h2>
+<p>Redis can maintain real-time state.</p>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>driver:{id}:location
+driver:{id}:route
+driver:{id}:active-order
+route:{id}:state
+polygon:{id}:traffic</code></pre></div>
+<p>ETA prediction can retrieve fast-changing state from Redis.</p>
+<hr>
+<h2 id="84-websocket-integration">84. WebSocket Integration</h2>
+<p>Customers and operations dashboards can receive real-time ETA updates.</p>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>ETA_UPDATED
+     ↓
+WebSocket
+     ↓
+Customer App</code></pre></div>
+<p>Topic:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>/topic/orders/{orderId}/eta</code></pre></div>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">JSON</span><pre class="code-block"><code>{
+  &quot;orderId&quot;: &quot;ORD-1001&quot;,
+  &quot;etaMinutes&quot;: 24,
+  &quot;lowerBound&quot;: 22,
+  &quot;upperBound&quot;: 28
+}</code></pre></div>
+<hr>
+<h2 id="85-customer-eta">85. Customer ETA</h2>
+<p>Customer sees:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Estimated delivery
+
+25–30 minutes</code></pre></div>
+<p>As the driver progresses:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>22–27 minutes</code></pre></div>
+<p>Then:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>8–12 minutes</code></pre></div>
+<p>Finally:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Arriving now</code></pre></div>
+<hr>
+<h2 id="86-driver-eta">86. Driver ETA</h2>
+<p>The driver can see:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Next stop
+Customer A
+
+ETA:
+8 minutes</code></pre></div>
+<p>For multi-drop:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Customer A → 8 min
+Customer B → 17 min
+Customer C → 29 min</code></pre></div>
+<hr>
+<h2 id="87-operations-dashboard">87. Operations Dashboard</h2>
+<p>Operations dashboard can show:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Order
+Driver
+Predicted ETA
+Actual ETA
+ETA error
+Route
+Traffic</code></pre></div>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Order     ETA    Traffic    Risk
+--------------------------------
+1001      24m    Low        Low
+1002      31m    High       Medium
+1003      42m    Severe     High</code></pre></div>
+<hr>
+<h2 id="88-eta-and-driver-matching">88. ETA and Driver Matching</h2>
+<p>Driver matching should not only ask:</p>
+<blockquote>Which driver is closest?</blockquote>
+<p>It can ask:</p>
+<blockquote>Which driver can complete this delivery fastest?</blockquote>
+<p>Architecture:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Nearby Drivers
+      ↓
+Eligible Drivers
+      ↓
+ETA Prediction
+      ↓
+Driver Ranking
+      ↓
+Best Driver</code></pre></div>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Driver A
+Distance = 1.5 km
+ETA = 14 min
+
+Driver B
+Distance = 2.0 km
+ETA = 9 min</code></pre></div>
+<p>Driver B may be the better choice.</p>
+<hr>
+<h2 id="89-eta-and-route-optimization">89. ETA and Route Optimization</h2>
+<p>Route optimizer decides:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Stop sequence</code></pre></div>
+<p>ETA model predicts:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Travel time</code></pre></div>
+<p>Together:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Route Candidates
+       ↓
+ETA Prediction
+       ↓
+Route Score
+       ↓
+Best Route</code></pre></div>
+<p>This makes route optimization much more realistic.</p>
+<hr>
+<h2 id="90-eta-and-surge-pricing">90. ETA and Surge Pricing</h2>
+<p>ETA can also provide signals to pricing.</p>
+<p>For example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>High demand
++
+Low driver availability
++
+High ETA</code></pre></div>
+<p>may indicate capacity pressure.</p>
+<p>Architecture:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Demand
+Driver Supply
+ETA
+Traffic
+      ↓
+Pricing Engine</code></pre></div>
+<p>ETA should be a signal, not necessarily the sole pricing input.</p>
+<hr>
+<h2 id="91-eta-and-store-matching">91. ETA and Store Matching</h2>
+<p>When multiple stores can fulfill an order:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Store A
+ETA = 32 min
+
+Store B
+ETA = 21 min
+
+Store C
+ETA = 28 min</code></pre></div>
+<p>ETA can become one feature in store selection.</p>
+<p>Therefore:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Store Matching
+      ↓
+ETA Prediction
+      ↓
+Customer Experience</code></pre></div>
+<hr>
+<h2 id="92-ml-model-retraining">92. ML Model Retraining</h2>
+<p>Traffic patterns change.</p>
+<p>Driver behavior changes.</p>
+<p>Road networks change.</p>
+<p>Therefore the model must be retrained periodically.</p>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Historical Data
+      ↓
+Feature Engineering
+      ↓
+Training
+      ↓
+Validation
+      ↓
+Model Evaluation
+      ↓
+Model Registry
+      ↓
+Deployment</code></pre></div>
+<p>Possible schedule:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Daily
+Weekly
+Monthly</code></pre></div>
+<p>depending on scale and data freshness.</p>
+<hr>
+<h2 id="93-model-versioning">93. Model Versioning</h2>
+<p>Never deploy an ML model without tracking its version.</p>
+<p>Example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>eta-xgb-v10
+eta-xgb-v11
+eta-xgb-v12</code></pre></div>
+<p>Prediction:</p>
+<div class="code-wrap"><span class="code-lang">JSON</span><pre class="code-block"><code>{
+  &quot;etaMinutes&quot;: 27.4,
+  &quot;modelVersion&quot;: &quot;eta-xgb-v12&quot;
+}</code></pre></div>
+<p>This allows us to determine:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Which model generated this prediction?</code></pre></div>
+<hr>
+<h2 id="94-production-ml-architecture">94. Production ML Architecture</h2>
+<p>A production architecture can look like:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>                    ┌─────────────────────┐
+                    │     Mobile Apps     │
+                    └──────────┬──────────┘
+                               │
+                               ↓
+                    ┌─────────────────────┐
+                    │    Spring Boot      │
+                    │   Order Service     │
+                    └──────────┬──────────┘
+                               │
+                    ┌──────────┴──────────┐
+                    ↓                     ↓
+                 Kafka                  Redis
+                    │                     │
+                    └──────────┬──────────┘
+                               ↓
+                    ┌─────────────────────┐
+                    │ Feature Builder     │
+                    └──────────┬──────────┘
+                               ↓
+                    ┌─────────────────────┐
+                    │   Feature Store     │
+                    └──────────┬──────────┘
+                               ↓
+                    ┌─────────────────────┐
+                    │ Python ML Server    │
+                    │ XGBoost Model       │
+                    └──────────┬──────────┘
+                               ↓
+                    ┌─────────────────────┐
+                    │ ETA Prediction      │
+                    └──────────┬──────────┘
+                               ↓
+              ┌────────────────┼────────────────┐
+              ↓                ↓                ↓
+        Driver Matching   Route Optimizer    Pricing
+              │                │                │
+              └────────────────┼────────────────┘
+                               ↓
+                        Customer ETA
+                               ↓
+                           WebSocket</code></pre></div>
+<hr>
+<h2 id="95-failure-handling">95. Failure Handling</h2>
+<p>ML systems can fail.</p>
+<p>Possible failures:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>ML server unavailable
+Feature Store unavailable
+Traffic service unavailable
+Weather service unavailable
+Model timeout
+Invalid features</code></pre></div>
+<p>The application should not fail the order because ETA prediction failed.</p>
+<hr>
+<h2 id="96-fallback-eta">96. Fallback ETA</h2>
+<p>Always maintain a fallback.</p>
+<p>For example:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Primary:
+ML ETA
+
+Fallback:
+Routing ETA
+
+Last fallback:
+Distance / Average Speed</code></pre></div>
+<p>Architecture:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>        ML Prediction
+             ↓
+          Success?
+         /       \
+       Yes        No
+       ↓           ↓
+     ETA      Routing ETA
+                  ↓
+               Failure?
+              /       \
+            Yes       No
+            ↓          ↓
+       Simple ETA    ETA</code></pre></div>
+<p>This makes the system resilient.</p>
+<hr>
+<h2 id="97-complete-end-to-end-architecture">97. Complete End-to-End Architecture</h2>
+<p>The complete system:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>                    ORDER
+                      │
+                      ↓
+              Store Matching
+                      │
+                      ↓
+              Route Generation
+                      │
+                      ↓
+              Driver Matching
+                      │
+                      ↓
+              Driver Selected
+                      │
+                      ↓
+              Feature Builder
+                      │
+        ┌─────────────┼─────────────┐
+        ↓             ↓             ↓
+     Traffic        Driver        Weather
+        │             │             │
+        └─────────────┼─────────────┘
+                      ↓
+               Feature Vector
+                      │
+                      ↓
+                 ETA Model
+                      │
+                      ↓
+              Predicted Travel Time
+                      │
+                      ↓
+            Store Preparation ETA
+                      │
+                      ↓
+                 Final ETA
+                      │
+          ┌───────────┼───────────┐
+          ↓           ↓           ↓
+       Customer     Driver      Dashboard
+          │           │           │
+          └───────────┼───────────┘
+                      ↓
+                GPS Updates
+                      │
+                      ↓
+                Recalculate
+                      │
+                      ↓
+                 New ETA</code></pre></div>
+<hr>
+<h2 id="98-implementation-phases">98. Implementation Phases</h2>
+<h4 id="phase-1-basic-eta">Phase 1 — Basic ETA</h4>
+<p>Implement:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Distance
+Average Speed</code></pre></div>
+<p>Formula:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>ETA = distance / speed</code></pre></div>
+<hr>
+<h4 id="phase-2-route-aware-eta">Phase 2 — Route-Aware ETA</h4>
+<p>Add:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Route distance
+Route duration
+Number of turns
+Road complexity</code></pre></div>
+<hr>
+<h4 id="phase-3-context-aware-eta">Phase 3 — Context-Aware ETA</h4>
+<p>Add:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Time
+Day
+Traffic
+Region
+Weather</code></pre></div>
+<hr>
+<h4 id="phase-4-driver-aware-eta">Phase 4 — Driver-Aware ETA</h4>
+<p>Add:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Driver speed
+Driver delay history
+Driver route behavior</code></pre></div>
+<hr>
+<h4 id="phase-5-ml-dataset">Phase 5 — ML Dataset</h4>
+<p>Store:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Features
++
+Actual travel time</code></pre></div>
+<hr>
+<h4 id="phase-6-train-ml-model">Phase 6 — Train ML Model</h4>
+<p>Start with:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>XGBoost</code></pre></div>
+<p>Evaluate:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>MAE
+RMSE
+P90
+P95</code></pre></div>
+<hr>
+<h4 id="phase-7-ml-serving">Phase 7 — ML Serving</h4>
+<p>Deploy:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Python
++
+FastAPI
++
+XGBoost</code></pre></div>
+<hr>
+<h4 id="phase-8-spring-boot-integration">Phase 8 — Spring Boot Integration</h4>
+<p>Implement:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>FeatureBuilder
+EtaPredictionService
+MLClient
+EtaPredictionResponse</code></pre></div>
+<hr>
+<h4 id="phase-9-real-time-eta">Phase 9 — Real-Time ETA</h4>
+<p>Integrate:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Redis
+Kafka
+GPS
+Traffic
+WebSocket</code></pre></div>
+<hr>
+<h4 id="phase-10-advanced-eta">Phase 10 — Advanced ETA</h4>
+<p>Add:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>ETA confidence
+ETA ranges
+Store preparation prediction
+Multi-stop ETA
+Traffic prediction
+Spatio-temporal models</code></pre></div>
+<hr>
+<h2 id="99-final-architecture">99. Final Architecture</h2>
+<p>The final architecture becomes:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>                    ┌──────────────────────┐
+                    │      Customer        │
+                    └──────────┬───────────┘
+                               │
+                               ↓
+                    ┌──────────────────────┐
+                    │     Order Service    │
+                    └──────────┬───────────┘
+                               ↓
+                    ┌──────────────────────┐
+                    │  Multi-Store Match   │
+                    └──────────┬───────────┘
+                               ↓
+                    ┌──────────────────────┐
+                    │   Driver Matching    │
+                    └──────────┬───────────┘
+                               ↓
+                    ┌──────────────────────┐
+                    │   Route Generation   │
+                    └──────────┬───────────┘
+                               ↓
+                    ┌──────────────────────┐
+                    │   Feature Builder    │
+                    └──────────┬───────────┘
+                               ↓
+             ┌─────────────────┼──────────────────┐
+             ↓                 ↓                  ↓
+          Traffic            Driver             Weather
+             │                 │                  │
+             └─────────────────┼──────────────────┘
+                               ↓
+                    ┌──────────────────────┐
+                    │    Feature Store     │
+                    └──────────┬───────────┘
+                               ↓
+                    ┌──────────────────────┐
+                    │   XGBoost ETA Model  │
+                    └──────────┬───────────┘
+                               ↓
+                    ┌──────────────────────┐
+                    │    ETA Prediction    │
+                    └──────────┬───────────┘
+                               ↓
+                    ┌──────────────────────┐
+                    │ Final Delivery ETA   │
+                    └──────────┬───────────┘
+                               ↓
+                 ┌─────────────┼─────────────┐
+                 ↓             ↓             ↓
+             Customer        Driver       Dashboard
+                 │             │             │
+                 └─────────────┼─────────────┘
+                               ↓
+                           GPS Events
+                               ↓
+                       ETA Recalculation
+                               ↓
+                          Updated ETA</code></pre></div>
+<hr>
+<h2 id="100-final-success-criteria">100. Final Success Criteria</h2>
+<p>The ETA Prediction System is successful when it supports:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>✓ Basic ETA calculation
+✓ Route-aware ETA
+✓ Traffic-aware ETA
+✓ Time-aware ETA
+✓ Weather-aware ETA
+✓ Region-aware ETA
+✓ Driver-aware ETA
+✓ Store preparation ETA
+✓ Feature engineering
+✓ Historical training data
+✓ ML model training
+✓ XGBoost inference
+✓ Python model serving
+✓ Spring Boot integration
+✓ Kafka integration
+✓ Redis integration
+✓ Real-time GPS updates
+✓ Dynamic ETA recalculation
+✓ Multi-drop ETA
+✓ ETA confidence
+✓ ETA ranges
+✓ MAE/RMSE/P90 monitoring
+✓ Model versioning
+✓ Model retraining
+✓ Fallback ETA
+✓ Driver matching integration
+✓ Route optimization integration
+✓ Store matching integration
+✓ Pricing integration</code></pre></div>
+<hr>
+<h2 id="101-key-architectural-principle">101. Key Architectural Principle</h2>
+<p>The most important idea is:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>OLD SYSTEM
+
+ETA = distance / speed</code></pre></div>
+<p>becomes:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>NEW SYSTEM
+
+                ┌───────────────┐
+                │   Distance    │
+                ├───────────────┤
+                │   Traffic     │
+                ├───────────────┤
+                │   Time        │
+                ├───────────────┤
+                │   Road        │
+                ├───────────────┤
+                │   Driver      │
+                ├───────────────┤
+                │   Weather     │
+                ├───────────────┤
+                │   Region      │
+                ├───────────────┤
+                │   Route       │
+                ├───────────────┤
+                │   Store       │
+                └───────┬───────┘
+                        ↓
+                 Feature Builder
+                        ↓
+                  ML ETA Model
+                        ↓
+                  Predicted ETA</code></pre></div>
+<p>The fundamental architecture is:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>REAL-WORLD CONDITIONS
+        ↓
+FEATURE ENGINEERING
+        ↓
+MACHINE LEARNING
+        ↓
+ETA PREDICTION
+        ↓
+REAL-TIME CORRECTION</code></pre></div>
+<p>And the broader PureEats architecture becomes:</p>
+<div class="code-wrap"><span class="code-lang">diagram</span><pre class="code-block"><code>Order
+  ↓
+Multi-Store Matching
+  ↓
+Store Selection
+  ↓
+Driver Matching
+  ↓
+Route Optimization
+  ↓
+ETA Prediction
+  ↓
+Driver + Customer
+  ↓
+GPS Updates
+  ↓
+ETA Recalculation
+  ↓
+Continuous Optimization</code></pre></div>
+<p>The key principle is:</p>
+<blockquote><strong>Routing determines where the driver should go. Route optimization determines the best sequence of stops. ETA prediction determines how long the journey is expected to take.</strong></blockquote>
+<p>These three systems should remain separate services, but continuously exchange information.</p>
+    </main>
+  </div>
+
+  <footer>
+    pureeats-geo-service &middot; see also ETA PREDICTION SYSTEM — Step-by-Step Implementation Guide.md for the plain-markdown version
+  </footer>
+</div>
+
+<script>
+(function () {
+  var links = Array.prototype.slice.call(document.querySelectorAll('.sidebar-toc a[href^="#"]'));
+  var map = {};
+  links.forEach(function (a) { map[a.getAttribute('href').slice(1)] = a; });
+  var headings = Array.prototype.slice.call(document.querySelectorAll('main.article h2, main.article h3, main.article h4'));
+  if (!('IntersectionObserver' in window) || !headings.length) return;
+  var current = null;
+  var observer = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (!entry.isIntersecting) return;
+      var link = map[entry.target.id];
+      if (!link) return;
+      if (current) current.classList.remove('active');
+      link.classList.add('active');
+      current = link;
+    });
+  }, { rootMargin: '0px 0px -70% 0px', threshold: 0 });
+  headings.forEach(function (h) { observer.observe(h); });
+})();
+</script>
