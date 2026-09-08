@@ -146,7 +146,7 @@ map.addControl(drawControl);
 map.on(L.Draw.Event.CREATED, function (event) {
   const layer = event.layer;
   drawnItems.addLayer(layer);
-  const geojson = layer.toGeoJSON();
+  const geojson = layer.toGeoJSON(); // Convert Polygon to GeoJSON
   console.log("Polygon GeoJSON:", geojson);
 
   // send to backend
@@ -229,42 +229,149 @@ function sendPolygon(coords) {
 
 ## 🧱 STEP 5 — Backend Polygon API
 
+Polygon Request DTO
+```java
+public record DeliveryAreaRequest(
+        String type, 
+        GeometryDTO geometry 
+) { }
+
+public record GeometryDTO(
+        String type, 
+        List<List<List<Double>>> coordinates 
+) { }
+```
+
 DeliveryZoneController.java
 ```java
 @RestController
-@RequestMapping("/delivery-zone")
+@RequestMapping("/api/stores/delivery-zone")
 public class DeliveryZoneController {
 
-    @PostMapping
-    public String saveZone(@RequestBody List<PointDTO> points) {
-        return "Polygon saved";
+    @PostMapping("/{storeId}/delivery-area")
+    public String saveZone(
+            @PathVariable Long storeId,
+            @RequestBody DeliveryAreaRequest request) {
+      service.saveDeliveryArea(storeId, request ); 
+      return ResponseEntity.ok().build();
     }
 }
 ````
 
-or
+## 🧠 STEP 6 — Validate Polygon
 
+### Step 6.1: Validate Polygon
+- Polygon type 
+- Coordinate count 
+- Closed ring 
+- Valid geometry 
+- Self-intersection 
+- Maximum area 
+- Maximum number of vertices
+
+### Step 6.2: Polygon Must Be Closed
+```text
+A → B → C → D → A
+```
+
+Example:
+```text
+First point: [78.48, 17.38] 
+Last point : [78.48, 17.38]
+```
+
+### Step 6.3: Minimum Number of Points
+A polygon requires at least three distinct points.
+
+Three points form the smallest polygon. The closing point is then added:
+```text
+A → B → C → A
+```
+
+### Step 6.4: Invalid Polygon Detection
+JTS can validate the geometry.
 ```java
-@RestController
-@RequestMapping("/store")
-public class StoreController {
-
-    @Autowired
-    private StoreService storeService;
-
-    @PostMapping("/delivery-area")
-    public String saveArea(@RequestBody Map<String, Object> geoJson) {
-        storeService.savePolygon(geoJson);
-        return "Saved";
-    }
+if (!polygon.isValid()) { 
+    throw new IllegalArgumentException( "Invalid delivery polygon" ); 
 }
 ```
 
+### Step 6.5: Polygon Self-Intersection
+
+This is invalid:
+
+```text
+      A──────B
+       \    /
+        \  /
+        /  \
+       /    \
+      C──────D
+```
+
+A self-intersecting polygon should be rejected.
+
+This is another reason validation should happen before persistence.
+
 ---
 
-## 🧠 STEP 6 — Store Polygon in Database
+## 🧠 STEP 7 — Store Polygon in Database
+
+### Step 7.1: Create PostgreSQL Database
+Enable PostGIS:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS postgis;
+```
+
+Verify:
+
+```sql
+SELECT PostGIS_Version();
+```
+
+
+### Step 7.2: Enable PostGIS
+PostGIS adds spatial functionality to PostgreSQL.
+
 We convert GeoJSON → WKT (Well Known Text) <br/>
-Use PostGIS geometry type.
+
+**Use PostGIS geometry type.**
+
+
+Without PostGIS:
+
+```text
+PostgreSQL
+    ↓
+Normal relational data
+```
+
+With PostGIS:
+
+```text
+PostgreSQL
+    ↓
+Spatial database
+    ↓
+Point
+Polygon
+Geometry
+Spatial indexes
+Geo queries
+```
+
+### Step 7.3: Delivery Zone Table
+
+```sql
+CREATE TABLE delivery_zone (
+   id BIGSERIAL PRIMARY KEY,
+   store_id BIGINT NOT NULL,
+   polygon GEOMETRY(POLYGON, 4326) NOT NULL,
+   created_at TIMESTAMP NOT NULL,
+   updated_at TIMESTAMP NOT NULL
+);
+```
 
 DeliveryZoneEntity.java
 ```java
@@ -283,6 +390,43 @@ public class DeliveryZoneEntity {
 }
 ```
 
+### Step 7.4: Geometry Column
+
+The important column is:
+
+```sql
+polygon GEOMETRY(POLYGON, 4326)
+```
+
+This tells PostGIS:
+
+```text
+Geometry type = Polygon
+SRID = 4326
+```
+
+### Step 7.5: SRID 4326
+
+EPSG:4326 represents:
+
+```text
+WGS 84
+Latitude / Longitude
+```
+
+This is commonly used by:
+
+```text
+GPS
+GeoJSON
+Leaflet
+OpenStreetMap
+```
+
+The key is to keep coordinate systems consistent.
+
+---
+
 🌍 Why PostGIS?
 
 PostGIS provides:
@@ -294,7 +438,7 @@ PostGIS provides:
 
 ---
 
-## 🧠 STEP 7 — Convert Coordinates to Polygon
+## 🧠 STEP 8 — Convert Coordinates to Polygon (Store Polygon Using JTS)
 Use JTS Geometry library.
 
 ### Maven Dependency
@@ -305,12 +449,25 @@ Use JTS Geometry library.
 </dependency>
 ```
 
+```java
+GeometryFactory factory = new GeometryFactory();
+```
 
-## Polygon Builder
+Then create:
+
+```text
+Coordinate[]
+LinearRing
+Polygon
+```
+
+
+## Option1: Polygon Builder - GeometryFactory
 ```java
 public Polygon buildPolygon(List<PointDTO> points) {
     GeometryFactory factory = new GeometryFactory();
 
+    // Create coordinates:
     Coordinate[] coordinates = new Coordinate[points.size() + 1];
 
     for (int i = 0; i < points.size(); i++) {
@@ -331,12 +488,18 @@ public Polygon buildPolygon(List<PointDTO> points) {
 
 ---
 
-## Option2: PARSE POLYGON + SAVE (POSTGIS)
+## Option2: Store Polygon Using WKT - PARSE POLYGON + SAVE (POSTGIS)
 We convert GeoJSON → WKT (Well Known Text)
 
 Example WKT format:
 ```
-POLYGON((78.48 17.38, 78.50 17.38, 78.50 17.40, 78.48 17.40, 78.48 17.38))
+POLYGON((
+  78.48 17.38, 
+  78.50 17.38, 
+  78.50 17.40, 
+  78.48 17.40, 
+  78.48 17.38
+ ))
 ```
 
 Service Layer
@@ -365,7 +528,20 @@ public class StoreService {
 }
 ```
 
-**Build WKT**
+## GeoJSON → WKT
+The transformation:
+
+```text
+GeoJSON
+   ↓
+Extract Coordinates
+   ↓
+WKT
+   ↓
+PostGIS
+```
+
+## Build WKT (GeoJSON → WKT)
 ```java
 private String buildWKT(List<List<Double>> coords) {
 
@@ -423,10 +599,48 @@ public boolean isDeliverable(double lat, double lon) {
 ---
 
 
-## 📦 STEP 8 — GeoHash Optimization
-Polygon searching over all stores is expensive.
+## 📦 STEP 9 - Save Polygon with PostGIS
 
-So we optimize.
+Example:
+
+```sql
+INSERT INTO delivery_zone (
+    store_id,
+    polygon,
+    created_at,
+    updated_at
+)
+VALUES (
+    ?,
+    ST_GeomFromText(?, 4326),
+    NOW(),
+    NOW()
+);
+```
+
+The important function is:
+
+```sql
+ST_GeomFromText(...)
+```
+
+---
+
+
+
+## 📦 STEP 10 — GeoHash Optimization
+Polygon searching over all stores is expensive. GeoHash converts a geographical location into a string representing a spatial cell.
+
+Nearby coordinates tend to have similar GeoHash prefixes.
+
+
+Example:
+
+```text
+17.385, 78.486
+        ↓
+    tepg1...
+```
 
 **Strategy**
 ```
@@ -438,20 +652,89 @@ Store bucket references
    ↓
 Search nearby buckets first
 ```
-
-Example
+Example:
+```text
+Store A → tepg1
+Store B → tepg1
+Store C → tepg2
+Store D → tepg3
 ```
-Polygon Area
-   ↓
-tepg1
-tepg2
-tepg3
+
+Database:
+
+```text
+store_id | geohash
+---------|--------
+A        | tepg1
+B        | tepg1
+C        | tepg2
+D        | tepg3
 ```
 
 ---
 
-## 📍 STEP 9 — KD-Tree Integration
-KD-Tree improves nearest-neighbor searching.
+## Store GeoHash References
+
+
+Possible table:
+
+```sql
+CREATE TABLE delivery_zone_geohash (
+    delivery_zone_id BIGINT NOT NULL,
+    geohash VARCHAR(20) NOT NULL
+);
+```
+
+Example:
+
+```text
+zone 101 → tepg1
+zone 101 → tepg2
+zone 101 → tepg3
+```
+
+---
+
+## 📍 STEP 11 — GeoHash Prefilter
+
+User searches:
+
+```text
+17.387, 78.489
+```
+
+Generate:
+
+```text
+User GeoHash = tepg1
+```
+
+Search nearby cells:
+
+```text
+tepg1
+tepg2
+tepf9
+tepg0
+...
+```
+
+Then:
+
+```text
+Only stores associated with those cells
+```
+
+are considered.
+
+---
+
+
+## 📍 STEP 12 — KD-Tree Integration
+GeoHash is useful for grid-based filtering.
+
+KD-Tree is useful for:
+> Nearest-neighbor search.
 
 KD-Tree Stores
 ```
@@ -471,9 +754,58 @@ KD-Tree Nearby Search
 Point-In-Polygon Validation
 ``` 
 
+## What KD-Tree Solves
+
+Without KD-Tree:
+
+```text
+Calculate distance to every store
+```
+
+With KD-Tree:
+
+```text
+User
+ ↓
+KD-Tree
+ ↓
+Nearest K stores
+```
+
+Example:
+
+```text
+User
+ ↓
+Nearest 20 stores
+```
+
+Then only those candidates need more expensive checks.
+
 ---
 
-## 📍 STEP 10 — Point-In-Polygon Validation
+## Store Location Index
+
+Create a point for each store:
+
+```text
+Store A → (78.486, 17.385)
+Store B → (78.492, 17.390)
+Store C → (78.500, 17.380)
+```
+
+Build:
+
+```text
+KD-Tree
+```
+
+from those points.
+
+---
+
+
+## 📍 STEP 13 — Point-In-Polygon Validation
 Now verify user is inside delivery region.
 
 Java Implementation
@@ -490,7 +822,7 @@ public boolean insidePolygon(Polygon polygon, double lat, double lon) {
 
 ---
 
-## STEP 11 — User Search Flow
+## STEP 13 — User Search Flow
 Now implement full search logic.
 
 Search Algorithm
@@ -515,7 +847,7 @@ Store C ✅
 
 ---
 
-## 🚀 STEP 12 — Visualize Polygon on Map
+## 🚀 STEP 14 — Visualize Polygon on Map
 Load saved polygon from backend.
 
 Frontend Rendering
@@ -540,239 +872,10 @@ L.polygon([
 
 ---
 
-# 🚀 Advanced Improvements
-
-1. Dynamic Delivery Zones <br/>
-   Automatically expand or shrink polygon based on:
-    - Traffic
-    - Driver availability
-    - Weather
-    - Peak demand
-
-2. Heatmaps
-   Visualize: `High demand areas`
-3. H3 Hexagonal Indexing <br/>
-   Upgrade from GeoHash to: `Uber H3 indexing`
-4. Real-Time Driver Streaming <br/>
-    - Kafka
-    - Redis Streams
-    - WebSockets
-5. Polygon Simplification <br/>
-   Optimize large polygons using: `Douglas-Peucker algorithm`
-
-
-# 🚀 NEXT STEP
-1. Multi-store matching engine (Uber Eats full flow)
-2. Live driver tracking + delivery assignment
-3. Dynamic surge pricing per polygon
-4. Route optimization (multi-drop delivery)
-
-
-
----
-
-
-# 1. MULTI-STORE MATCHING ENGINE
-Customer may match multiple stores:
-- Store A (fast delivery)
-- Store B (cheaper)
-- Store C (high rating)
-  We rank them.
-
-## STEP 1 — STORE SCORE MODEL
-We compute:
-```
-Score = distance + price factor + rating + delivery time + surge penalty
-```
-Formula:
-
-$$
-Score=w1​D+w2​P+w3​R+w4​T+w5​S​
-$$
-
-Store Entity
-```java
-class Store {
-    Long id;
-    String name;
-    double lat;
-    double lon;
-    double rating;
-    double baseDeliveryTime;
-}
-```
-
-## STEP 2 — MATCH STORES
-```java
-@Service
-public class StoreMatchingService {
-
-    @Autowired
-    private StoreRepository storeRepo;
-
-    @Autowired
-    private SurgeService surgeService;
-
-    public List<Store> findBestStores(double lat, double lon) {
-        List<Store> stores = storeRepo.findNearbyCandidates(lat, lon);
-        List<ScoredStore> scored = new ArrayList<>();
-
-        for (Store s : stores) {
-            double distance = haversine(lat, lon, s.getLat(), s.getLon());
-            double surge = surgeService.getSurgeForStore(s.getId());
-
-            double score =
-                    distance * 0.5 +
-                    (1 / s.getRating()) * 0.2 +
-                    s.getBaseDeliveryTime() * 0.2 +
-                    surge * 0.1;
-
-            scored.add(new ScoredStore(s, score));
-        }
-
-        return scored.stream()
-                .sorted(Comparator.comparingDouble(ScoredStore::score))
-                .map(ScoredStore::store)
-                .toList();
-    }
-}
-```
-
-## 2. DYNAMIC SURGE PRICING (PER POLYGON)
-This is Uber Eats pricing brain.
-
-### 💡 IDEA
-
-Each delivery zone (polygon) has:
-- demand
-- supply
-- surge multiplier
-
-## STEP 1 — ZONE MODEL
-```java
-class DeliveryZone {
-    Long id;
-    String geoHash;
-    int activeOrders;
-    int availableDrivers;
-}
-```
-
-## STEP 2 — SURGE FORMULA
-
-$$
-\text{Surge} = \frac{\text{Demand}}{\text{Supply} + 1}
-$$
-
-Service:
-```java
-@Service
-public class SurgeService {
-
-    private final Map<String, DeliveryZone> zones = new ConcurrentHashMap<>();
-
-    public double getSurgeForStore(Long storeId) {
-
-        DeliveryZone zone = zones.get(getZoneKey(storeId));
-
-        if (zone == null) return 1.0;
-
-        double surge = (double) zone.getActiveOrders()
-                / (zone.getAvailableDrivers() + 1);
-
-        return Math.max(1.0, Math.min(surge, 3.0));
-    }
-
-    public void incrementDemand(String zone) {
-        zones.computeIfAbsent(zone, z -> new DeliveryZone())
-             .activeOrders++;
-    }
-
-    public void incrementSupply(String zone) {
-        zones.computeIfAbsent(zone, z -> new DeliveryZone())
-             .availableDrivers++;
-    }
-}
-```
-
-# 3. MULTI-DROP ROUTE OPTIMIZATION
-This is delivery batching system (**Swiggy Genie / Uber Delivery**).
-
-PROBLEM
-
-Driver gets:
-- Pickup A → Drop A
-- Pickup B → Drop B
-- Pickup C → Drop C
-  Need optimal route.
-
-### MODEL = GRAPH PROBLEM
-- Each location = node
-- Each travel cost = edge
-
-### DELIVERY TASK MODEL
-```java
-class DeliveryTask {
-    Location pickup;
-    Location drop;
-}
-```
-
-## STEP 1 — BUILD ROUTE GRAPH
-We generate distance matrix:
-```
-A → B → C → D
-```
-
-## STEP 2 — ROUTE OPTIMIZATION (GREEDY + A*)
-We use hybrid:
-- ✔ nearest pickup first
-- ✔ shortest path reorder
-
-SIMPLE VERSION (REAL SYSTEM START POINT)
-```java
-public List<Location> optimizeRoute(List<Location> stops, Location start) {
-    List<Location> route = new ArrayList<>();
-    Location current = start;
-
-    while (!stops.isEmpty()) {
-
-        Location nearest = null;
-        double best = Double.MAX_VALUE;
-
-        for (Location l : stops) {
-            double d = haversine(
-                    current.getLat(), current.getLon(),
-                    l.getLat(), l.getLon()
-            );
-
-            if (d < best) {
-                best = d;
-                nearest = l;
-            }
-        }
-
-        route.add(nearest);
-        stops.remove(nearest);
-        current = nearest;
-    }
-    return route;
-}
-```
-
-### ⚡ ADVANCED VERSION (REAL UBER)
-Use:
-- A*
-- Time windows
-- Traffic graph
-- ML-based ETA
-
----
-
 # LIVE DRIVER TRACKING + DELIVERY ASSIGNMENT
 
 ## REDIS GEO STORAGE
-```java
+```
 GEOADD drivers 78.48 17.38 driver_1
 ```
 
@@ -812,314 +915,145 @@ public String assignDriver(double lat, double lon) {
 }
 ```
 
-## DELIVERY ASSIGNMENT FLOW
-```
-Order created
-   ↓
-Find store
-   ↓
-Find driver (Redis GEO)
-   ↓
-Assign driver
-   ↓
-Start tracking
-   ↓
-Update route dynamically
-```
+## Step 15 - Retrieve Polygon
 
-## FINAL FULL SYSTEM FLOW
-```
-Customer Order
+When the store owner opens the delivery area editor again:
+
+```text
+Frontend
    ↓
-Multi-store matching engine
+GET /delivery-area
    ↓
-Polygon check (PostGIS)
+Backend
    ↓
-Surge pricing engine
+PostGIS
    ↓
-Driver assignment (Redis GEO)
+GeoJSON
    ↓
-Route optimization (multi-drop)
-   ↓
-Live tracking updates
-   ↓
-Delivery completion
+Leaflet
 ```
 
 ---
 
+## PostGIS → GeoJSON
 
-# ML-BASED ETA PREDICTION SYSTEM
-WHY RULE-BASED ETA FAILS?
+PostGIS provides:
 
-Earlier we used:
+```sql
+ST_AsGeoJSON(polygon)
 ```
-ETA = distance / speed
-```
-
-❌ Problems:
-- ignores traffic
-- ignores time of day
-- ignores road type
-- ignores weather
-- ignores driver behavior
-
-## REAL UBER APPROACH
-Uber uses ML model:
-```
-ETA = f(distance, traffic, road, driver, time, region)
-```
-
-## FEATURE ENGINEERING (MOST IMPORTANT)
-We convert ride into features:
-
-## 🔢 INPUT FEATURES
-**Spatial:**
-- distance_km
-- route_curvature
-- number_of_turns
-  **Temporal:**
-- hour_of_day
-- day_of_week
-- peak_hour_flag
-  **Traffic:**
-- congestion_level
-- avg_speed_zone
-  **Driver:**
-- driver_speed_avg
-- driver_history_delay
-  **Context:**
-- rain / weather
-- event zone
-
-## FEATURE VECTOR
-```
-X = [
- distance,
- hour,
- traffic,
- driver_speed,
- road_complexity
-]
-```
-
-## ⚙️ MODEL OPTIONS
-In production:
-- Gradient Boosting (XGBoost) ⭐
-- Random Forest
-- Neural Networks (large scale)
-- Deep Spatio-Temporal models (advanced Uber AI)
-
-
-## 🧪 SIMPLE WORKING MODEL (JAVA SIMULATION)
-We simulate ML inference (real backend style).
-
-🎯 ETA MODEL SERVICE
-```java
-@Service
-public class EtaPredictionService {
-
-    public double predictETA(
-            double distanceKm,
-            int hourOfDay,
-            double trafficLevel,
-            double driverSpeed,
-            double roadComplexity
-    ) {
-
-        // Simulated ML weights (like regression model)
-        double eta =
-                (distanceKm * 2.5) +
-                (trafficLevel * 8) +
-                (roadComplexity * 3) -
-                (driverSpeed * 1.2) +
-                (isPeakHour(hourOfDay) ? 5 : 0);
-
-        return Math.max(1, eta); // minutes
-    }
-
-    private boolean isPeakHour(int hour) {
-        return (hour >= 8 && hour <= 11) ||
-               (hour >= 17 && hour <= 21);
-    }
-}
-```
-
-## 🧠 REAL ML VERSION (HOW IT LOOKS)
-In real Uber system:
-```
-Spring Boot → Kafka → Feature Store → ML Model → ETA
-```
-Model is usually:
-- Python (XGBoost / PyTorch)
-- Served via REST/gRPC
-
-## REAL CALL FLOW
-```
-Ride Request
-   ↓
-Feature Builder Service
-   ↓
-ML Model Server (Python)
-   ↓
-ETA Prediction
-   ↓
-Driver Matching + Pricing
-```
-
----
-
-# PART 2 — REAL-TIME MAP DASHBOARD (UBER CONTROL PANEL)
-
-WHAT YOU WILL BUILD
-
-A live dashboard showing:
-- 🟢 Drivers (moving in real time)
-- 🏪 Stores (delivery zones)
-- 🚗 Active rides
-- 🔥 Surge heatmap
-- 📍 Assignments live
-
-
-## SYSTEM ARCHITECTURE
-```
-Driver GPS Updates
-      ↓
-Redis GEO
-      ↓
-WebSocket Publisher
-      ↓
-Frontend Map Dashboard
-```
-
-## 📡 STEP 1 — WEBSOCKET BACKEND
-
-WebSocket Config
-```java
-@Configuration
-@EnableWebSocketMessageBroker
-public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
-
-    @Override
-    public void registerStompEndpoints(StompEndpointRegistry registry) {
-        registry.addEndpoint("/ws").setAllowedOriginPatterns("*").withSockJS();
-    }
-
-    @Override
-    public void configureMessageBroker(MessageBrokerRegistry registry) {
-        registry.enableSimpleBroker("/topic");
-        registry.setApplicationDestinationPrefixes("/app");
-    }
-}
-```
-
-## 🚗 STEP 2 — DRIVER STREAM SERVICE
-```java
-@Service
-public class DriverStreamService {
-
-    @Autowired
-    private SimpMessagingTemplate messagingTemplate;
-
-    public void publishDriverLocation(Long driverId, double lat, double lon) {
-
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("driverId", driverId);
-        payload.put("lat", lat);
-        payload.put("lon", lon);
-
-        messagingTemplate.convertAndSend("/topic/drivers", payload);
-    }
-}
-```
-
-## 📍STEP 3 — DRIVER UPDATE FLOW
-```java
-public void updateDriverLocation(Long id, double lat, double lon) {
-
-    // 1. Redis update
-    redisGeo.update(id, lat, lon);
-
-    // 2. Push to dashboard
-    streamService.publishDriverLocation(id, lat, lon);
-}
-```
-
-## 🖥️ STEP 4 — FRONTEND DASHBOARD (LIVE MAP)
-
-HTML + Leaflet + WebSocket
-```html
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Uber Control Panel</title>
-
-  <link rel="stylesheet"
-        href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/sockjs-client/dist/sockjs.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/stompjs/lib/stomp.min.js"></script>
-
-  <style>
-    #map { height: 100vh; }
-  </style>
-</head>
-
-<body>
-
-<div id="map"></div>
-
-<script>
-
-const map = L.map('map').setView([17.385, 78.486], 13);
-
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19
-}).addTo(map);
-
-const markers = {};
-
-// WebSocket connect
-const socket = new SockJS('/ws');
-const stomp = Stomp.over(socket);
-
-stomp.connect({}, function () {
-
-    stomp.subscribe('/topic/drivers', function (msg) {
-
-        const data = JSON.parse(msg.body);
-
-        const id = data.driverId;
-
-        if (markers[id]) {
-            map.removeLayer(markers[id]);
-        }
-
-        markers[id] = L.circleMarker([data.lat, data.lon], {
-            radius: 6,
-            color: "blue"
-        }).addTo(map)
-        .bindPopup("Driver " + id);
-    });
-});
-
-</script>
-
-</body>
-</html>
-```
-
-## STEP 5 — ADD SURGE HEATMAP (OPTIONAL ADVANCED)
-You can overlay:
-- red zones = high demand
-- green zones = low demand
 
 Example:
-```JavaScript
-L.circle([17.39, 78.48], {
-  radius: 500,
-  color: "red",
-  fillOpacity: 0.2
-}).addTo(map);
+
+```sql
+SELECT
+    id,
+    store_id,
+    ST_AsGeoJSON(polygon)
+FROM delivery_zone
+WHERE store_id = ?;
 ```
+
+This is extremely convenient because the frontend already understands GeoJSON.
+
+---
+
+## Render Saved Polygon
+
+Frontend:
+
+```javascript
+fetch("/api/stores/100/delivery-area")
+    .then(response => response.json())
+    .then(data => {
+
+        L.geoJSON(data)
+            .addTo(map);
+    });
+```
+
+Or manually:
+
+```javascript
+L.polygon([
+    [17.385, 78.486],
+    [17.390, 78.492],
+    [17.380, 78.500]
+]).addTo(map);
+```
+
+---
+
+## ST_Contains
+
+PostGIS provides:
+
+```sql
+ST_Contains()
+```
+
+Example:
+
+```sql
+SELECT *
+FROM delivery_zone
+WHERE ST_Contains(
+    polygon,
+    ST_SetSRID(
+        ST_Point(78.489, 17.387),
+        4326
+    )
+);
+```
+
+Notice:
+
+```text
+ST_Point(longitude, latitude)
+```
+
+---
+
+##  ST_Within
+
+The reverse relationship can be expressed using:
+
+```sql
+ST_Within(point, polygon)
+```
+
+Example:
+
+```sql
+SELECT *
+FROM delivery_zone
+WHERE ST_Within(
+    ST_SetSRID(
+        ST_Point(78.489, 17.387),
+        4326
+    ),
+    polygon
+);
+```
+
+---
+
+## ST_Covers
+
+There is an important boundary difference.
+
+`ST_Contains` can exclude points lying exactly on the polygon boundary.
+
+For delivery eligibility, you may prefer:
+
+```sql
+ST_Covers(polygon, point)
+```
+
+if your business rule says:
+
+> Boundary locations are deliverable.
+
+Therefore choose the spatial predicate according to the actual business requirement.
+
+---
