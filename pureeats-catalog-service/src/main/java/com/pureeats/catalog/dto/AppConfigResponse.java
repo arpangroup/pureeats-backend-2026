@@ -21,6 +21,10 @@ public record AppConfigResponse(
         List<DeliveryInstructionOptionDto> deliveryInstructionOptions,
         String mapProvider,
         String orderStatusUpdateMode,
-        int orderStatusPollIntervalMs
+        int orderStatusPollIntervalMs,
+        List<String> locationResolutionAuthenticatedPriority,
+        List<String> locationResolutionGuestPriority,
+        String locationResolutionAuthenticatedFallbackLabel,
+        String locationResolutionGuestFallbackLabel
 ) {
 }

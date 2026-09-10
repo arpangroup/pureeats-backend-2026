@@ -14,6 +14,7 @@ public class AuthSecurityProperties {
     private final Session session = new Session();
     private final RateLimit rateLimit = new RateLimit();
     private final Geolocation geolocation = new Geolocation();
+    private final ReverseGeocoding reverseGeocoding = new ReverseGeocoding();
 
     public Otp getOtp() {
         return otp;
@@ -29,6 +30,10 @@ public class AuthSecurityProperties {
 
     public Geolocation getGeolocation() {
         return geolocation;
+    }
+
+    public ReverseGeocoding getReverseGeocoding() {
+        return reverseGeocoding;
     }
 
     public static class Otp {
@@ -184,6 +189,46 @@ public class AuthSecurityProperties {
         private boolean enabled = true;
         private String provider = "ip-api";
         private int timeoutMs = 2000;
+        private int cacheTtlMinutes = 60;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getProvider() {
+            return provider;
+        }
+
+        public void setProvider(String provider) {
+            this.provider = provider;
+        }
+
+        public int getTimeoutMs() {
+            return timeoutMs;
+        }
+
+        public void setTimeoutMs(int timeoutMs) {
+            this.timeoutMs = timeoutMs;
+        }
+
+        public int getCacheTtlMinutes() {
+            return cacheTtlMinutes;
+        }
+
+        public void setCacheTtlMinutes(int cacheTtlMinutes) {
+            this.cacheTtlMinutes = cacheTtlMinutes;
+        }
+    }
+
+    /** A separate concern from {@link Geolocation} (IP -> coords) even though it shares the same shape - this is coords -> address, has its own provider (Nominatim by default, no API key), and its own cache since the cache key (rounded lat/lon) is nothing like an IP address. */
+    public static class ReverseGeocoding {
+        private boolean enabled = true;
+        private String provider = "nominatim";
+        private int timeoutMs = 3000;
         private int cacheTtlMinutes = 60;
 
         public boolean isEnabled() {

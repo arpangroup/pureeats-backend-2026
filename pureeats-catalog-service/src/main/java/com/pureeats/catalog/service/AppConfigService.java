@@ -41,7 +41,9 @@ public class AppConfigService {
                 config.audioSearchEnabled(), config.promoSliderEnabled(), config.topPicksEnabled(), config.recommendedItemsEnabled(),
                 config.restaurantListLayout(), config.recommendedItemsLayout(), config.restaurantItemsLayout(),
                 config.deliveryInstructionMode(), config.deliveryInstructionOptions(), config.mapProvider(),
-                config.orderStatusUpdateMode(), config.orderStatusPollIntervalMs());
+                config.orderStatusUpdateMode(), config.orderStatusPollIntervalMs(),
+                config.locationResolutionAuthenticatedPriority(), config.locationResolutionGuestPriority(),
+                config.locationResolutionAuthenticatedFallbackLabel(), config.locationResolutionGuestFallbackLabel());
     }
 
     @Transactional(readOnly = true)
@@ -52,7 +54,9 @@ public class AppConfigService {
                 config.audioSearchEnabled(), config.promoSliderEnabled(), config.topPicksEnabled(), config.recommendedItemsEnabled(),
                 config.restaurantListLayout(), config.recommendedItemsLayout(), config.restaurantItemsLayout(),
                 config.deliveryInstructionMode(), config.deliveryInstructionOptions(), config.mapProvider(),
-                config.orderStatusUpdateMode(), config.orderStatusPollIntervalMs());
+                config.orderStatusUpdateMode(), config.orderStatusPollIntervalMs(),
+                config.locationResolutionAuthenticatedPriority(), config.locationResolutionGuestPriority(),
+                config.locationResolutionAuthenticatedFallbackLabel(), config.locationResolutionGuestFallbackLabel());
     }
 
     @Transactional
@@ -97,12 +101,15 @@ public class AppConfigService {
                 new DeliveryInstructionOptionDto("LEAVE_WITH_SECURITY", "Leave with security", "UserCheck"));
     }
 
+    /** Mirrors defaultLocationResolutionConfig in the customer app's src/config/locationResolution.ts — keep the two in sync. */
     private static AppConfigAdminRequest defaults() {
         return new AppConfigAdminRequest("0.0.0", "0.0.0", null, null, List.of(), false,
                 false, true, true, true,
                 "TWO_COLUMN", "TWO_COLUMN", "TWO_COLUMN",
                 "QUICK_OPTIONS", defaultDeliveryInstructionOptions(), "OSM",
-                "POLL", 8000);
+                "POLL", 8000,
+                List.of("saved", "gps", "ip"), List.of("gps", "ip"),
+                "Set your location", "Other");
     }
 
     /** Fills any null field (a row stored before this field existed) with its default, so an old/partial stored blob never trips a NPE unboxing a primitive in AppConfigResponse/AppConfigAdminResponse. */
@@ -123,7 +130,11 @@ public class AppConfigService {
                 config.deliveryInstructionOptions() != null ? config.deliveryInstructionOptions() : d.deliveryInstructionOptions(),
                 config.mapProvider() != null ? config.mapProvider() : d.mapProvider(),
                 config.orderStatusUpdateMode() != null ? config.orderStatusUpdateMode() : d.orderStatusUpdateMode(),
-                config.orderStatusPollIntervalMs() != null ? config.orderStatusPollIntervalMs() : d.orderStatusPollIntervalMs());
+                config.orderStatusPollIntervalMs() != null ? config.orderStatusPollIntervalMs() : d.orderStatusPollIntervalMs(),
+                config.locationResolutionAuthenticatedPriority() != null ? config.locationResolutionAuthenticatedPriority() : d.locationResolutionAuthenticatedPriority(),
+                config.locationResolutionGuestPriority() != null ? config.locationResolutionGuestPriority() : d.locationResolutionGuestPriority(),
+                config.locationResolutionAuthenticatedFallbackLabel() != null ? config.locationResolutionAuthenticatedFallbackLabel() : d.locationResolutionAuthenticatedFallbackLabel(),
+                config.locationResolutionGuestFallbackLabel() != null ? config.locationResolutionGuestFallbackLabel() : d.locationResolutionGuestFallbackLabel());
     }
 
     private AppConfigAdminRequest parseJson(String json) {

@@ -112,6 +112,11 @@ security:
     provider: ${GEOLOCATION_PROVIDER:ip-api}
     timeout-ms: ${GEOLOCATION_TIMEOUT_MS:2000}
     cache-ttl-minutes: ${GEOLOCATION_CACHE_TTL_MINUTES:60}
+  reverse-geocoding:
+    enabled: ${REVERSE_GEOCODING_ENABLED:true}
+    provider: ${REVERSE_GEOCODING_PROVIDER:nominatim}
+    timeout-ms: ${REVERSE_GEOCODING_TIMEOUT_MS:3000}
+    cache-ttl-minutes: ${REVERSE_GEOCODING_CACHE_TTL_MINUTES:60}
 
 notification:
   email-provider: ${NOTIFICATION_EMAIL_PROVIDER:smtp} # console,smtp
