@@ -65,3 +65,6 @@ application-local.properties
 
 ### Runtime data from local verification runs ###
 *.pid
+
+
+firebase-service-account.json
