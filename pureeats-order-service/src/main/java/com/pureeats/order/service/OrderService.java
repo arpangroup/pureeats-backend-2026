@@ -14,6 +14,8 @@ import com.pureeats.domain.entity.*;
 import com.pureeats.domain.common.response.PageResponse;
 import com.pureeats.domain.enums.DeliveryType;
 import com.pureeats.domain.enums.OrderStatusCode;
+import com.pureeats.domain.enums.PaymentMode;
+import com.pureeats.order.service.payment.RazorpayService;
 import com.pureeats.notification.enums.NotificationRecipientRole;
 import com.pureeats.media.storage.MediaUrlResolver;
 import com.pureeats.order.dto.*;
@@ -66,6 +68,7 @@ public class OrderService {
     private final DeliveryGuyDetailRepository deliveryGuyDetailRepository;
     private final CartValidationService cartValidationService;
     private final MediaUrlResolver mediaUrlResolver;
+    private final RazorpayService razorpayService;
 
     @Transactional
     public OrderResponse placeOrder(Long userId, PlaceOrderRequest request) {
@@ -157,6 +160,27 @@ public class OrderService {
                 restaurantCharge, restaurant.getRestaurantCharges(), deliveryCharge, deliveryChargeResult.basis(),
                 deliveryChargeResult.distanceKm(), restaurant.getLatitude(), restaurant.getLongitude(),
                 address.getLatitude(), address.getLongitude())));
+
+        if (request.paymentMode() == PaymentMode.RAZORPAY) {
+            // The amount Checkout was opened for (CreateRazorpayOrderRequest.amount, see
+            // RazorpayController) is never trusted here — `payable` above is computed fresh from
+            // the cart, same as every other payment mode. What actually gates persisting the order
+            // is: (1) the signature proves this payment_id/order_id pair really came from Razorpay,
+            // and (2) the amount Razorpay actually captured, fetched from Razorpay's own API, covers
+            // what this order now costs. A customer who paid less than the freshly-computed payable
+            // (a stale quote, a tampered client) gets rejected here rather than an order that's
+            // short-paid.
+            if (!razorpayService.verifySignature(request.razorpayOrderId(), request.razorpayPaymentId(), request.razorpaySignature())) {
+                log.warn("Rejected order for user {}: Razorpay signature did not verify", userId);
+                throw new BadRequestException("Payment could not be verified — please try again");
+            }
+            BigDecimal capturedAmount = razorpayService.fetchCapturedAmount(request.razorpayPaymentId());
+            if (capturedAmount.compareTo(payable) < 0) {
+                log.warn("Rejected order for user {}: Razorpay captured {} but order total is {}", userId, capturedAmount, payable);
+                throw new BadRequestException("The captured payment does not cover this order's total");
+            }
+            order.setTransactionId(request.razorpayPaymentId());
+        }
 
         boolean autoAccept = Boolean.TRUE.equals(restaurant.getAutoAcceptable());
         order.setOrderstatusId(orderStatusService.idFor(autoAccept ? OrderStatusCode.RESTAURANT_ACCEPTED : OrderStatusCode.PLACED));

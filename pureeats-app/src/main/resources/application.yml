@@ -62,6 +62,13 @@ pureeats:
       max-orders: ${ORDER_RATE_LIMIT_MAX_ORDERS:3}
   commission:
     basis: ${COMMISSION_BASIS:FULL_ORDER}
+  settings:
+    # When set, PUT /api/v1/admin/settings and PUT /api/v1/admin/app-config both require this exact
+    # value as confirmationPassword before applying any change - the admin panel's confirmation
+    # dialog gates on it (see AppConfigAdminResponse#settingsConfirmationEnabled, computed as
+    # "is this non-blank" - there's no admin-panel UI to set/change it, only this env var).
+    # Left blank, the feature is off and no confirmation password is required.
+    confirmation-password: ${SETTINGS_CONFIRMATION_PASSWORD:123456}
   # Image upload - local disk today; swap to an S3 implementation of MediaStorage/MediaUrlResolver
   # later by changing `provider` alone (see pureeats-media-service).
   media:
