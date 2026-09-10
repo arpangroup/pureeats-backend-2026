@@ -21,6 +21,8 @@ public record AppConfigAdminRequest(
         Boolean promoSliderEnabled,
         Boolean topPicksEnabled,
         Boolean recommendedItemsEnabled,
+        /** Home page's horizontal cuisine/category icon row (categories fetched from GET /restaurant-categories) — same "hide the whole section, not just its content" toggle as the other three home-page sections above. */
+        Boolean cuisineCategorySectionEnabled,
         String restaurantListLayout,
         String recommendedItemsLayout,
         String restaurantItemsLayout,

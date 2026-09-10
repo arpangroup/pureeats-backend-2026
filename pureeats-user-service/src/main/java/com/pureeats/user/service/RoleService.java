@@ -79,6 +79,24 @@ public class RoleService {
                 .orElse(false);
     }
 
+    /** Every distinct user id holding at least one of the given roles - e.g. every ADMIN/SUPER_ADMIN/EMPLOYEE, to fan a platform-operations alert out to all of them (see OrderNotificationService#notifyAdminsOfNewOrder). */
+    @Transactional(readOnly = true)
+    public List<Long> findUserIdsInAnyRole(List<com.pureeats.domain.enums.Role> roles) {
+        List<Long> roleIds = roles.stream()
+                .map(role -> roleRepository.findByName(role.legacyName()))
+                .filter(java.util.Optional::isPresent)
+                .map(java.util.Optional::get)
+                .map(Role::getId)
+                .toList();
+        if (roleIds.isEmpty()) {
+            return List.of();
+        }
+        return modelHasRoleRepository.findByModelTypeAndRoleIdIn(USER_MORPH_TYPE, roleIds).stream()
+                .map(ModelHasRole::getModelId)
+                .distinct()
+                .toList();
+    }
+
     /**
      * Self-registration (password signup, email signup) must never be reachable from a session
      * that already holds an elevated role - {@code SUPER_ADMIN} is seeded once at startup and

@@ -37,7 +37,7 @@ public class NotificationController {
     public ApiResponse<Void> savePushToken(@Valid @RequestBody SavePushTokenRequest request) {
         Long userId = CurrentUserContext.get();
         log.info("Saving push token for user {}", userId);
-        pushTokenService.save(userId, request.token());
+        pushTokenService.save(userId, request.token(), request.audience());
         return ApiResponse.success("Push token saved", null);
     }
 

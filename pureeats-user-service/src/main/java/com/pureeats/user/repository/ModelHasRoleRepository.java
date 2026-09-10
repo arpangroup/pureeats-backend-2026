@@ -8,5 +8,7 @@ import java.util.List;
 public interface ModelHasRoleRepository extends JpaRepository<ModelHasRole, ModelHasRole.ModelHasRoleId> {
     List<ModelHasRole> findByModelTypeAndModelId(String modelType, Long modelId);
 
+    List<ModelHasRole> findByModelTypeAndRoleIdIn(String modelType, List<Long> roleIds);
+
     boolean existsByRoleId(Long roleId);
 }

@@ -13,12 +13,15 @@ import java.util.Map;
  * POST .../topics/{topic}/subscribe) and has no notion of a single "recipient" to attach a bell
  * entry to, so it skips IN_APP entirely.
  * <p>
- * title/body are optional - blank falls back to generic test copy. imageUrl/clickAction/actions are
- * the web-specific extras (see FcmSender) - all optional, a plain title+body push if omitted.
+ * title/body are optional - blank falls back to generic test copy, and are ignored entirely when
+ * {@code silent} is true (see PushDisplayMode#SILENT) - a silent test only ever sends {@code data}.
+ * imageUrl/clickAction/actions are the VISIBLE-only web extras (see FcmSender) - all optional, a
+ * plain title+body push if omitted.
  */
 public record TestPushRequest(
         Long userId,
         String topic,
+        boolean silent,
         String title,
         String body,
         String imageUrl,

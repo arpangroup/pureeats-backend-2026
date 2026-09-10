@@ -12,6 +12,7 @@ import com.google.firebase.messaging.WebpushFcmOptions;
 import com.google.firebase.messaging.WebpushNotification;
 import com.pureeats.notification.dto.FcmAction;
 import com.pureeats.notification.dto.FcmPushRequest;
+import com.pureeats.notification.enums.PushDisplayMode;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -64,26 +65,31 @@ public class FcmSender {
         }
     }
 
-    /** Convenience overload for the common case - a single device token, plain title/body, an optional {@code type} that lands in the data payload (see NotificationType#TEST's caller for why this must never rely on a template). */
+    /** Convenience overload for the common case - a single device token, a VISIBLE plain title/body, an optional {@code type} that lands in the data payload (see NotificationType#TEST's caller for why this must never rely on a template). */
     public void send(String token, String title, String body, String type) {
-        send(new FcmPushRequest(token, null, title, body, null,
+        send(FcmPushRequest.visible(token, null, title, body, null,
                 type != null ? Map.of("type", type) : Map.of(), null, null));
     }
 
     /**
      * Sends exactly one FCM message per call, to either {@code request.token()} (one device) or
-     * {@code request.topic()} (every device subscribed to it) - never both. Builds three parallel
-     * views of the same content: a plain {@link Notification} (image only - the generic
-     * cross-platform fallback), a top-level data payload (delivered to the app's own code on every
-     * platform, display or not), and a {@link WebpushConfig} carrying the full web-specific
-     * presentation (image, click-through link, action buttons) - browsers use the richer webpush
-     * block when present, so nothing is lost by also setting the plain one.
+     * {@code request.topic()} (every device subscribed to it) - never both.
+     * <p>
+     * {@link PushDisplayMode#VISIBLE} builds three parallel views of the same content: a plain
+     * {@link Notification} (image only - the generic cross-platform fallback), a top-level data
+     * payload (delivered to the app's own code on every platform, display or not), and a {@link
+     * WebpushConfig} carrying the full web-specific presentation (image, click-through link, action
+     * buttons) - browsers use the richer webpush block when present, so nothing is lost by also
+     * setting the plain one. {@link PushDisplayMode#SILENT} skips both notification blocks entirely
+     * - only {@code data} goes out, so nothing pops up on any platform; see that enum's doc for why
+     * this needs to be a real, separate code path rather than "visible with an empty title."
      */
     public void send(FcmPushRequest request) {
-        Map<String, String> data = buildDataPayload(request);
+        boolean silent = request.displayMode() == PushDisplayMode.SILENT;
+        Map<String, String> data = silent ? new LinkedHashMap<>(request.data()) : buildDataPayload(request);
         if (!initialized) {
-            log.info("[push-stub] would send to {}={} title='{}' body='{}' data={}",
-                    request.token() != null ? "token" : "topic", request.token() != null ? request.token() : request.topic(),
+            log.info("[push-stub] would send ({}) to {}={} title='{}' body='{}' data={}",
+                    request.displayMode(), request.token() != null ? "token" : "topic", request.token() != null ? request.token() : request.topic(),
                     request.title(), request.body(), data);
             return;
         }
@@ -92,12 +98,7 @@ public class FcmSender {
             return;
         }
 
-        Notification.Builder notification = Notification.builder().setTitle(request.title()).setBody(request.body());
-        if (request.imageUrl() != null && !request.imageUrl().isBlank()) {
-            notification.setImage(request.imageUrl());
-        }
-
-        Message.Builder message = Message.builder().setNotification(notification.build());
+        Message.Builder message = Message.builder();
         if (request.token() != null) {
             message.setToken(request.token());
         } else {
@@ -106,11 +107,18 @@ public class FcmSender {
         if (!data.isEmpty()) {
             message.putAllData(data);
         }
-        message.setWebpushConfig(buildWebpushConfig(request));
+        if (!silent) {
+            Notification.Builder notification = Notification.builder().setTitle(request.title()).setBody(request.body());
+            if (request.imageUrl() != null && !request.imageUrl().isBlank()) {
+                notification.setImage(request.imageUrl());
+            }
+            message.setNotification(notification.build());
+            message.setWebpushConfig(buildWebpushConfig(request));
+        }
 
         try {
             String id = FirebaseMessaging.getInstance().send(message.build());
-            log.debug("Sent FCM message {} to {}", id, request.token() != null ? request.token() : "topic:" + request.topic());
+            log.debug("Sent FCM message {} ({}) to {}", id, request.displayMode(), request.token() != null ? request.token() : "topic:" + request.topic());
         } catch (Exception e) {
             log.warn("Failed to send FCM push to {}", request.token() != null ? request.token() : "topic:" + request.topic(), e);
         }

@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -66,7 +67,8 @@ public class StoreOwnerOrderService {
         log.info("Order {} transitioned PLACED -> RESTAURANT_ACCEPTED by store owner {}", orderId, ownerUserId);
 
         orderNotificationService.notify(NotificationRecipientRole.CUSTOMER, order.getUserId().longValue(), "Order accepted",
-                "Your order #" + order.getUniqueOrderId() + " has been accepted by the restaurant");
+                "Your order #" + order.getUniqueOrderId() + " has been accepted by the restaurant",
+                Map.of("orderId", order.getId(), "status", OrderStatusCode.RESTAURANT_ACCEPTED.name()));
         return orderService.toResponse(order);
     }
 
@@ -124,7 +126,8 @@ public class StoreOwnerOrderService {
         orderStatusLogService.record(order.getId(), current, OrderStatusCode.CANCELLED, "STORE_OWNER", ownerUserId, null);
         log.info("Order {} transitioned {} -> CANCELLED by store owner {}", orderId, current, ownerUserId);
         orderNotificationService.notify(NotificationRecipientRole.CUSTOMER, order.getUserId().longValue(), "Order cancelled",
-                "Your order #" + order.getUniqueOrderId() + " was cancelled by the restaurant");
+                "Your order #" + order.getUniqueOrderId() + " was cancelled by the restaurant",
+                Map.of("orderId", order.getId(), "status", OrderStatusCode.CANCELLED.name()));
         return orderService.toResponse(order);
     }
 

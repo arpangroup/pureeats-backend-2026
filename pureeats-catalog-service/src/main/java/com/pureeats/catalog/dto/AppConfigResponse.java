@@ -14,6 +14,7 @@ public record AppConfigResponse(
         boolean promoSliderEnabled,
         boolean topPicksEnabled,
         boolean recommendedItemsEnabled,
+        boolean cuisineCategorySectionEnabled,
         String restaurantListLayout,
         String recommendedItemsLayout,
         String restaurantItemsLayout,

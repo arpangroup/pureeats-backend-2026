@@ -24,11 +24,12 @@ import java.util.Map;
  * fixed per {@link com.pureeats.notification.enums.NotificationType}.
  * <p>
  * {@code params} may additionally carry {@code imageUrl} (String), {@code clickAction} (String -
- * the link opened on click), {@code data} ({@code Map<String,String>}) and {@code actions}
- * ({@code List<FcmAction>}) - all optional, since every existing caller only ever sets
- * title/body/category. These are same-JVM values a caller builds directly (never deserialized from
- * JSON at this layer), so they're cast rather than parsed; a caller passing the wrong shape is a
- * programming error, not a runtime input to guard against.
+ * the link opened on click), {@code data} ({@code Map<String,String>}), {@code actions}
+ * ({@code List<FcmAction>}) and {@code silent} (Boolean - see {@link
+ * com.pureeats.notification.enums.PushDisplayMode#SILENT}) - all optional, since every existing
+ * caller only ever sets title/body/category. These are same-JVM values a caller builds directly
+ * (never deserialized from JSON at this layer), so they're cast rather than parsed; a caller
+ * passing the wrong shape is a programming error, not a runtime input to guard against.
  */
 @Service
 @RequiredArgsConstructor
@@ -50,6 +51,7 @@ public class PushNotificationSender implements ChannelNotificationSender {
             log.warn("Cannot send PUSH notification for type {} - no userId on the request", request.type());
             return NotificationResult.failure("No userId to resolve push tokens for");
         }
+        boolean silent = Boolean.TRUE.equals(request.params().get("silent"));
         String title = String.valueOf(request.params().getOrDefault("title", request.type().name()));
         String body = String.valueOf(request.params().getOrDefault("body", ""));
         String category = request.params().get("category") != null ? String.valueOf(request.params().get("category")) : null;
@@ -70,9 +72,12 @@ public class PushNotificationSender implements ChannelNotificationSender {
             return NotificationResult.failure("No active push tokens registered for this user");
         }
         for (PushToken token : tokens) {
-            fcmSender.send(new FcmPushRequest(token.getToken(), null, title, body, imageUrl, data, clickAction, actions));
+            FcmPushRequest fcmRequest = silent
+                    ? FcmPushRequest.silent(token.getToken(), null, data)
+                    : FcmPushRequest.visible(token.getToken(), null, title, body, imageUrl, data, clickAction, actions);
+            fcmSender.send(fcmRequest);
         }
-        log.info("Dispatched PUSH notification ({}) to {} device(s) for user {}", request.type(), tokens.size(), request.userId());
+        log.info("Dispatched {} PUSH notification ({}) to {} device(s) for user {}", silent ? "silent" : "visible", request.type(), tokens.size(), request.userId());
         return NotificationResult.success(tokens.size() + " device(s)");
     }
 

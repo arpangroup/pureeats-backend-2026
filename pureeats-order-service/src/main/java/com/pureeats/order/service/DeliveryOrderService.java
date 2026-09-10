@@ -20,7 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -90,7 +92,8 @@ public class DeliveryOrderService {
         log.info("Order {} transitioned {} -> RIDER_ASSIGNED (rider {} self-accepted)", orderId, from, riderUserId);
 
         orderNotificationService.notify(NotificationRecipientRole.CUSTOMER, order.getUserId().longValue(), "Rider assigned",
-                "A delivery partner has been assigned to order #" + order.getUniqueOrderId());
+                "A delivery partner has been assigned to order #" + order.getUniqueOrderId(),
+                riderAssignedData(order.getId(), rider, riderUserId));
         return orderService.toResponse(order);
     }
 
@@ -98,7 +101,7 @@ public class DeliveryOrderService {
     @Transactional
     public OrderResponse assignDriverAsAdmin(Long adminUserId, Long orderId, Long riderUserId) {
         log.info("Admin {} assigning rider {} to order {}", adminUserId, riderUserId, orderId);
-        riderProfile(riderUserId);
+        DeliveryGuyDetail rider = riderProfile(riderUserId);
         Order order = orderService.findOrThrow(orderId);
         if (acceptDeliveryRepository.findByOrderId(order.getId().intValue()).isPresent()) {
             log.warn("Rejected admin driver assignment for order {}: already assigned to a rider", orderId);
@@ -120,7 +123,8 @@ public class DeliveryOrderService {
         log.info("Order {} transitioned {} -> RIDER_ASSIGNED (rider {} assigned by admin {})", orderId, from, riderUserId, adminUserId);
 
         orderNotificationService.notify(NotificationRecipientRole.CUSTOMER, order.getUserId().longValue(), "Rider assigned",
-                "A delivery partner has been assigned to order #" + order.getUniqueOrderId());
+                "A delivery partner has been assigned to order #" + order.getUniqueOrderId(),
+                riderAssignedData(order.getId(), rider, riderUserId));
         orderNotificationService.notify(NotificationRecipientRole.DELIVERY_PARTNER, riderUserId, "New delivery assigned",
                 "You've been assigned to deliver order #" + order.getUniqueOrderId());
         return orderService.toResponse(order);
@@ -185,7 +189,8 @@ public class DeliveryOrderService {
         }
 
         orderNotificationService.notify(NotificationRecipientRole.CUSTOMER, order.getUserId().longValue(), "Order delivered",
-                "Your order #" + order.getUniqueOrderId() + " has been delivered. Enjoy your meal!");
+                "Your order #" + order.getUniqueOrderId() + " has been delivered. Enjoy your meal!",
+                Map.of("orderId", order.getId(), "status", OrderStatusCode.DELIVERED.name()));
         return orderService.toResponse(order);
     }
 
@@ -284,6 +289,26 @@ public class DeliveryOrderService {
             throw new ForbiddenException("This order is not assigned to you");
         }
         return order;
+    }
+
+    /**
+     * The extra {@code data} riding alongside a silent "Rider assigned" push (see
+     * OrderNotificationService#notify(role, userId, title, body, data)) - lets the customer's
+     * tracking page/home banner show who's coming without a follow-up fetch. {@code riderPhone}
+     * comes from {@link User}, everything else from the already-loaded {@link DeliveryGuyDetail} -
+     * both null-safe since a profile can be created without every optional field filled in yet.
+     */
+    private Map<String, Object> riderAssignedData(Long orderId, DeliveryGuyDetail rider, Long riderUserId) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("orderId", orderId);
+        data.put("status", OrderStatusCode.RIDER_ASSIGNED.name());
+        data.put("riderId", riderUserId);
+        if (rider.getName() != null) data.put("riderName", rider.getName());
+        if (rider.getPhoto() != null) data.put("riderPhoto", rider.getPhoto());
+        if (rider.getVehicleNumber() != null) data.put("riderVehicleNumber", rider.getVehicleNumber());
+        if (rider.getRating() != null) data.put("riderRating", rider.getRating());
+        userRepository.findById(riderUserId).map(User::getPhone).ifPresent(phone -> data.put("riderPhone", phone));
+        return data;
     }
 
     private DeliveryGuyDetail riderProfile(Long riderUserId) {

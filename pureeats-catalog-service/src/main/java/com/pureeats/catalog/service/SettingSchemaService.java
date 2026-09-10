@@ -20,11 +20,12 @@ import java.util.stream.Collectors;
  * registry, so a value can never be silently saved for a setting the schema doesn't know about
  * either.
  *
- * Excluded on purpose: Razorpay credentials, Firebase web config, and the Google Maps API key.
- * Those live as typed fields on {@link AppConfigService}'s structured blob instead of this generic
- * key/value store (see docs in the customer app's src/config/locationResolution.ts and
- * AppConfigService itself) — they need type safety (a write-only secret, structured nested
- * config) this generic string-keyed registry deliberately doesn't provide.
+ * Excluded on purpose: Razorpay credentials, Firebase web config, the Google Maps API key, and the
+ * home page's section-visibility toggles (promo slider / top picks / recommended / cuisine
+ * category). Those live as typed fields on {@link AppConfigService}'s structured blob instead of
+ * this generic key/value store (see docs in the customer app's src/config/locationResolution.ts and
+ * AppConfigService itself) — they need type safety (a write-only secret, structured nested config)
+ * this generic string-keyed registry deliberately doesn't provide.
  */
 @Service
 public class SettingSchemaService {
@@ -285,9 +286,11 @@ public class SettingSchemaService {
                         field("default_country_code", "Default country code on phone field", "text", "+91").placeholder("+91")
                 )),
                 group("Browsing & merchandising", "Sparkles", List.of(
-                        field("promo_slider", "Promo slider", "boolean", "true")
-                                .info("Shows the rotating promotional banner carousel on the home screen."),
-                        field("recommended_item_slider", "Recommended item slider", "boolean", "true"),
+                        // Promo slider / Top picks / Recommended / Cuisine category section visibility
+                        // live on AppConfig instead (see SectionVisibilityPanel in the admin panel,
+                        // same "typed field, not this generic store" reasoning as Razorpay/Firebase/
+                        // Google Maps above) - they used to be duplicated here as generic keys that
+                        // silently did nothing, since the customer app never read them.
                         field("veg_nonveg_badge", "Veg/Non-veg badge", "boolean", "true"),
                         field("show_discount_percentage", "Show product discount percentage", "boolean", "true"),
                         field("hide_zero_price", "Hide item price when zero", "boolean", "false")

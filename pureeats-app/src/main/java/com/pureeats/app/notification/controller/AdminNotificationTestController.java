@@ -74,7 +74,7 @@ public class AdminNotificationTestController {
     }
 
     @PostMapping("/test/push")
-    @Operation(summary = "Send a test push - to a user id (fans out to every device they've registered, and records it in their notification bell) or to a topic (every subscribed device, no bell entry). Exactly one of userId/topic must be set.")
+    @Operation(summary = "Send a test push - to a user id (fans out to every device they've registered, and records it in their notification bell unless silent) or to a topic (every subscribed device, never a bell entry). Exactly one of userId/topic must be set.")
     public ApiResponse<Void> sendTestPush(@Valid @RequestBody TestPushRequest request) {
         if ((request.userId() == null) == (request.topic() == null)) {
             throw new BadRequestException("Set exactly one of userId or topic, not both and not neither");
@@ -83,22 +83,30 @@ public class AdminNotificationTestController {
         String body = request.body() != null && !request.body().isBlank() ? request.body() : "This is a test push notification sent from the admin panel.";
 
         if (request.topic() != null) {
-            log.info("Admin sending test push notification to topic '{}'", request.topic());
-            fcmSender.send(new FcmPushRequest(null, request.topic(), title, body,
-                    request.imageUrl(), request.data(), request.clickAction(), request.actions()));
+            log.info("Admin sending {} test push notification to topic '{}'", request.silent() ? "silent" : "visible", request.topic());
+            FcmPushRequest fcmRequest = request.silent()
+                    ? FcmPushRequest.silent(null, request.topic(), request.data())
+                    : FcmPushRequest.visible(null, request.topic(), title, body, request.imageUrl(), request.data(), request.clickAction(), request.actions());
+            fcmSender.send(fcmRequest);
             return ApiResponse.success("Test push notification sent to topic '" + request.topic() + "'", null);
         }
 
-        log.info("Admin sending test push notification to user {}", request.userId());
-        Map<String, Object> params = new java.util.HashMap<>(Map.of("title", title, "body", body));
-        if (request.imageUrl() != null) params.put("imageUrl", request.imageUrl());
-        if (request.clickAction() != null) params.put("clickAction", request.clickAction());
+        log.info("Admin sending {} test push notification to user {}", request.silent() ? "silent" : "visible", request.userId());
+        Map<String, Object> params = new java.util.HashMap<>();
+        if (request.silent()) {
+            params.put("silent", true);
+        } else {
+            params.put("title", title);
+            params.put("body", body);
+            if (request.imageUrl() != null) params.put("imageUrl", request.imageUrl());
+            if (request.clickAction() != null) params.put("clickAction", request.clickAction());
+            if (request.actions() != null && !request.actions().isEmpty()) params.put("actions", request.actions());
+        }
         if (request.data() != null && !request.data().isEmpty()) params.put("data", request.data());
-        if (request.actions() != null && !request.actions().isEmpty()) params.put("actions", request.actions());
 
         Map<NotificationChannel, NotificationResult> results = notificationService.sendToChannels(
                 NotificationType.TEST, null, request.userId(), params,
-                Set.of(NotificationChannel.PUSH, NotificationChannel.IN_APP));
+                request.silent() ? Set.of(NotificationChannel.PUSH) : Set.of(NotificationChannel.PUSH, NotificationChannel.IN_APP));
         NotificationResult pushResult = results.get(NotificationChannel.PUSH);
         if (pushResult == null || !pushResult.success()) {
             String reason = pushResult != null ? pushResult.failureReason() : "unknown error";
