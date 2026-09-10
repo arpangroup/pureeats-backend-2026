@@ -17,6 +17,10 @@ public record PlaceOrderRequest(
         @NotNull DeliveryType deliveryType,
         String couponCode,
         String orderComment,
-        BigDecimal driverTipAmount
+        BigDecimal driverTipAmount,
+        /** Only present (and only checked) when paymentMode is RAZORPAY — the three values Razorpay Checkout's success callback hands back. All three must verify (see OrderService#placeOrder) before a RAZORPAY order is ever persisted. */
+        String razorpayOrderId,
+        String razorpayPaymentId,
+        String razorpaySignature
 ) {
 }

@@ -2,7 +2,9 @@ package com.pureeats.catalog.service;
 
 import com.pureeats.catalog.dto.*;
 import com.pureeats.catalog.repository.*;
+import com.pureeats.domain.common.exception.BadRequestException;
 import com.pureeats.domain.common.exception.ResourceNotFoundException;
+import com.pureeats.domain.entity.Setting;
 import com.pureeats.domain.entity.Slide;
 import com.pureeats.media.storage.MediaUrlResolver;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -26,6 +30,8 @@ public class ContentService {
     private final TranslationRepository translationRepository;
     private final PaymentGatewayRepository paymentGatewayRepository;
     private final MediaUrlResolver mediaUrlResolver;
+    private final SettingSchemaService settingSchemaService;
+    private final SettingHistoryService settingHistoryService;
 
     @Transactional(readOnly = true)
     public List<PageResponse> listPages() {
@@ -49,6 +55,49 @@ public class ContentService {
         Map<String, String> settings = new HashMap<>();
         settingRepository.findAll().forEach(s -> settings.put(s.getKey(), s.getValue()));
         return settings;
+    }
+
+    /**
+     * Upserts each key - creates the row if it doesn't exist yet, updates it otherwise. Generic
+     * key/value on purpose (see the {@link Setting} entity): every setting behind this endpoint is
+     * currently just a bare admin-configurable string with no working integration reading it yet
+     * (Stripe/PayPal/Twilio/etc. credential placeholders, display toggles, ...) - a dedicated typed
+     * entity per feature would be the better call once one of those actually gets built out, at
+     * which point that feature's own service is the natural place to move its settings onto real
+     * columns. AppConfig (a single structured JSON blob under one key) is the other point on this
+     * spectrum, for config that's already grown real shape (feature flags, Razorpay/Firebase creds).
+     *
+     * <p>Every incoming key is checked against {@link SettingSchemaService#validKeys()} first - the
+     * same registry the admin panel renders its form fields from - and rejected wholesale (nothing
+     * in the batch is saved) if any key isn't recognized. That's what makes the schema the actual
+     * contract rather than just documentation: a client can't persist a setting the backend hasn't
+     * declared, and conversely a field declared in the schema is always immediately saveable, no
+     * separate allow-list to keep in sync.
+     *
+     * <p>{@code updatedBy} is the acting admin's user id (from the controller's
+     * {@code @AuthenticationPrincipal}) - each key that actually changes value gets one row in
+     * {@link SettingHistory} via {@link SettingHistoryService#record}, which itself no-ops for a key
+     * whose "new" value is the same as what was already stored (a re-save with no real change logs
+     * nothing).
+     */
+    @Transactional
+    public Map<String, String> updateSettings(Map<String, String> updates, Long updatedBy) {
+        Set<String> validKeys = settingSchemaService.validKeys();
+        Set<String> unknownKeys = updates.keySet().stream().filter(key -> !validKeys.contains(key)).collect(Collectors.toSet());
+        if (!unknownKeys.isEmpty()) {
+            throw new BadRequestException("Unknown setting key(s): " + String.join(", ", unknownKeys));
+        }
+        updates.forEach((key, value) -> {
+            Setting setting = settingRepository.findByKey(key).orElseGet(() -> {
+                Setting created = new Setting();
+                created.setKey(key);
+                return created;
+            });
+            settingHistoryService.record(SettingHistoryService.SOURCE_SETTING, key, setting.getValue(), value, updatedBy);
+            setting.setValue(value);
+            settingRepository.save(setting);
+        });
+        return getPublicSettings();
     }
 
     @Transactional(readOnly = true)

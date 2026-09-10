@@ -1,16 +1,19 @@
 package com.pureeats.catalog.controller;
 
-import com.pureeats.catalog.dto.AppConfigAdminRequest;
 import com.pureeats.catalog.dto.AppConfigAdminResponse;
 import com.pureeats.catalog.dto.AppConfigResponse;
+import com.pureeats.catalog.dto.AppConfigUpdateRequest;
 import com.pureeats.catalog.service.AppConfigService;
+import com.pureeats.domain.common.exception.BadRequestException;
 import com.pureeats.domain.common.response.ApiResponse;
+import com.pureeats.user.security.AuthenticatedUser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @Slf4j
@@ -36,9 +39,12 @@ public class AppConfigController {
 
     @PutMapping("/api/v1/admin/app-config")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
-    @Operation(summary = "Update the app config - version thresholds, Google Maps key, enabled payment methods")
-    public ApiResponse<AppConfigAdminResponse> update(@Valid @RequestBody AppConfigAdminRequest request) {
-        log.info("Admin updating app config");
-        return ApiResponse.success("App config updated", appConfigService.update(request));
+    @Operation(summary = "Partially update the app config - any field left null is left unchanged; only send what actually changed")
+    public ApiResponse<AppConfigAdminResponse> update(@AuthenticationPrincipal AuthenticatedUser principal, @Valid @RequestBody AppConfigUpdateRequest request) {
+        log.info("Admin {} updating app config", principal.userId());
+        if (!appConfigService.verifyConfirmationPassword(request.confirmationPassword())) {
+            throw new BadRequestException("Incorrect confirmation password");
+        }
+        return ApiResponse.success("App config updated", appConfigService.update(request.config(), principal.userId()));
     }
 }

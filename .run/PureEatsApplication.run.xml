@@ -1,6 +1,9 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="PureEatsApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot" nameIsGenerated="true">
     <option name="ACTIVE_PROFILES" value="dev" />
+    <envs>
+      <env name="FCM_CREDENTIALS_PATH" value="D:\workspace\pureeats-2026\pureeats-backend-2026\firebase-service-account.json" />
+    </envs>
     <module name="pureeats-app" />
     <option name="SPRING_BOOT_MAIN_CLASS" value="com.pureeats.app.PureEatsApplication" />
     <extension name="coverage">

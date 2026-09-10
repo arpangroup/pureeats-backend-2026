@@ -14,6 +14,8 @@ import com.pureeats.domain.entity.*;
 import com.pureeats.domain.common.response.PageResponse;
 import com.pureeats.domain.enums.DeliveryType;
 import com.pureeats.domain.enums.OrderStatusCode;
+import com.pureeats.domain.enums.PaymentMode;
+import com.pureeats.order.service.payment.RazorpayService;
 import com.pureeats.notification.enums.NotificationRecipientRole;
 import com.pureeats.media.storage.MediaUrlResolver;
 import com.pureeats.order.dto.*;
@@ -36,6 +38,7 @@ import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -66,6 +69,7 @@ public class OrderService {
     private final DeliveryGuyDetailRepository deliveryGuyDetailRepository;
     private final CartValidationService cartValidationService;
     private final MediaUrlResolver mediaUrlResolver;
+    private final RazorpayService razorpayService;
 
     @Transactional
     public OrderResponse placeOrder(Long userId, PlaceOrderRequest request) {
@@ -158,6 +162,27 @@ public class OrderService {
                 deliveryChargeResult.distanceKm(), restaurant.getLatitude(), restaurant.getLongitude(),
                 address.getLatitude(), address.getLongitude())));
 
+        if (request.paymentMode() == PaymentMode.RAZORPAY) {
+            // The amount Checkout was opened for (CreateRazorpayOrderRequest.amount, see
+            // RazorpayController) is never trusted here — `payable` above is computed fresh from
+            // the cart, same as every other payment mode. What actually gates persisting the order
+            // is: (1) the signature proves this payment_id/order_id pair really came from Razorpay,
+            // and (2) the amount Razorpay actually captured, fetched from Razorpay's own API, covers
+            // what this order now costs. A customer who paid less than the freshly-computed payable
+            // (a stale quote, a tampered client) gets rejected here rather than an order that's
+            // short-paid.
+            if (!razorpayService.verifySignature(request.razorpayOrderId(), request.razorpayPaymentId(), request.razorpaySignature())) {
+                log.warn("Rejected order for user {}: Razorpay signature did not verify", userId);
+                throw new BadRequestException("Payment could not be verified — please try again");
+            }
+            BigDecimal capturedAmount = razorpayService.fetchCapturedAmount(request.razorpayPaymentId());
+            if (capturedAmount.compareTo(payable) < 0) {
+                log.warn("Rejected order for user {}: Razorpay captured {} but order total is {}", userId, capturedAmount, payable);
+                throw new BadRequestException("The captured payment does not cover this order's total");
+            }
+            order.setTransactionId(request.razorpayPaymentId());
+        }
+
         boolean autoAccept = Boolean.TRUE.equals(restaurant.getAutoAcceptable());
         order.setOrderstatusId(orderStatusService.idFor(autoAccept ? OrderStatusCode.RESTAURANT_ACCEPTED : OrderStatusCode.PLACED));
 
@@ -195,7 +220,11 @@ public class OrderService {
             walletService.debit(userId, payable, "Order #" + order.getUniqueOrderId());
         }
 
-        notifyOwners(restaurant.getId(), order.getUniqueOrderId());
+        notifyOwners(restaurant.getId(), order.getId(), order.getUniqueOrderId(), restaurant.getName(), payable);
+        orderNotificationService.notifyAdminsOfNewOrder("New order received",
+                "Order #" + order.getUniqueOrderId() + " placed at " + restaurant.getName(),
+                Map.of("orderId", order.getId(), "uniqueOrderId", order.getUniqueOrderId(),
+                        "restaurantName", restaurant.getName(), "payable", payable));
 
         return toResponse(order);
     }
@@ -280,7 +309,8 @@ public class OrderService {
 
         orderStatusLogService.record(order.getId(), from, toStatus, "ADMIN", adminUserId, "Updated by admin");
         orderNotificationService.notify(NotificationRecipientRole.CUSTOMER, order.getUserId().longValue(), "Order status updated",
-                "Your order #" + order.getUniqueOrderId() + " is now " + toStatus.name());
+                "Your order #" + order.getUniqueOrderId() + " is now " + toStatus.name(),
+                Map.of("orderId", order.getId(), "status", toStatus.name()));
         log.info("Order {} transitioned {} -> {} by admin {}", orderId, from, toStatus, adminUserId);
         return toResponse(order);
     }
@@ -422,12 +452,14 @@ public class OrderService {
                 order.getPayable(), order.getCreatedAt(), deliveryGuyName);
     }
 
-    private void notifyOwners(Long restaurantId, String uniqueOrderId) {
+    /** Same fixed, always-PUSH+IN_APP alert as {@code OrderNotificationService#notifyAdminsOfNewOrder} (see that method's doc for why this bypasses the configurable per-role routing) - one per owner of this restaurant, since a new order is that owner's own restaurant's business, not a platform-wide broadcast. */
+    private void notifyOwners(Long restaurantId, Long orderId, String uniqueOrderId, String restaurantName, java.math.BigDecimal payable) {
+        java.util.Map<String, Object> data = java.util.Map.of("orderId", orderId, "uniqueOrderId", uniqueOrderId, "restaurantName", restaurantName, "payable", payable);
         restaurantUserRepository.findByRestaurantId(restaurantId).stream()
                 .map(RestaurantUser::getUserId)
                 .distinct()
-                .forEach(ownerId -> orderNotificationService.notify(NotificationRecipientRole.STORE_OWNER, ownerId, "New order received",
-                        "Order #" + uniqueOrderId + " has been placed"));
+                .forEach(ownerId -> orderNotificationService.notifyNewOrder(ownerId, "New order received",
+                        "Order #" + uniqueOrderId + " has been placed", data));
     }
 
     private static String generateUniqueOrderId() {

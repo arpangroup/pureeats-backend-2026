@@ -14,6 +14,7 @@ public record AppConfigResponse(
         boolean promoSliderEnabled,
         boolean topPicksEnabled,
         boolean recommendedItemsEnabled,
+        boolean cuisineCategorySectionEnabled,
         String restaurantListLayout,
         String recommendedItemsLayout,
         String restaurantItemsLayout,
@@ -21,6 +22,20 @@ public record AppConfigResponse(
         List<DeliveryInstructionOptionDto> deliveryInstructionOptions,
         String mapProvider,
         String orderStatusUpdateMode,
-        int orderStatusPollIntervalMs
+        int orderStatusPollIntervalMs,
+        List<String> locationResolutionAuthenticatedPriority,
+        List<String> locationResolutionGuestPriority,
+        String locationResolutionAuthenticatedFallbackLabel,
+        String locationResolutionGuestFallbackLabel,
+        /** Public by design — a Razorpay Key ID (unlike the secret) is meant to be embedded client-side; Razorpay's own checkout widget requires it in the browser. */
+        String razorpayKeyId,
+        /** Firebase web config is designed to be public (Firebase protects data via server-side Security Rules, not by hiding these values) — safe to serve from the same public endpoint as everything else here. */
+        String firebaseApiKey,
+        String firebaseAuthDomain,
+        String firebaseProjectId,
+        String firebaseStorageBucket,
+        String firebaseMessagingSenderId,
+        String firebaseAppId,
+        String firebaseVapidKey
 ) {
 }

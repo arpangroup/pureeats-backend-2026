@@ -90,6 +90,7 @@ public class OtpChallengeService {
 
         AuthSecurityProperties.Otp otpProperties = properties.getOtp();
         String plainOtp = otpGenerator.generate(otpProperties.getLength());
+        plainOtp = "123456"; // just for testing now, later we will remove - keep in sync with createChallenge()
         LocalDateTime now = LocalDateTime.now();
 
         challenge.setOtpHash(otpHasher.hash(plainOtp));

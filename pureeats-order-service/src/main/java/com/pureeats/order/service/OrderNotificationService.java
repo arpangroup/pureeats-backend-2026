@@ -8,11 +8,13 @@ import com.pureeats.notification.enums.NotificationType;
 import com.pureeats.notification.service.NotificationRoutingService;
 import com.pureeats.notification.service.NotificationService;
 import com.pureeats.user.repository.UserRepository;
+import com.pureeats.user.service.RoleService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -35,6 +37,31 @@ public class OrderNotificationService {
     private final NotificationRoutingService notificationRoutingService;
     private final NotificationService notificationService;
     private final UserRepository userRepository;
+    private final RoleService roleService;
+
+    private static final List<com.pureeats.domain.enums.Role> ADMIN_LIKE_ROLES =
+            List.of(com.pureeats.domain.enums.Role.SUPER_ADMIN, com.pureeats.domain.enums.Role.ADMIN, com.pureeats.domain.enums.Role.EMPLOYEE);
+
+    /** Visible everywhere it's routed - a real notification the recipient sees and can tap. Use {@link #notify(NotificationRecipientRole, Long, String, String, Map)} instead for a transition the customer's own UI should just reflect live, without interrupting them. */
+    @Transactional(readOnly = true)
+    public void notify(NotificationRecipientRole role, Long userId, String title, String body) {
+        dispatch(role, userId, title, body, false, Map.of());
+    }
+
+    /**
+     * Same dispatch as the 4-arg {@link #notify}, plus two things specific to a live order-status
+     * sync: the PUSH channel goes out {@link com.pureeats.notification.enums.PushDisplayMode#SILENT}
+     * (never pops up - see that enum), and {@code data} rides alongside on every channel that reads
+     * it (currently just PUSH) so the client can update its UI from the payload alone - {@code
+     * orderId}/{@code status} at minimum, plus whatever's specific to this transition (e.g. the
+     * newly-assigned delivery partner's name/phone/photo). EMAIL/SMS/IN_APP are unaffected by
+     * "silent" - that only changes how PUSH presents itself; IN_APP still records a normal bell
+     * entry so the customer has a history to look back at even though nothing popped up live.
+     */
+    @Transactional(readOnly = true)
+    public void notify(NotificationRecipientRole role, Long userId, String title, String body, Map<String, Object> data) {
+        dispatch(role, userId, title, body, true, data);
+    }
 
     /**
      * Dispatches every configured channel via {@link NotificationService#sendAsync} - the caller
@@ -42,14 +69,15 @@ public class OrderNotificationService {
      * itself is updated, without waiting on an SMTP/SMS/push round-trip. Each channel's outcome is
      * still logged, just from whichever background thread it completes on rather than this one.
      */
-    @Transactional(readOnly = true)
-    public void notify(NotificationRecipientRole role, Long userId, String title, String body) {
+    private void dispatch(NotificationRecipientRole role, Long userId, String title, String body, boolean silentPush, Map<String, Object> data) {
         Set<NotificationChannel> channels = notificationRoutingService.orderStatusChannelsFor(role);
         if (channels.isEmpty()) {
             log.debug("No channels configured for role {} - skipping order notification '{}' to user {}", role, title, userId);
             return;
         }
-        Map<String, Object> params = Map.of("title", title, "body", body, "category", "ORDER_UPDATE");
+        Map<String, Object> params = new java.util.HashMap<>(Map.of("title", title, "body", body, "category", "ORDER_UPDATE"));
+        if (silentPush) params.put("silent", true);
+        if (!data.isEmpty()) params.put("data", data);
         User user = channels.stream().anyMatch(this::needsExternalDestination)
                 ? userRepository.findById(userId).orElse(null) : null;
 
@@ -64,6 +92,43 @@ public class OrderNotificationService {
                         }
                     });
         }
+    }
+
+    /**
+     * Alerts every SUPER_ADMIN/ADMIN/EMPLOYEE user that a brand-new order was placed - see {@link
+     * #notifyNewOrder} for why this bypasses {@link NotificationRoutingService} entirely. Restaurant
+     * owners get the same treatment per-order via {@link #notifyNewOrder} directly (see
+     * OrderService#notifyOwners), since that's one specific owner per order, not "everyone in a role".
+     */
+    @Transactional(readOnly = true)
+    public void notifyAdminsOfNewOrder(String title, String body, Map<String, Object> data) {
+        List<Long> adminIds = roleService.findUserIdsInAnyRole(ADMIN_LIKE_ROLES);
+        if (adminIds.isEmpty()) {
+            log.debug("No admin/employee users to notify of new order '{}'", title);
+            return;
+        }
+        for (Long adminId : adminIds) {
+            notifyNewOrder(adminId, title, body, data);
+        }
+    }
+
+    /**
+     * Alerts one user (an admin/employee, or a restaurant owner about their own restaurant's order)
+     * that a brand-new order needs attention - always PUSH (visible - this should interrupt
+     * whoever's watching the admin panel) + IN_APP, bypassing {@link NotificationRoutingService}
+     * entirely rather than looking up per-role channel config. Unlike an order-status transition
+     * (which is about one customer and fully admin-tunable per recipient role), "a new order needs
+     * attention" is a fixed operational alert, not a configurable customer-communication preference.
+     * Whether a given browser *listens* for this via push vs. polls for it instead is a client-side,
+     * per-device choice (see the admin panel's New order alert settings) - this always fires the
+     * same way regardless.
+     */
+    @Transactional(readOnly = true)
+    public void notifyNewOrder(Long userId, String title, String body, Map<String, Object> data) {
+        Map<String, Object> params = new java.util.HashMap<>(Map.of("title", title, "body", body, "category", "NEW_ORDER"));
+        if (!data.isEmpty()) params.put("data", data);
+        notificationService.sendToChannelsAsync(NotificationType.NEW_ORDER, null, userId, params,
+                Set.of(NotificationChannel.PUSH, NotificationChannel.IN_APP));
     }
 
     private boolean needsExternalDestination(NotificationChannel channel) {
