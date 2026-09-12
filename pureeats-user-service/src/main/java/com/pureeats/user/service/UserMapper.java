@@ -17,6 +17,8 @@ final class UserMapper {
                 user.getPhone(),
                 resolvedPhotoUrl,
                 role,
-                user.getDefaultAddressId() != null ? user.getDefaultAddressId().longValue() : null);
+                user.getDefaultAddressId() != null ? user.getDefaultAddressId().longValue() : null,
+                user.getDob(),
+                user.getGender());
     }
 }

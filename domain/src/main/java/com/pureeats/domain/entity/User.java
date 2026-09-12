@@ -1,12 +1,14 @@
 package com.pureeats.domain.entity;
 
 import com.pureeats.domain.enums.AccountStatus;
+import com.pureeats.domain.enums.Gender;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -71,6 +73,13 @@ public class User {
 
     @Column(name = "photo")
     private String photo;
+
+    @Column(name = "dob")
+    private LocalDate dob;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "gender", length = 16)
+    private Gender gender;
 
     // --- OTP-based auth additions below. `isActive`/`emailVerifiedAt` above are the legacy
     // fields and are left untouched for backward compatibility with the password/legacy-OTP flows. ---

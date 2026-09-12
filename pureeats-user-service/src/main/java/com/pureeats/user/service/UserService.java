@@ -40,6 +40,12 @@ public class UserService {
         if (request.photo() != null) {
             user.setPhoto(request.photo());
         }
+        if (request.dob() != null) {
+            user.setDob(request.dob());
+        }
+        if (request.gender() != null) {
+            user.setGender(request.gender());
+        }
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
         log.info("Profile updated for user {}", userId);
