@@ -2,7 +2,9 @@ package com.pureeats.catalog.controller;
 
 import com.pureeats.catalog.dto.PaymentGatewayResponse;
 import com.pureeats.catalog.dto.PaymentGatewayToggleRequest;
+import com.pureeats.catalog.service.AppConfigService;
 import com.pureeats.catalog.service.ContentService;
+import com.pureeats.domain.common.exception.BadRequestException;
 import com.pureeats.domain.common.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,6 +29,7 @@ import java.util.List;
 public class AdminPaymentGatewayController {
 
     private final ContentService contentService;
+    private final AppConfigService appConfigService;
 
     @GetMapping
     @Operation(summary = "List every payment gateway (active and inactive)")
@@ -35,8 +38,11 @@ public class AdminPaymentGatewayController {
     }
 
     @PatchMapping("/{id}")
-    @Operation(summary = "Enable or disable a payment gateway")
+    @Operation(summary = "Enable or disable a payment gateway - requires the confirmation password when settingsConfirmationEnabled is on, same gate every other settings write goes through")
     public ApiResponse<PaymentGatewayResponse> toggle(@PathVariable Long id, @Valid @RequestBody PaymentGatewayToggleRequest request) {
+        if (!appConfigService.verifyConfirmationPassword(request.confirmationPassword())) {
+            throw new BadRequestException("Incorrect confirmation password");
+        }
         log.info("Setting payment gateway {} active={}", id, request.isActive());
         return ApiResponse.success(contentService.setPaymentGatewayActive(id, request.isActive()));
     }
