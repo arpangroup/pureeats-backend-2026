@@ -52,6 +52,8 @@ public record RestaurantPatchRequest(
         Boolean isFeatured,
         BigDecimal commissionRate,
         List<DayScheduleDto> weeklySchedule,
-        List<Long> categoryIds
+        List<Long> categoryIds,
+        Integer offerDiscountPercent,
+        BigDecimal offerMaxDiscount
 ) {
 }
