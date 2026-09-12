@@ -50,23 +50,23 @@ public class DemoContentSeeder implements ApplicationRunner {
                     "cdb23e9a-bcac-43a2-a105-3e657cc03a1f.jpg", 3)
     );
 
-    /** Null {@code code} means "not wired to an actual checkout flow yet" - the customer app shows these in a non-interactive "we also support" strip rather than as a selectable payment option (see CheckoutPage.tsx). */
+    /** Null {@code code} means "not wired to an actual checkout flow yet" - the customer app shows these disabled rather than as a selectable payment option (see CheckoutPage.tsx). */
     private record GatewaySeed(String code, String name, String description) {
     }
 
     /**
-     * The first three codes match the customer app's PaymentMode exactly and are real, selectable
-     * checkout options. "Razorpay" is its own catalog row (distinct from "UPI") even though it's
-     * actually implemented - its real on/off switch is the key in Settings → Payment Gateways →
-     * Razorpay (RazorpayConfigPanel), not this list, so it's decorative here same as the others.
-     * The rest (Stripe/PayPal/PayStack/PayTm/PayUmoney/CCAvenue) are placeholders for gateways not
-     * integrated yet - listed so admin can see what's planned and toggle visibility, nothing more.
+     * COD/WALLET/UPI/RAZORPAY match the customer app's PaymentMode exactly and are real, selectable
+     * checkout options. Razorpay is genuinely implemented (RazorpayService, signature verification,
+     * the works) - unlike the placeholders below, it's only greyed out on Checkout when an admin
+     * hasn't set a key yet (Settings → Payment Gateways → Razorpay / RazorpayConfigPanel), not
+     * because the flow doesn't exist. The rest (Stripe/PayPal/PayStack/PayTm/PayUmoney/CCAvenue) are
+     * placeholders for gateways not integrated at all yet - listed so admin can see what's planned.
      */
     private static final List<GatewaySeed> GATEWAYS = List.of(
             new GatewaySeed("COD", "Cash on Delivery", "Pay with cash when your order arrives"),
             new GatewaySeed("WALLET", "PureEats Wallet", "Pay using your wallet balance"),
             new GatewaySeed("UPI", "UPI", "Pay via GPay, PhonePe, Paytm & more"),
-            new GatewaySeed(null, "Razorpay", "Cards, UPI, netbanking and wallets - powers the UPI option above once configured"),
+            new GatewaySeed("RAZORPAY", "Razorpay", "Cards, UPI, netbanking and wallets"),
             new GatewaySeed(null, "Stripe", "International cards - not yet integrated"),
             new GatewaySeed(null, "PayPal", "Not yet integrated"),
             new GatewaySeed(null, "PayStack", "Not yet integrated"),
