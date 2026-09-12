@@ -50,14 +50,29 @@ public class DemoContentSeeder implements ApplicationRunner {
                     "cdb23e9a-bcac-43a2-a105-3e657cc03a1f.jpg", 3)
     );
 
+    /** Null {@code code} means "not wired to an actual checkout flow yet" - the customer app shows these in a non-interactive "we also support" strip rather than as a selectable payment option (see CheckoutPage.tsx). */
     private record GatewaySeed(String code, String name, String description) {
     }
 
-    /** Matches the customer app's PaymentMode exactly - "UPI" is Razorpay-backed once an admin sets a key in Settings → Payment Gateways (RazorpayConfigPanel), plain UPI deep-link otherwise. See CheckoutPage.tsx. */
+    /**
+     * The first three codes match the customer app's PaymentMode exactly and are real, selectable
+     * checkout options. "Razorpay" is its own catalog row (distinct from "UPI") even though it's
+     * actually implemented - its real on/off switch is the key in Settings → Payment Gateways →
+     * Razorpay (RazorpayConfigPanel), not this list, so it's decorative here same as the others.
+     * The rest (Stripe/PayPal/PayStack/PayTm/PayUmoney/CCAvenue) are placeholders for gateways not
+     * integrated yet - listed so admin can see what's planned and toggle visibility, nothing more.
+     */
     private static final List<GatewaySeed> GATEWAYS = List.of(
             new GatewaySeed("COD", "Cash on Delivery", "Pay with cash when your order arrives"),
             new GatewaySeed("WALLET", "PureEats Wallet", "Pay using your wallet balance"),
-            new GatewaySeed("UPI", "UPI / Razorpay", "Pay via GPay, PhonePe, Paytm, cards & more, through Razorpay once configured")
+            new GatewaySeed("UPI", "UPI", "Pay via GPay, PhonePe, Paytm & more"),
+            new GatewaySeed(null, "Razorpay", "Cards, UPI, netbanking and wallets - powers the UPI option above once configured"),
+            new GatewaySeed(null, "Stripe", "International cards - not yet integrated"),
+            new GatewaySeed(null, "PayPal", "Not yet integrated"),
+            new GatewaySeed(null, "PayStack", "Not yet integrated"),
+            new GatewaySeed(null, "PayTm", "Not yet integrated"),
+            new GatewaySeed(null, "PayUmoney", "Not yet integrated"),
+            new GatewaySeed(null, "CCAvenue", "Not yet integrated")
     );
 
     private final PromoSliderRepository promoSliderRepository;
@@ -103,25 +118,50 @@ public class DemoContentSeeder implements ApplicationRunner {
         log.info("Demo content seeding complete: promo slider '{}' ({} new slide(s) created)", SLIDER_NAME, created);
     }
 
-    /** Nothing else writes payment_gateways (no create endpoint exists - only the toggle) - without this the table stays empty forever, so Settings → Payment gateways has nothing to show, and GET /payment-gateways (which the customer app's checkout now reads) returns nothing either. Idempotent, guarded on {@code code}. */
+    /**
+     * Nothing else writes payment_gateways (no create endpoint exists - only the toggle) - without
+     * this the table stays empty forever, so Settings → Payment gateways has nothing to show, and
+     * GET /payment-gateways (which the customer app's checkout now reads) returns nothing either.
+     * Matched on {@code code} where set, else {@code name} (the decorative placeholder rows have no
+     * code). A matched row's name/description are kept in sync with GATEWAYS on every restart -
+     * this list is still actively evolving, so a demo row shouldn't go stale after a rename here
+     * (e.g. "UPI / Razorpay" splitting into separate "UPI" and "Razorpay" rows) - only isActive is
+     * left alone, since that's the one field an admin actually edits.
+     */
     private void seedPaymentGateways() {
         int created = 0;
+        int updated = 0;
+        List<PaymentGateway> existing = paymentGatewayRepository.findAll();
         for (GatewaySeed seed : GATEWAYS) {
-            boolean exists = paymentGatewayRepository.findAll().stream().anyMatch(g -> seed.code().equals(g.getCode()));
-            if (exists) continue;
+            PaymentGateway match = existing.stream()
+                    .filter(g -> seed.code() != null ? seed.code().equals(g.getCode()) : seed.name().equals(g.getName()))
+                    .findFirst().orElse(null);
+
+            if (match != null) {
+                if (!seed.name().equals(match.getName()) || !seed.description().equals(match.getDescription())) {
+                    match.setName(seed.name());
+                    match.setDescription(seed.description());
+                    match.setUpdatedAt(LocalDateTime.now());
+                    paymentGatewayRepository.save(match);
+                    updated++;
+                }
+                continue;
+            }
 
             PaymentGateway gateway = new PaymentGateway();
             gateway.setCode(seed.code());
             gateway.setName(seed.name());
             gateway.setDescription(seed.description());
-            gateway.setIsActive(true);
+            // Real, selectable options start on; not-yet-integrated placeholders start off, same as
+            // the admin app's mock fixtures — an admin can flip either on/off any time regardless.
+            gateway.setIsActive(seed.code() != null);
             gateway.setCreatedAt(LocalDateTime.now());
             gateway.setUpdatedAt(LocalDateTime.now());
             paymentGatewayRepository.save(gateway);
             created++;
         }
-        if (created > 0) {
-            log.info("Demo payment gateway seeding complete: {} new gateway(s) created", created);
+        if (created > 0 || updated > 0) {
+            log.info("Demo payment gateway seeding complete: {} new, {} updated", created, updated);
         }
     }
 }
