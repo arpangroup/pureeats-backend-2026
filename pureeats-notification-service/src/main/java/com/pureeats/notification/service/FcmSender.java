@@ -182,7 +182,12 @@ public class FcmSender {
             var response = FirebaseMessaging.getInstance().subscribeToTopic(tokens, topic);
             log.info("Subscribed {} token(s) to topic '{}' ({} failure(s))", tokens.size(), topic, response.getFailureCount());
         } catch (Exception e) {
-            log.warn("Failed to subscribe {} token(s) to topic '{}'", tokens.size(), topic, e);
+            // A full stack trace here is almost always the same recurring cause (a network-level
+            // issue between this host and Google's servers - a MITM antivirus/proxy mangling the
+            // gzip-encoded response, most often) rather than a new failure each time, and this fires
+            // on every push-token save - so keep it to one line at WARN, full trace at DEBUG only.
+            log.warn("Failed to subscribe {} token(s) to topic '{}': {}", tokens.size(), topic, e.toString());
+            log.debug("Full stack trace for topic-subscribe failure", e);
         }
     }
 
@@ -196,7 +201,8 @@ public class FcmSender {
             var response = FirebaseMessaging.getInstance().unsubscribeFromTopic(tokens, topic);
             log.info("Unsubscribed {} token(s) from topic '{}' ({} failure(s))", tokens.size(), topic, response.getFailureCount());
         } catch (Exception e) {
-            log.warn("Failed to unsubscribe {} token(s) from topic '{}'", tokens.size(), topic, e);
+            log.warn("Failed to unsubscribe {} token(s) from topic '{}': {}", tokens.size(), topic, e.toString());
+            log.debug("Full stack trace for topic-unsubscribe failure", e);
         }
     }
 }
