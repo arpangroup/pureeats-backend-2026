@@ -1,5 +1,7 @@
 package com.pureeats.catalog.dto;
 
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
@@ -21,7 +23,8 @@ public record RestaurantCreateRequest(
         @NotBlank String longitude,
         @NotNull Boolean isPureveg,
         @NotNull BigDecimal deliveryCharges,
-        @NotNull BigDecimal deliveryRadius,
+        /** Capped well above any real food-delivery range - guards against an accidental typo (e.g. "700" or "5011" meant to be "7"/"5") silently letting orders hundreds of km away through as "in range". */
+        @NotNull @DecimalMin("0") @DecimalMax(RestaurantValidation.MAX_DELIVERY_RADIUS_KM) BigDecimal deliveryRadius,
         @NotNull BigDecimal minOrderPrice,
         boolean isAcceptCod,
         /** Purely informational capability badge - independent of actual order-fulfillment (deliveryType). */

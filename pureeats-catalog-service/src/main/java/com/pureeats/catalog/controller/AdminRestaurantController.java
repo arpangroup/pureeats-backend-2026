@@ -77,7 +77,7 @@ public class AdminRestaurantController {
     @PutMapping("/api/v1/admin/restaurants/{id}")
     @Operation(summary = "Partially update a restaurant - name/commissionRate/isActive/isAccepted/autoAcceptable/isFeatured are ADMIN/SUPER_ADMIN only")
     public ApiResponse<RestaurantDetailResponse> patch(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long id,
-                                                         @RequestBody RestaurantPatchRequest request) {
+                                                         @Valid @RequestBody RestaurantPatchRequest request) {
         log.debug("Admin {}: patch restaurant {}", principal.userId(), id);
         return ApiResponse.success("Restaurant updated", restaurantService.patchAsAdmin(principal.userId(), id, request, principal.role()));
     }

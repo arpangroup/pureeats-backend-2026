@@ -1,5 +1,8 @@
 package com.pureeats.catalog.dto;
 
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+
 import java.math.BigDecimal;
 import java.time.LocalTime;
 import java.util.List;
@@ -32,7 +35,8 @@ public record RestaurantPatchRequest(
         String longitude,
         BigDecimal restaurantCharges,
         BigDecimal deliveryCharges,
-        BigDecimal deliveryRadius,
+        /** Capped well above any real food-delivery range - guards against an accidental typo (e.g. "700" or "5011" meant to be "7"/"5") silently letting orders hundreds of km away through as "in range". */
+        @DecimalMin("0") @DecimalMax(RestaurantValidation.MAX_DELIVERY_RADIUS_KM) BigDecimal deliveryRadius,
         BigDecimal minOrderPrice,
         /** Estimated prep+delivery time in minutes. */
         Integer deliveryTime,
