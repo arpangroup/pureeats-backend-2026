@@ -3,8 +3,10 @@ package com.pureeats.user.controller;
 import com.pureeats.domain.common.response.ApiResponse;
 import com.pureeats.domain.common.response.PageResponse;
 import com.pureeats.domain.enums.Role;
+import com.pureeats.user.dto.AddressResponse;
 import com.pureeats.user.dto.AdminUserResponse;
 import com.pureeats.user.security.AuthenticatedUser;
+import com.pureeats.user.service.AddressService;
 import com.pureeats.user.service.AdminUserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,6 +25,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 /** Admin-panel user directory - list by {@code userType} (defaults to CUSTOMER) and detail. */
 @Slf4j
 @RestController
@@ -33,6 +37,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class AdminUserController {
 
     private final AdminUserService adminUserService;
+    private final AddressService addressService;
 
     @GetMapping
     @Operation(summary = "List users, optionally filtered by userType (defaults to CUSTOMER) and search")
@@ -49,6 +54,13 @@ public class AdminUserController {
     public ApiResponse<AdminUserResponse> getUser(@PathVariable Long id) {
         log.debug("Admin fetching user detail for {}", id);
         return ApiResponse.success(adminUserService.getUser(id));
+    }
+
+    @GetMapping("/{id}/addresses")
+    @Operation(summary = "List a user's saved addresses, as an admin - includes which one is their active/default address")
+    public ApiResponse<List<AddressResponse>> listAddresses(@PathVariable Long id) {
+        log.debug("Admin listing addresses for user {}", id);
+        return ApiResponse.success(addressService.list(id));
     }
 
     @PostMapping("/{id}/photo")
