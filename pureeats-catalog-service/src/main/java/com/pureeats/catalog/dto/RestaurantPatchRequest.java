@@ -47,6 +47,8 @@ public record RestaurantPatchRequest(
         Boolean isNotifiable,
         Boolean isAcceptCod,
         Boolean autoAcceptable,
+        /** Purely informational capability badge - independent of actual order-fulfillment (deliveryType). */
+        Boolean isDineInAvailable,
         Boolean isActive,
         Boolean isAccepted,
         Boolean isFeatured,

@@ -156,4 +156,8 @@ public class Restaurant {
 
     @Column(name = "is_accept_cod", nullable = false)
     private Boolean isAcceptCod;
+
+    /** Purely informational capability badge - whether this restaurant also seats walk-in/dine-in customers. Independent of {@link #deliveryType} (self-pickup/delivery/both), which governs actual in-app order fulfillment; dine-in never goes through the cart/checkout pipeline. */
+    @Column(name = "is_dine_in_available")
+    private Boolean isDineInAvailable;
 }

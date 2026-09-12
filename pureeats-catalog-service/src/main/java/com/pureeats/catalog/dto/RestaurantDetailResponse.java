@@ -42,6 +42,8 @@ public record RestaurantDetailResponse(
         boolean isFeatured,
         boolean isAcceptCod,
         boolean autoAcceptable,
+        /** Purely informational - whether this restaurant also seats walk-in/dine-in customers. Independent of {@code deliveryType} (self-pickup/delivery/both), which governs actual order fulfillment; dine-in never goes through the cart/checkout pipeline. */
+        boolean isDineInAvailable,
         BigDecimal commissionRate,
         Integer offerDiscountPercent,
         BigDecimal offerMaxDiscount,

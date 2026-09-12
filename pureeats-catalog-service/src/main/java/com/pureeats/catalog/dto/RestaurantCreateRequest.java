@@ -24,6 +24,8 @@ public record RestaurantCreateRequest(
         @NotNull BigDecimal deliveryRadius,
         @NotNull BigDecimal minOrderPrice,
         boolean isAcceptCod,
+        /** Purely informational capability badge - independent of actual order-fulfillment (deliveryType). */
+        boolean isDineInAvailable,
         /** Optional - omit to leave every day unset (closed) until edited later via patch. */
         List<DayScheduleDto> weeklySchedule,
         /** Optional - cuisine category ids (see {@code RestaurantCategory}) this restaurant belongs to. */

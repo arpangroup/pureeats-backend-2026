@@ -20,6 +20,8 @@ public record RestaurantUpdateRequest(
         @NotNull BigDecimal deliveryRadius,
         @NotNull BigDecimal minOrderPrice,
         boolean isAcceptCod,
-        boolean autoAcceptable
+        boolean autoAcceptable,
+        /** Purely informational capability badge - independent of actual order-fulfillment (deliveryType). */
+        boolean isDineInAvailable
 ) {
 }
