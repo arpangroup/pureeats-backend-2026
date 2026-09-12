@@ -119,7 +119,29 @@ public class ContentService {
     @Transactional(readOnly = true)
     public List<PaymentGatewayResponse> listPaymentGateways() {
         return paymentGatewayRepository.findByIsActiveTrue().stream()
-                .map(g -> new PaymentGatewayResponse(g.getId(), g.getName(), g.getLogo())).toList();
+                .map(this::toPaymentGatewayResponse).toList();
+    }
+
+    /** Admin listing - every row regardless of active/inactive, so a disabled gateway can be found and re-enabled (the public {@link #listPaymentGateways} above only ever returns active ones). */
+    @Transactional(readOnly = true)
+    public List<PaymentGatewayResponse> listAllPaymentGatewaysForAdmin() {
+        return paymentGatewayRepository.findAll().stream()
+                .map(this::toPaymentGatewayResponse).toList();
+    }
+
+    @Transactional
+    public PaymentGatewayResponse setPaymentGatewayActive(Long id, boolean isActive) {
+        com.pureeats.domain.entity.PaymentGateway gateway = paymentGatewayRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment gateway not found: " + id));
+        gateway.setIsActive(isActive);
+        gateway.setUpdatedAt(java.time.LocalDateTime.now());
+        paymentGatewayRepository.save(gateway);
+        log.info("Payment gateway {} ({}) set to {}", id, gateway.getName(), isActive ? "active" : "inactive");
+        return toPaymentGatewayResponse(gateway);
+    }
+
+    private PaymentGatewayResponse toPaymentGatewayResponse(com.pureeats.domain.entity.PaymentGateway g) {
+        return new PaymentGatewayResponse(g.getId(), g.getName(), g.getDescription(), g.getLogo(), g.getCode(), Boolean.TRUE.equals(g.getIsActive()));
     }
 
     private SlideResponse toSlideResponse(Slide s) {

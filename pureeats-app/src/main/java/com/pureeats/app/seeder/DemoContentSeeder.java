@@ -1,7 +1,9 @@
 package com.pureeats.app.seeder;
 
+import com.pureeats.catalog.repository.PaymentGatewayRepository;
 import com.pureeats.catalog.repository.PromoSliderRepository;
 import com.pureeats.catalog.repository.SlideRepository;
+import com.pureeats.domain.entity.PaymentGateway;
 import com.pureeats.domain.entity.PromoSlider;
 import com.pureeats.domain.entity.Slide;
 import lombok.RequiredArgsConstructor;
@@ -48,12 +50,24 @@ public class DemoContentSeeder implements ApplicationRunner {
                     "cdb23e9a-bcac-43a2-a105-3e657cc03a1f.jpg", 3)
     );
 
+    private record GatewaySeed(String code, String name, String description) {
+    }
+
+    /** Matches the customer app's PaymentMode exactly - "UPI" is Razorpay-backed once an admin sets a key in Settings → Payment Gateways (RazorpayConfigPanel), plain UPI deep-link otherwise. See CheckoutPage.tsx. */
+    private static final List<GatewaySeed> GATEWAYS = List.of(
+            new GatewaySeed("COD", "Cash on Delivery", "Pay with cash when your order arrives"),
+            new GatewaySeed("WALLET", "PureEats Wallet", "Pay using your wallet balance"),
+            new GatewaySeed("UPI", "UPI / Razorpay", "Pay via GPay, PhonePe, Paytm, cards & more, through Razorpay once configured")
+    );
+
     private final PromoSliderRepository promoSliderRepository;
     private final SlideRepository slideRepository;
+    private final PaymentGatewayRepository paymentGatewayRepository;
 
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
+        seedPaymentGateways();
         PromoSlider slider = promoSliderRepository.findAll().stream()
                 .filter(s -> SLIDER_NAME.equals(s.getName())).findFirst()
                 .orElseGet(() -> {
@@ -87,5 +101,27 @@ public class DemoContentSeeder implements ApplicationRunner {
             created++;
         }
         log.info("Demo content seeding complete: promo slider '{}' ({} new slide(s) created)", SLIDER_NAME, created);
+    }
+
+    /** Nothing else writes payment_gateways (no create endpoint exists - only the toggle) - without this the table stays empty forever, so Settings → Payment gateways has nothing to show, and GET /payment-gateways (which the customer app's checkout now reads) returns nothing either. Idempotent, guarded on {@code code}. */
+    private void seedPaymentGateways() {
+        int created = 0;
+        for (GatewaySeed seed : GATEWAYS) {
+            boolean exists = paymentGatewayRepository.findAll().stream().anyMatch(g -> seed.code().equals(g.getCode()));
+            if (exists) continue;
+
+            PaymentGateway gateway = new PaymentGateway();
+            gateway.setCode(seed.code());
+            gateway.setName(seed.name());
+            gateway.setDescription(seed.description());
+            gateway.setIsActive(true);
+            gateway.setCreatedAt(LocalDateTime.now());
+            gateway.setUpdatedAt(LocalDateTime.now());
+            paymentGatewayRepository.save(gateway);
+            created++;
+        }
+        if (created > 0) {
+            log.info("Demo payment gateway seeding complete: {} new gateway(s) created", created);
+        }
     }
 }

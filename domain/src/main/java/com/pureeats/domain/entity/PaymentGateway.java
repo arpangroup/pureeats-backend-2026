@@ -24,6 +24,10 @@ public class PaymentGateway {
     @Column(name = "name", nullable = false)
     private String name;
 
+    /** Maps this row to what the customer app actually does at checkout - "COD" | "WALLET" | "UPI" (Razorpay-backed once an admin sets a key, see AppConfigService#getRazorpayKeyId). Null on any legacy/decorative row created before this existed - those show in the admin list but the customer app can't act on them. */
+    @Column(name = "code")
+    private String code;
+
     @Lob
     @Column(name = "description")
     private String description;
