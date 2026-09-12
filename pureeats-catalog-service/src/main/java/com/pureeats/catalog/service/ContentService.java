@@ -128,6 +128,27 @@ public class ContentService {
         // or the client gets a bare "slide/xxx.jpg" it can't load. (MediaUrlResolver also passes an
         // already-absolute URL/data: URI straight through, so this is safe for any older row that
         // has one of those stored directly instead of a key.)
-        return new SlideResponse(s.getId(), s.getName(), mediaUrlResolver.resolve(s.getImage()), s.getImagePlaceholder(), s.getUrl());
+        return new SlideResponse(s.getId(), s.getName(), mediaUrlResolver.resolve(s.getImage()), s.getImagePlaceholder(), resolveSlideUrl(s));
+    }
+
+    /**
+     * The admin side models a slide's click target as {@code linkType} ("none"/"category"/
+     * "restaurant"/"url") plus whichever of {@code categoryId}/{@code restaurantId}/{@code url}
+     * matches - but the raw {@code url} column is only ever populated for {@code linkType == "url"}.
+     * The customer app's {@code PromoSlider} only ever looks at a single {@code url} string (null =
+     * not clickable), so for the category/restaurant cases we derive that string here from the id,
+     * matching the customer app's own route shapes ({@code /restaurants/:id}, {@code /category/:id})
+     * instead of ever exposing linkType/categoryId/restaurantId to the client.
+     */
+    private String resolveSlideUrl(Slide s) {
+        if (s.getLinkType() == null) {
+            return s.getUrl();
+        }
+        return switch (s.getLinkType()) {
+            case "restaurant" -> s.getRestaurantId() != null ? "/restaurants/" + s.getRestaurantId() : null;
+            case "category" -> s.getCategoryId() != null ? "/category/" + s.getCategoryId() : null;
+            case "url" -> s.getUrl();
+            default -> null;
+        };
     }
 }
