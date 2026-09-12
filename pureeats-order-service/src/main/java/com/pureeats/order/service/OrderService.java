@@ -148,13 +148,15 @@ public class OrderService {
         DeliveryChargeResult deliveryChargeResult = orderPricingService.computeDeliveryCharge(
                 restaurant, isSelfPickup, freeDelivery, address.getLatitude(), address.getLongitude());
         BigDecimal deliveryCharge = deliveryChargeResult.amount();
-        BigDecimal payable = amountAfterDiscount.add(tax).add(restaurantCharge).add(deliveryCharge).add(order.getDriverTipAmount());
+        BigDecimal platformFee = orderPricingService.platformFee();
+        BigDecimal payable = amountAfterDiscount.add(tax).add(restaurantCharge).add(deliveryCharge).add(platformFee).add(order.getDriverTipAmount());
 
         order.setTotal(itemTotal);
         order.setDiscountAmount(discount);
         order.setTax(tax);
         order.setRestaurantCharge(restaurantCharge);
         order.setDeliveryCharge(deliveryCharge);
+        order.setPlatformFee(platformFee);
         order.setPayable(payable);
         order.setPricingBreakdown(serializeBreakdown(new PricingBreakdown(
                 itemTotal, discount, amountAfterDiscount, tax, orderPricingService.taxPercentage(),
@@ -411,7 +413,8 @@ public class OrderService {
         return new OrderResponse(order.getId(), order.getUniqueOrderId(), status != null ? status.label() : "UNKNOWN",
                 order.getOrderstatusId(), customerSummary, restaurantSummary, couponSummary, itemResponses,
                 order.getAddress(), order.getTax(), order.getRestaurantCharge(),
-                order.getDeliveryCharge(), order.getDriverTipAmount(), order.getDiscountAmount(), order.getTotal(), order.getPayable(),
+                order.getDeliveryCharge(), order.getPlatformFee() != null ? order.getPlatformFee() : BigDecimal.ZERO,
+                order.getDriverTipAmount(), order.getDiscountAmount(), order.getTotal(), order.getPayable(),
                 order.getPaymentMode(), order.getDeliveryPin(), order.getOrderComment(),
                 order.getTransactionId(), order.getDeliveryType(), order.getOrderFrom(), order.getCreatedAt(), order.getUpdatedAt(),
                 legalNextStatuses, deserializeBreakdown(order.getPricingBreakdown()), deliveryGuyId, deliveryGuyName, deliveryPartner);

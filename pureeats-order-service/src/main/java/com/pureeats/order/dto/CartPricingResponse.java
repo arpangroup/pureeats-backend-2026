@@ -11,6 +11,7 @@ public record CartPricingResponse(
         BigDecimal deliveryCharge,
         String deliveryChargeBasis,
         BigDecimal distanceKm,
+        BigDecimal platformFee,
         BigDecimal payable
 ) {
 }

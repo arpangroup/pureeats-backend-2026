@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -52,7 +53,8 @@ public class AppConfigService {
                 config.locationResolutionAuthenticatedPriority(), config.locationResolutionGuestPriority(),
                 config.locationResolutionAuthenticatedFallbackLabel(), config.locationResolutionGuestFallbackLabel(),
                 config.razorpayKeyId(), config.firebaseApiKey(), config.firebaseAuthDomain(), config.firebaseProjectId(),
-                config.firebaseStorageBucket(), config.firebaseMessagingSenderId(), config.firebaseAppId(), config.firebaseVapidKey());
+                config.firebaseStorageBucket(), config.firebaseMessagingSenderId(), config.firebaseAppId(), config.firebaseVapidKey(),
+                config.platformFee());
     }
 
     @Transactional(readOnly = true)
@@ -70,7 +72,7 @@ public class AppConfigService {
                 config.razorpayKeyId(), config.razorpayKeySecret() != null && !config.razorpayKeySecret().isBlank(),
                 config.firebaseApiKey(), config.firebaseAuthDomain(), config.firebaseProjectId(),
                 config.firebaseStorageBucket(), config.firebaseMessagingSenderId(), config.firebaseAppId(), config.firebaseVapidKey(),
-                settingsConfirmationPassword != null && !settingsConfirmationPassword.isBlank());
+                settingsConfirmationPassword != null && !settingsConfirmationPassword.isBlank(), config.platformFee());
     }
 
     /** The one value never exposed through either response above — read directly by RazorpayService when it needs to actually call Razorpay's API. */
@@ -82,6 +84,13 @@ public class AppConfigService {
     @Transactional(readOnly = true)
     public String getRazorpayKeyId() {
         return readStored().razorpayKeyId();
+    }
+
+    /** Read directly by OrderPricingService when pricing an order — never null, defaults to zero. */
+    @Transactional(readOnly = true)
+    public BigDecimal getPlatformFee() {
+        BigDecimal fee = readStored().platformFee();
+        return fee != null ? fee : BigDecimal.ZERO;
     }
 
     /**
@@ -165,7 +174,8 @@ public class AppConfigService {
                 request.firebaseStorageBucket() != null ? request.firebaseStorageBucket() : existing.firebaseStorageBucket(),
                 request.firebaseMessagingSenderId() != null ? request.firebaseMessagingSenderId() : existing.firebaseMessagingSenderId(),
                 request.firebaseAppId() != null ? request.firebaseAppId() : existing.firebaseAppId(),
-                request.firebaseVapidKey() != null ? request.firebaseVapidKey() : existing.firebaseVapidKey());
+                request.firebaseVapidKey() != null ? request.firebaseVapidKey() : existing.firebaseVapidKey(),
+                request.platformFee() != null ? request.platformFee() : existing.platformFee());
     }
 
     /**
@@ -220,7 +230,7 @@ public class AppConfigService {
                 "PUSH", 8000,
                 List.of("saved", "gps", "ip"), List.of("gps", "ip"),
                 "Set your location", "Other",
-                null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, BigDecimal.ZERO);
     }
 
     /** Fills any null field (a row stored before this field existed) with its default, so an old/partial stored blob never trips a NPE unboxing a primitive in AppConfigResponse/AppConfigAdminResponse. */
@@ -251,7 +261,8 @@ public class AppConfigService {
                 config.locationResolutionGuestFallbackLabel() != null ? config.locationResolutionGuestFallbackLabel() : d.locationResolutionGuestFallbackLabel(),
                 config.razorpayKeyId(), config.razorpayKeySecret(),
                 config.firebaseApiKey(), config.firebaseAuthDomain(), config.firebaseProjectId(),
-                config.firebaseStorageBucket(), config.firebaseMessagingSenderId(), config.firebaseAppId(), config.firebaseVapidKey());
+                config.firebaseStorageBucket(), config.firebaseMessagingSenderId(), config.firebaseAppId(), config.firebaseVapidKey(),
+                config.platformFee() != null ? config.platformFee() : d.platformFee());
     }
 
     private AppConfigAdminRequest parseJson(String json) {

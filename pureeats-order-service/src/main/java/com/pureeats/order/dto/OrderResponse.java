@@ -18,6 +18,8 @@ public record OrderResponse(
         BigDecimal tax,
         BigDecimal restaurantCharge,
         BigDecimal deliveryCharge,
+        /** Flat, admin-configurable fee snapshotted at order-placement time — 0 for orders placed before this existed. */
+        BigDecimal platformFee,
         BigDecimal driverTipAmount,
         BigDecimal discountAmount,
         BigDecimal total,

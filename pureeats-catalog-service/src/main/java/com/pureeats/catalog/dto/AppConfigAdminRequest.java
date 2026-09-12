@@ -1,5 +1,6 @@
 package com.pureeats.catalog.dto;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -46,6 +47,8 @@ public record AppConfigAdminRequest(
         String firebaseStorageBucket,
         String firebaseMessagingSenderId,
         String firebaseAppId,
-        String firebaseVapidKey
+        String firebaseVapidKey,
+        /** Flat fee added to every order's payable total, same place tax/restaurantCharge/deliveryCharge are - null/unset means 0 (no platform fee charged), the default until an admin sets one. */
+        BigDecimal platformFee
 ) {
 }

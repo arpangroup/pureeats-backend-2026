@@ -1,5 +1,6 @@
 package com.pureeats.catalog.dto;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 /** The raw stored config, as the admin panel edits it - contrast with AppConfigResponse, which is what the app itself fetches (computed severity, no version numbers). */
@@ -38,6 +39,8 @@ public record AppConfigAdminResponse(
         String firebaseAppId,
         String firebaseVapidKey,
         /** Whether PUT /api/v1/admin/settings and PUT /api/v1/admin/app-config require a confirmation password — computed from whether pureeats.settings.confirmation-password is set (see application.yml), not stored or admin-editable; there's no UI to change it, only that env var. */
-        boolean settingsConfirmationEnabled
+        boolean settingsConfirmationEnabled,
+        /** Flat fee added to every order's payable total — 0 until an admin sets one. */
+        BigDecimal platformFee
 ) {
 }

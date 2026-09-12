@@ -109,10 +109,11 @@ public class CartValidationService {
         BigDecimal amountAfterDiscount = itemTotal.subtract(discount);
         BigDecimal tax = orderPricingService.tax(amountAfterDiscount);
         BigDecimal restaurantCharge = orderPricingService.restaurantCharge(restaurant, amountAfterDiscount);
-        BigDecimal payable = amountAfterDiscount.add(tax).add(restaurantCharge).add(deliveryChargeResult.amount());
+        BigDecimal platformFee = orderPricingService.platformFee();
+        BigDecimal payable = amountAfterDiscount.add(tax).add(restaurantCharge).add(deliveryChargeResult.amount()).add(platformFee);
 
         CartPricingResponse pricing = new CartPricingResponse(itemTotal, discount, tax, restaurantCharge,
-                deliveryChargeResult.amount(), deliveryChargeResult.basis(), deliveryChargeResult.distanceKm(), payable);
+                deliveryChargeResult.amount(), deliveryChargeResult.basis(), deliveryChargeResult.distanceKm(), platformFee, payable);
 
         boolean anyUnavailable = restaurantIssue != null || itemResponses.stream().anyMatch(i -> !i.available());
 
