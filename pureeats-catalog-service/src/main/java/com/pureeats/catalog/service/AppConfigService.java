@@ -228,7 +228,7 @@ public class AppConfigService {
                 "TWO_COLUMN", "TWO_COLUMN", "TWO_COLUMN",
                 "QUICK_OPTIONS", defaultDeliveryInstructionOptions(), "OSM",
                 "PUSH", 8000,
-                List.of("saved", "gps", "ip"), List.of("gps", "ip"),
+                List.of("gps", "ip", "saved", "picked"), List.of("gps", "ip", "picked"),
                 "Set your location", "Other",
                 null, null, null, null, null, null, null, null, null, BigDecimal.ZERO);
     }
