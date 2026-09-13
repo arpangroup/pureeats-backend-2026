@@ -6,6 +6,7 @@ import com.pureeats.catalog.repository.AddonCategoryItemRepository;
 import com.pureeats.catalog.repository.AddonRepository;
 import com.pureeats.catalog.repository.ItemRepository;
 import com.pureeats.catalog.repository.RestaurantRepository;
+import com.pureeats.catalog.service.AppConfigService;
 import com.pureeats.catalog.service.CouponService;
 import com.pureeats.catalog.service.RestaurantOpenStatusService;
 import com.pureeats.catalog.service.RestaurantScheduleCodec;
@@ -68,7 +69,11 @@ class CartValidationServiceTest {
     @BeforeEach
     void setUp() {
         couponService = mock(CouponService.class);
-        orderPricingService = new OrderPricingService(new HaversineDistanceCalculator());
+        AppConfigService appConfigService = mock(AppConfigService.class);
+        // Not every test's path reaches the platformFee() add-on in computePricing - lenient() so
+        // the ones that don't aren't flagged for an unnecessary stub, same as orderRepository below.
+        lenient().when(appConfigService.getPlatformFee()).thenReturn(BigDecimal.ZERO);
+        orderPricingService = new OrderPricingService(new HaversineDistanceCalculator(), appConfigService);
         ReflectionTestUtils.setField(orderPricingService, "taxPercentage", BigDecimal.valueOf(5));
 
         // Every rule the real pipeline runs (see CartValidationRule beans), same set the Spring
