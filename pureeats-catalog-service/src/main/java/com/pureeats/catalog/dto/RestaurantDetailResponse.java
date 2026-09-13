@@ -13,7 +13,8 @@ public record RestaurantDetailResponse(
         LocalTime openingTime,
         LocalTime closingTime,
         String image,
-        String rating,
+        /** Static, admin-set trust signal (e.g. 4.5) - not derived from real customer reviews. */
+        BigDecimal rating,
         Integer deliveryTime,
         String priceRange,
         boolean isPureveg,
