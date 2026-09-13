@@ -25,9 +25,11 @@ public class RestaurantController {
     private final MenuService menuService;
 
     @GetMapping
-    @Operation(summary = "List active, accepted restaurants")
-    public ApiResponse<List<RestaurantSummaryResponse>> list() {
-        return ApiResponse.success(restaurantService.listActive());
+    @Operation(summary = "List active, accepted restaurants",
+            description = "Optional lat/lng resolve each restaurant's deliveryTime to a real distance-based ETA "
+                    + "(and populate distanceKm) instead of its static admin-set estimate - omit either to get the static value, same as before.")
+    public ApiResponse<List<RestaurantSummaryResponse>> list(@RequestParam(required = false) String lat, @RequestParam(required = false) String lng) {
+        return ApiResponse.success(restaurantService.listActive(lat, lng));
     }
 
     @GetMapping("/nearby")

@@ -8,7 +8,9 @@ public record RestaurantSummaryResponse(
         String name,
         String slug,
         String image,
-        String rating,
+        /** Static, admin-set trust signal (e.g. 4.5) - not derived from real customer reviews. */
+        BigDecimal rating,
+        /** A real distance-based ETA when the request carried the customer's lat/lng (see distanceKm below); otherwise this restaurant's own static admin-set prep+delivery estimate, unchanged from before. */
         Integer deliveryTime,
         String priceRange,
         boolean isPureveg,
@@ -31,6 +33,8 @@ public record RestaurantSummaryResponse(
         /** Purely informational - whether this restaurant also seats walk-in/dine-in customers. Independent of actual order-fulfillment capability. */
         boolean isDineInAvailable,
         /** The real-time, day-aware answer — computed server-side from the restaurant's actual weeklySchedule. Use this, not openingTime/closingTime, for any "is it open" / grey-out logic. */
-        RestaurantOpenStatus openStatus
+        RestaurantOpenStatus openStatus,
+        /** Straight-line distance from the request's lat/lng to this restaurant - null unless both were provided and this restaurant's own coordinates are valid. */
+        BigDecimal distanceKm
 ) {
 }

@@ -43,7 +43,7 @@ public class RestaurantService {
 
     /** Only ADMIN/SUPER_ADMIN may change these via {@link #patchAsAdmin} - add/remove field names here to retune. */
     private static final Set<String> ADMIN_ONLY_FIELDS = Set.of(
-            "name", "commissionRate", "isActive", "isAccepted", "autoAcceptable", "isFeatured");
+            "name", "commissionRate", "isActive", "isAccepted", "autoAcceptable", "isFeatured", "rating");
 
     private final RestaurantRepository restaurantRepository;
     private final RestaurantUserRepository restaurantUserRepository;
@@ -66,9 +66,17 @@ public class RestaurantService {
     private static final long MAX_IMAGE_BYTES = 2L * 1024 * 1024;
     private static final int MAX_IMAGES = 5;
 
+    /**
+     * customerLat/customerLng are optional - when both are present (and a given restaurant's own
+     * coordinates are valid), that restaurant's {@code deliveryTime} in the response is a real
+     * distance-based ETA instead of its static admin-set estimate, and {@code distanceKm} is
+     * populated too. Computed fresh per request against the cached raw entity list below (see
+     * {@link #cachedActiveRestaurants}) - never cached itself, since it's specific to the caller's
+     * location, the same pattern {@link #findNearby} already uses for its own per-request distances.
+     */
     @Transactional(readOnly = true)
-    public List<RestaurantSummaryResponse> listActive() {
-        return cachedActiveRestaurants().stream().map(this::toSummary).toList();
+    public List<RestaurantSummaryResponse> listActive(String customerLat, String customerLng) {
+        return cachedActiveRestaurants().stream().map(r -> toSummary(r, customerLat, customerLng)).toList();
     }
 
     /**
@@ -238,6 +246,7 @@ public class RestaurantService {
         restaurant.setIsAccepted(isAccepted);
         restaurant.setIsFeatured(false);
         restaurant.setCommissionRate(isAdminCreate && request.commissionRate() != null ? request.commissionRate() : BigDecimal.TEN);
+        restaurant.setRating(isAdminCreate ? formatRating(request.rating()) : null);
         restaurant.setRestaurantCharges(BigDecimal.ZERO);
         restaurant.setDeliveryType(0);
         restaurant.setDeliveryChargeType("FIXED");
@@ -325,6 +334,7 @@ public class RestaurantService {
         applyField(restaurant.getId(), "commissionRate", restaurant.getCommissionRate(), request.commissionRate(), isPrivileged, callerUserId, restaurant::setCommissionRate);
         applyField(restaurant.getId(), "offerDiscountPercent", restaurant.getOfferDiscountPercent(), request.offerDiscountPercent(), isPrivileged, callerUserId, restaurant::setOfferDiscountPercent);
         applyField(restaurant.getId(), "offerMaxDiscount", restaurant.getOfferMaxDiscount(), request.offerMaxDiscount(), isPrivileged, callerUserId, restaurant::setOfferMaxDiscount);
+        applyField(restaurant.getId(), "rating", parseRating(restaurant.getRating()), request.rating(), isPrivileged, callerUserId, v -> restaurant.setRating(formatRating(v)));
         if (request.weeklySchedule() != null) {
             String newScheduleJson = scheduleCodec.validateAndSerialize(request.weeklySchedule());
             applyField(restaurant.getId(), "weeklySchedule", restaurant.getScheduleData(), newScheduleJson, isPrivileged, callerUserId, restaurant::setScheduleData);
@@ -405,6 +415,35 @@ public class RestaurantService {
 
     private static String formatDeliveryTime(Integer value) {
         return value == null ? null : String.valueOf(value);
+    }
+
+    /** {@code Restaurant.rating} is a plain string column, same reasoning as deliveryTime above - stored as text, exposed to the API as the number it actually holds. */
+    private static BigDecimal parseRating(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return new BigDecimal(value.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static String formatRating(BigDecimal value) {
+        return value == null ? null : value.toPlainString();
+    }
+
+    /** {@link DistanceCalculator#distanceKm} treats a null/unparseable coordinate as "0 away" rather than throwing (see its own doc) - true for every implementation, so an ETA computed off a garbage query param would otherwise come back as a confidently-wrong "0 minutes" instead of falling back to the static estimate. Checked before ever calling it. */
+    private static boolean isParseableCoordinate(String value) {
+        if (value == null) {
+            return false;
+        }
+        try {
+            Double.parseDouble(value);
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 
     @Transactional
@@ -510,21 +549,38 @@ public class RestaurantService {
     }
 
     RestaurantSummaryResponse toSummary(Restaurant r) {
+        return toSummary(r, null, null);
+    }
+
+    /**
+     * customerLat/customerLng absent (or this restaurant's own coordinates invalid) → deliveryTime
+     * stays the static admin-set estimate and distanceKm is null, exactly the old behavior. Present
+     * and valid → deliveryTime becomes {@link DistanceCalculator#etaMinutes} (straight-line, 25kph
+     * naive average - see that method's own doc) and distanceKm is populated alongside it.
+     */
+    private RestaurantSummaryResponse toSummary(Restaurant r, String customerLat, String customerLng) {
         List<DayScheduleDto> weeklySchedule = scheduleCodec.deserialize(r.getScheduleData());
         RestaurantOpenStatus openStatus = openStatusService.compute(r, weeklySchedule);
-        return new RestaurantSummaryResponse(r.getId(), r.getName(), r.getSlug(), mediaUrlResolver.resolve(r.getImage()), r.getRating(),
-                parseDeliveryTime(r.getDeliveryTime()), r.getPriceRange(), Boolean.TRUE.equals(r.getIsPureveg()),
+        Integer deliveryTimeMinutes = parseDeliveryTime(r.getDeliveryTime());
+        BigDecimal distanceKm = null;
+        if (isParseableCoordinate(customerLat) && isParseableCoordinate(customerLng)
+                && isParseableCoordinate(r.getLatitude()) && isParseableCoordinate(r.getLongitude())) {
+            distanceKm = distanceCalculator.distanceKm(r.getLatitude(), r.getLongitude(), customerLat, customerLng);
+            deliveryTimeMinutes = distanceCalculator.etaMinutes(r.getLatitude(), r.getLongitude(), customerLat, customerLng);
+        }
+        return new RestaurantSummaryResponse(r.getId(), r.getName(), r.getSlug(), mediaUrlResolver.resolve(r.getImage()), parseRating(r.getRating()),
+                deliveryTimeMinutes, r.getPriceRange(), Boolean.TRUE.equals(r.getIsPureveg()),
                 Boolean.TRUE.equals(r.getIsActive()), Boolean.TRUE.equals(r.getIsAccepted()),
                 r.getMinOrderPrice(), r.getDeliveryCharges(),
                 r.getOpeningTime(), r.getClosingTime(), Boolean.TRUE.equals(r.getIsFeatured()),
-                r.getOfferDiscountPercent(), r.getOfferMaxDiscount(), Boolean.TRUE.equals(r.getIsDineInAvailable()), openStatus);
+                r.getOfferDiscountPercent(), r.getOfferMaxDiscount(), Boolean.TRUE.equals(r.getIsDineInAvailable()), openStatus, distanceKm);
     }
 
     private RestaurantDetailResponse toDetail(Restaurant r) {
         List<DayScheduleDto> weeklySchedule = scheduleCodec.deserialize(r.getScheduleData());
         RestaurantOpenStatus openStatus = openStatusService.compute(r, weeklySchedule);
         return new RestaurantDetailResponse(r.getId(), r.getName(), r.getDescription(), r.getSlug(),
-                r.getContactNumber(), r.getOpeningTime(), r.getClosingTime(), mediaUrlResolver.resolve(r.getImage()), r.getRating(),
+                r.getContactNumber(), r.getOpeningTime(), r.getClosingTime(), mediaUrlResolver.resolve(r.getImage()), parseRating(r.getRating()),
                 parseDeliveryTime(r.getDeliveryTime()), r.getPriceRange(), Boolean.TRUE.equals(r.getIsPureveg()), r.getAddress(),
                 r.getPincode(), r.getLandmark(), r.getCertificate(), r.getLocationId(), r.getLatitude(), r.getLongitude(), r.getRestaurantCharges(),
                 r.getDeliveryCharges(), r.getDeliveryRadius(), r.getMinOrderPrice(), deliveryTypeLabel(r.getDeliveryType()),

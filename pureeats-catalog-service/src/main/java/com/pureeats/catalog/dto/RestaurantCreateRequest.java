@@ -40,6 +40,12 @@ public record RestaurantCreateRequest(
          * {@code RestaurantService#create}) so a submitted value can never let an owner set their
          * own commission rate; defaults to 10% when omitted or ignored.
          */
-        BigDecimal commissionRate
+        BigDecimal commissionRate,
+        /**
+         * Optional, ADMIN/SUPER_ADMIN only - ignored on store-owner self-onboarding (see
+         * {@code RestaurantService#create}), same gating as {@code commissionRate} above, so an
+         * owner can never set their own rating at creation either.
+         */
+        @DecimalMin("0") @DecimalMax("5") BigDecimal rating
 ) {
 }

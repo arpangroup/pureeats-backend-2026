@@ -10,7 +10,7 @@ import java.util.List;
 /**
  * Every field optional - only fields actually present get applied and diffed for the audit log.
  * {@code name}, {@code commissionRate}, {@code isActive}, {@code isAccepted}, {@code autoAcceptable},
- * {@code isFeatured} are admin/super-admin only (see {@code RestaurantService.ADMIN_ONLY_FIELDS}).
+ * {@code isFeatured}, {@code rating} are admin/super-admin only (see {@code RestaurantService.ADMIN_ONLY_FIELDS}).
  * <p>
  * {@code weeklySchedule} is included even though it's a JSON blob under the hood
  * ({@code RestaurantScheduleCodec} validates and (de)serializes it against
@@ -60,6 +60,8 @@ public record RestaurantPatchRequest(
         List<DayScheduleDto> weeklySchedule,
         List<Long> categoryIds,
         Integer offerDiscountPercent,
-        BigDecimal offerMaxDiscount
+        BigDecimal offerMaxDiscount,
+        /** Static, admin-set trust signal (e.g. 4.5) - ADMIN/SUPER_ADMIN only, see class doc. */
+        @DecimalMin("0") @DecimalMax("5") BigDecimal rating
 ) {
 }
