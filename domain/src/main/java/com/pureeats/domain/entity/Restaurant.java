@@ -83,6 +83,14 @@ public class Restaurant {
     @Column(name = "delivery_charges")
     private BigDecimal deliveryCharges;
 
+    /** Admin/store-owner-set promo badge shown on the restaurant card, e.g. "50% OFF" - independent of any actual {@code Coupon}; null means no badge is shown at all. */
+    @Column(name = "offer_discount_percent")
+    private Integer offerDiscountPercent;
+
+    /** The "UPTO ₹x" cap paired with {@link #offerDiscountPercent} on the card - can also stand alone (e.g. "UPTO ₹100 OFF") if only this is set. */
+    @Column(name = "offer_max_discount")
+    private BigDecimal offerMaxDiscount;
+
     @Lob
     @Column(name = "address", nullable = false)
     private String address;
@@ -148,4 +156,8 @@ public class Restaurant {
 
     @Column(name = "is_accept_cod", nullable = false)
     private Boolean isAcceptCod;
+
+    /** Purely informational capability badge - whether this restaurant also seats walk-in/dine-in customers. Independent of {@link #deliveryType} (self-pickup/delivery/both), which governs actual in-app order fulfillment; dine-in never goes through the cart/checkout pipeline. */
+    @Column(name = "is_dine_in_available")
+    private Boolean isDineInAvailable;
 }

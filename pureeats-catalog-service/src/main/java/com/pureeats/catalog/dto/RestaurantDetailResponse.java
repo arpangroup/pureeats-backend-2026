@@ -42,7 +42,11 @@ public record RestaurantDetailResponse(
         boolean isFeatured,
         boolean isAcceptCod,
         boolean autoAcceptable,
+        /** Purely informational - whether this restaurant also seats walk-in/dine-in customers. Independent of {@code deliveryType} (self-pickup/delivery/both), which governs actual order fulfillment; dine-in never goes through the cart/checkout pipeline. */
+        boolean isDineInAvailable,
         BigDecimal commissionRate,
+        Integer offerDiscountPercent,
+        BigDecimal offerMaxDiscount,
         List<DayScheduleDto> weeklySchedule,
         List<Long> categoryIds,
         /** The real-time, day-aware open/closed answer — computed server-side from weeklySchedule. openingTime/closingTime above are legacy and not day-aware; use this instead. */

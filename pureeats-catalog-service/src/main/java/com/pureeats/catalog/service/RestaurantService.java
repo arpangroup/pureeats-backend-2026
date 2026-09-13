@@ -226,6 +226,7 @@ public class RestaurantService {
         restaurant.setDeliveryRadius(request.deliveryRadius());
         restaurant.setMinOrderPrice(request.minOrderPrice());
         restaurant.setIsAcceptCod(request.isAcceptCod());
+        restaurant.setIsDineInAvailable(request.isDineInAvailable());
         restaurant.setDeliveryTime(formatDeliveryTime(request.deliveryTime()));
         if (request.weeklySchedule() != null) {
             restaurant.setScheduleData(scheduleCodec.validateAndSerialize(request.weeklySchedule()));
@@ -267,6 +268,7 @@ public class RestaurantService {
         restaurant.setMinOrderPrice(request.minOrderPrice());
         restaurant.setIsAcceptCod(request.isAcceptCod());
         restaurant.setAutoAcceptable(request.autoAcceptable());
+        restaurant.setIsDineInAvailable(request.isDineInAvailable());
         restaurant.setUpdatedAt(LocalDateTime.now());
         restaurantRepository.save(restaurant);
         return toDetail(restaurant);
@@ -316,10 +318,13 @@ public class RestaurantService {
         applyField(restaurant.getId(), "isNotifiable", restaurant.getIsNotifiable(), request.isNotifiable(), isPrivileged, callerUserId, restaurant::setIsNotifiable);
         applyField(restaurant.getId(), "isAcceptCod", restaurant.getIsAcceptCod(), request.isAcceptCod(), isPrivileged, callerUserId, restaurant::setIsAcceptCod);
         applyField(restaurant.getId(), "autoAcceptable", restaurant.getAutoAcceptable(), request.autoAcceptable(), isPrivileged, callerUserId, restaurant::setAutoAcceptable);
+        applyField(restaurant.getId(), "isDineInAvailable", restaurant.getIsDineInAvailable(), request.isDineInAvailable(), isPrivileged, callerUserId, restaurant::setIsDineInAvailable);
         applyField(restaurant.getId(), "isActive", restaurant.getIsActive(), request.isActive(), isPrivileged, callerUserId, restaurant::setIsActive);
         applyField(restaurant.getId(), "isAccepted", restaurant.getIsAccepted(), request.isAccepted(), isPrivileged, callerUserId, restaurant::setIsAccepted);
         applyField(restaurant.getId(), "isFeatured", restaurant.getIsFeatured(), request.isFeatured(), isPrivileged, callerUserId, restaurant::setIsFeatured);
         applyField(restaurant.getId(), "commissionRate", restaurant.getCommissionRate(), request.commissionRate(), isPrivileged, callerUserId, restaurant::setCommissionRate);
+        applyField(restaurant.getId(), "offerDiscountPercent", restaurant.getOfferDiscountPercent(), request.offerDiscountPercent(), isPrivileged, callerUserId, restaurant::setOfferDiscountPercent);
+        applyField(restaurant.getId(), "offerMaxDiscount", restaurant.getOfferMaxDiscount(), request.offerMaxDiscount(), isPrivileged, callerUserId, restaurant::setOfferMaxDiscount);
         if (request.weeklySchedule() != null) {
             String newScheduleJson = scheduleCodec.validateAndSerialize(request.weeklySchedule());
             applyField(restaurant.getId(), "weeklySchedule", restaurant.getScheduleData(), newScheduleJson, isPrivileged, callerUserId, restaurant::setScheduleData);
@@ -511,7 +516,8 @@ public class RestaurantService {
                 parseDeliveryTime(r.getDeliveryTime()), r.getPriceRange(), Boolean.TRUE.equals(r.getIsPureveg()),
                 Boolean.TRUE.equals(r.getIsActive()), Boolean.TRUE.equals(r.getIsAccepted()),
                 r.getMinOrderPrice(), r.getDeliveryCharges(),
-                r.getOpeningTime(), r.getClosingTime(), Boolean.TRUE.equals(r.getIsFeatured()), openStatus);
+                r.getOpeningTime(), r.getClosingTime(), Boolean.TRUE.equals(r.getIsFeatured()),
+                r.getOfferDiscountPercent(), r.getOfferMaxDiscount(), Boolean.TRUE.equals(r.getIsDineInAvailable()), openStatus);
     }
 
     private RestaurantDetailResponse toDetail(Restaurant r) {
@@ -526,7 +532,8 @@ public class RestaurantService {
                 r.getExtraDeliveryCharge(), r.getExtraDeliveryDistance(), Boolean.TRUE.equals(r.getIsSchedulable()),
                 Boolean.TRUE.equals(r.getIsNotifiable()), Boolean.TRUE.equals(r.getIsActive()), Boolean.TRUE.equals(r.getIsAccepted()),
                 Boolean.TRUE.equals(r.getIsFeatured()), Boolean.TRUE.equals(r.getIsAcceptCod()),
-                Boolean.TRUE.equals(r.getAutoAcceptable()), r.getCommissionRate(),
+                Boolean.TRUE.equals(r.getAutoAcceptable()), Boolean.TRUE.equals(r.getIsDineInAvailable()), r.getCommissionRate(),
+                r.getOfferDiscountPercent(), r.getOfferMaxDiscount(),
                 weeklySchedule, categoryIdsFor(r.getId()), openStatus);
     }
 

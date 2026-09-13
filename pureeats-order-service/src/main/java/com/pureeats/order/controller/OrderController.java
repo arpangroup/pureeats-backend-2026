@@ -8,6 +8,7 @@ import com.pureeats.order.dto.OrderSummaryResponse;
 import com.pureeats.order.dto.OrderTimelineResponse;
 import com.pureeats.order.dto.PlaceOrderRequest;
 import com.pureeats.order.service.DeliveryOrderService;
+import com.pureeats.order.service.InvoiceService;
 import com.pureeats.order.service.OrderService;
 import com.pureeats.order.service.OrderStatusLogService;
 import com.pureeats.user.security.AuthenticatedUser;
@@ -17,7 +18,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -34,6 +38,7 @@ public class OrderController {
     private final OrderService orderService;
     private final DeliveryOrderService deliveryOrderService;
     private final OrderStatusLogService orderStatusLogService;
+    private final InvoiceService invoiceService;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -70,6 +75,17 @@ public class OrderController {
     public ApiResponse<OrderTimelineResponse> timeline(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long id) {
         orderService.getOrder(principal.userId(), id);
         return ApiResponse.success(orderStatusLogService.timeline(id));
+    }
+
+    @GetMapping("/{id}/invoice")
+    @Operation(summary = "Download a PDF invoice for an order you placed")
+    public ResponseEntity<byte[]> invoice(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long id) {
+        OrderResponse order = orderService.getOrder(principal.userId(), id);
+        byte[] pdf = invoiceService.render(order);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"invoice-" + order.uniqueOrderId() + ".pdf\"")
+                .body(pdf);
     }
 
     @PatchMapping("/{id}/cancel")

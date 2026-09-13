@@ -60,6 +60,13 @@
 			<optional>true</optional>
 		</dependency>
 
+		<!-- Order invoice PDF generation - no PDF library existed anywhere in the backend before this. -->
+		<dependency>
+			<groupId>com.github.librepdf</groupId>
+			<artifactId>openpdf</artifactId>
+			<version>1.3.42</version>
+		</dependency>
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc-test</artifactId>

@@ -65,6 +65,10 @@ public class Order {
     @Column(name = "driver_tip_amount")
     private BigDecimal driverTipAmount;
 
+    /** Flat fee, admin-configurable (AppConfigService#getPlatformFee), snapshotted at order-placement time so a later config change never retroactively alters an already-placed order's payable. */
+    @Column(name = "platform_fee")
+    private BigDecimal platformFee;
+
     @Column(name = "total", nullable = false)
     private BigDecimal total;
 

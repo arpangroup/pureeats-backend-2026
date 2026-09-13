@@ -63,15 +63,38 @@ public class CartValidationService {
 
     @Transactional(readOnly = true)
     public CartValidationResponse validate(CartValidationRequest request, Long userId) {
-        Restaurant restaurant = findRestaurant(request.restaurantId());
-        List<CartLine> lines = toLines(request.items());
-        boolean isSelfPickup = request.deliveryType() == DeliveryType.SELF_PICKUP;
         String[] addressLatLng = resolveAddressLatLng(request.addressId(), userId);
-        BigDecimal distanceKm = isSelfPickup ? null : orderPricingService.distanceKm(restaurant, addressLatLng[0], addressLatLng[1]);
-        // Zero (both coordinates missing) isn't a real "in range" answer - don't let DeliveryRadiusRule act on it.
-        BigDecimal distanceForRules = (distanceKm != null && addressLatLng[0] != null) ? distanceKm : null;
+        // The live Cart-page preview never knows the payment mode yet (chosen later, on Checkout) -
+        // see the class doc - so PaymentMethodRule never fires here, only in assertPlaceable().
+        return validateCore(request.restaurantId(), request.items(), request.deliveryType(),
+                addressLatLng[0], addressLatLng[1], request.couponCode(), null, userId);
+    }
 
-        CartValidationContext context = buildContext(restaurant, lines, request.deliveryType(), distanceForRules, null, userId);
+    /**
+     * Same rules and pricing as {@link #validate(CartValidationRequest, Long)}, but for a caller
+     * that supplies the customer's coordinates directly instead of resolving them from one of that
+     * customer's own saved addresses - the admin Cart Simulator (a map-picked point, any restaurant,
+     * not scoped to any real customer) is the only current caller. {@code paymentMode} is accepted
+     * here (unlike the customer-facing overload) so the simulator can also exercise
+     * PaymentMethodRule (e.g. "COD not accepted"), which the live Cart preview never checks since
+     * Checkout hasn't chosen one yet at that point.
+     */
+    @Transactional(readOnly = true)
+    public CartValidationResponse simulate(Long restaurantId, List<PlaceOrderItemRequest> items, DeliveryType deliveryType,
+                                             String customerLat, String customerLng, String couponCode, String paymentMode) {
+        return validateCore(restaurantId, items, deliveryType, customerLat, customerLng, couponCode, paymentMode, null);
+    }
+
+    private CartValidationResponse validateCore(Long restaurantId, List<PlaceOrderItemRequest> items, DeliveryType deliveryType,
+                                                  String customerLat, String customerLng, String couponCode, String paymentMode, Long userId) {
+        Restaurant restaurant = findRestaurant(restaurantId);
+        List<CartLine> lines = toLines(items);
+        boolean isSelfPickup = deliveryType == DeliveryType.SELF_PICKUP;
+        BigDecimal distanceKm = isSelfPickup ? null : orderPricingService.distanceKm(restaurant, customerLat, customerLng);
+        // Zero (both coordinates missing) isn't a real "in range" answer - don't let DeliveryRadiusRule act on it.
+        BigDecimal distanceForRules = (distanceKm != null && customerLat != null) ? distanceKm : null;
+
+        CartValidationContext context = buildContext(restaurant, lines, deliveryType, distanceForRules, paymentMode, userId);
         List<CartIssue> issues = evaluateAll(context);
 
         CartIssue restaurantIssue = issues.stream().filter(i -> i.itemId() == null).findFirst().orElse(null);
@@ -91,10 +114,10 @@ public class CartValidationService {
         CartCouponValidationResponse couponResponse = null;
         BigDecimal discount = BigDecimal.ZERO;
         boolean freeDelivery = false;
-        if (request.couponCode() != null && !request.couponCode().isBlank()) {
+        if (couponCode != null && !couponCode.isBlank()) {
             try {
                 CouponApplyResponse preview = couponService.preview(
-                        new CouponApplyRequest(request.couponCode(), request.restaurantId().intValue(), itemTotal));
+                        new CouponApplyRequest(couponCode, restaurantId.intValue(), itemTotal));
                 discount = preview.discountAmount();
                 freeDelivery = preview.waivesDelivery();
                 couponResponse = new CartCouponValidationResponse(true, null, discount, freeDelivery);
@@ -104,15 +127,16 @@ public class CartValidationService {
         }
 
         DeliveryChargeResult deliveryChargeResult = orderPricingService.computeDeliveryCharge(
-                restaurant, isSelfPickup, freeDelivery, addressLatLng[0], addressLatLng[1]);
+                restaurant, isSelfPickup, freeDelivery, customerLat, customerLng);
 
         BigDecimal amountAfterDiscount = itemTotal.subtract(discount);
         BigDecimal tax = orderPricingService.tax(amountAfterDiscount);
         BigDecimal restaurantCharge = orderPricingService.restaurantCharge(restaurant, amountAfterDiscount);
-        BigDecimal payable = amountAfterDiscount.add(tax).add(restaurantCharge).add(deliveryChargeResult.amount());
+        BigDecimal platformFee = orderPricingService.platformFee();
+        BigDecimal payable = amountAfterDiscount.add(tax).add(restaurantCharge).add(deliveryChargeResult.amount()).add(platformFee);
 
         CartPricingResponse pricing = new CartPricingResponse(itemTotal, discount, tax, restaurantCharge,
-                deliveryChargeResult.amount(), deliveryChargeResult.basis(), deliveryChargeResult.distanceKm(), payable);
+                deliveryChargeResult.amount(), deliveryChargeResult.basis(), deliveryChargeResult.distanceKm(), platformFee, payable);
 
         boolean anyUnavailable = restaurantIssue != null || itemResponses.stream().anyMatch(i -> !i.available());
 

@@ -77,14 +77,19 @@ public class OrderService {
         Restaurant restaurant = restaurantRepository.findById(request.restaurantId())
                 .orElseThrow(() -> new ResourceNotFoundException("Restaurant not found: " + request.restaurantId()));
 
-        Address address = addressRepository.findById(request.addressId())
-                .orElseThrow(() -> new ResourceNotFoundException("Address not found: " + request.addressId()));
-        if (!address.getUserId().equals(userId.intValue())) {
-            log.warn("Rejected order for user {}: address {} does not belong to them", userId, request.addressId());
-            throw new ForbiddenException("This address does not belong to you");
+        boolean isSelfPickup = request.deliveryType() == DeliveryType.SELF_PICKUP;
+        // A self-pickup order has no delivery address - the client sends a placeholder addressId
+        // (0) it never expects to be looked up. Only DELIVERY orders need a real, owned address.
+        Address address = null;
+        if (!isSelfPickup) {
+            address = addressRepository.findById(request.addressId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Address not found: " + request.addressId()));
+            if (!address.getUserId().equals(userId.intValue())) {
+                log.warn("Rejected order for user {}: address {} does not belong to them", userId, request.addressId());
+                throw new ForbiddenException("This address does not belong to you");
+            }
         }
 
-        boolean isSelfPickup = request.deliveryType() == DeliveryType.SELF_PICKUP;
         BigDecimal distanceKm = isSelfPickup ? null : orderPricingService.distanceKm(restaurant, address.getLatitude(), address.getLongitude());
         // Same rule pipeline (CartValidationRule beans) that backs the Cart page's live availability
         // check (see CartController) - throws on the first issue (restaurant closed, item
@@ -97,8 +102,11 @@ public class OrderService {
         order.setUniqueOrderId(generateUniqueOrderId());
         order.setUserId(userId.intValue());
         order.setRestaurantId(restaurant.getId().intValue());
-        order.setAddress(address.getHouse() + ", " + address.getAddress());
-        order.setLocation("{\"latitude\":\"" + address.getLatitude() + "\",\"longitude\":\"" + address.getLongitude() + "\"}");
+        // For self-pickup there's no customer address at all - the "location" is the restaurant's own.
+        String orderLatitude = isSelfPickup ? restaurant.getLatitude() : address.getLatitude();
+        String orderLongitude = isSelfPickup ? restaurant.getLongitude() : address.getLongitude();
+        order.setAddress(isSelfPickup ? restaurant.getAddress() : address.getHouse() + ", " + address.getAddress());
+        order.setLocation("{\"latitude\":\"" + orderLatitude + "\",\"longitude\":\"" + orderLongitude + "\"}");
         order.setPaymentMode(request.paymentMode().name());
         order.setDeliveryType(request.deliveryType() == DeliveryType.SELF_PICKUP ? 1 : 0);
         order.setOrderComment(request.orderComment());
@@ -146,21 +154,23 @@ public class OrderService {
         BigDecimal tax = orderPricingService.tax(amountAfterDiscount);
         BigDecimal restaurantCharge = orderPricingService.restaurantCharge(restaurant, amountAfterDiscount);
         DeliveryChargeResult deliveryChargeResult = orderPricingService.computeDeliveryCharge(
-                restaurant, isSelfPickup, freeDelivery, address.getLatitude(), address.getLongitude());
+                restaurant, isSelfPickup, freeDelivery, orderLatitude, orderLongitude);
         BigDecimal deliveryCharge = deliveryChargeResult.amount();
-        BigDecimal payable = amountAfterDiscount.add(tax).add(restaurantCharge).add(deliveryCharge).add(order.getDriverTipAmount());
+        BigDecimal platformFee = orderPricingService.platformFee();
+        BigDecimal payable = amountAfterDiscount.add(tax).add(restaurantCharge).add(deliveryCharge).add(platformFee).add(order.getDriverTipAmount());
 
         order.setTotal(itemTotal);
         order.setDiscountAmount(discount);
         order.setTax(tax);
         order.setRestaurantCharge(restaurantCharge);
         order.setDeliveryCharge(deliveryCharge);
+        order.setPlatformFee(platformFee);
         order.setPayable(payable);
         order.setPricingBreakdown(serializeBreakdown(new PricingBreakdown(
                 itemTotal, discount, amountAfterDiscount, tax, orderPricingService.taxPercentage(),
                 restaurantCharge, restaurant.getRestaurantCharges(), deliveryCharge, deliveryChargeResult.basis(),
                 deliveryChargeResult.distanceKm(), restaurant.getLatitude(), restaurant.getLongitude(),
-                address.getLatitude(), address.getLongitude())));
+                orderLatitude, orderLongitude)));
 
         if (request.paymentMode() == PaymentMode.RAZORPAY) {
             // The amount Checkout was opened for (CreateRazorpayOrderRequest.amount, see
@@ -411,7 +421,8 @@ public class OrderService {
         return new OrderResponse(order.getId(), order.getUniqueOrderId(), status != null ? status.label() : "UNKNOWN",
                 order.getOrderstatusId(), customerSummary, restaurantSummary, couponSummary, itemResponses,
                 order.getAddress(), order.getTax(), order.getRestaurantCharge(),
-                order.getDeliveryCharge(), order.getDriverTipAmount(), order.getDiscountAmount(), order.getTotal(), order.getPayable(),
+                order.getDeliveryCharge(), order.getPlatformFee() != null ? order.getPlatformFee() : BigDecimal.ZERO,
+                order.getDriverTipAmount(), order.getDiscountAmount(), order.getTotal(), order.getPayable(),
                 order.getPaymentMode(), order.getDeliveryPin(), order.getOrderComment(),
                 order.getTransactionId(), order.getDeliveryType(), order.getOrderFrom(), order.getCreatedAt(), order.getUpdatedAt(),
                 legalNextStatuses, deserializeBreakdown(order.getPricingBreakdown()), deliveryGuyId, deliveryGuyName, deliveryPartner);

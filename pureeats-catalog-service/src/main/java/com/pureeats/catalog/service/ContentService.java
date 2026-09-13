@@ -119,7 +119,29 @@ public class ContentService {
     @Transactional(readOnly = true)
     public List<PaymentGatewayResponse> listPaymentGateways() {
         return paymentGatewayRepository.findByIsActiveTrue().stream()
-                .map(g -> new PaymentGatewayResponse(g.getId(), g.getName(), g.getLogo())).toList();
+                .map(this::toPaymentGatewayResponse).toList();
+    }
+
+    /** Admin listing - every row regardless of active/inactive, so a disabled gateway can be found and re-enabled (the public {@link #listPaymentGateways} above only ever returns active ones). */
+    @Transactional(readOnly = true)
+    public List<PaymentGatewayResponse> listAllPaymentGatewaysForAdmin() {
+        return paymentGatewayRepository.findAll().stream()
+                .map(this::toPaymentGatewayResponse).toList();
+    }
+
+    @Transactional
+    public PaymentGatewayResponse setPaymentGatewayActive(Long id, boolean isActive) {
+        com.pureeats.domain.entity.PaymentGateway gateway = paymentGatewayRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment gateway not found: " + id));
+        gateway.setIsActive(isActive);
+        gateway.setUpdatedAt(java.time.LocalDateTime.now());
+        paymentGatewayRepository.save(gateway);
+        log.info("Payment gateway {} ({}) set to {}", id, gateway.getName(), isActive ? "active" : "inactive");
+        return toPaymentGatewayResponse(gateway);
+    }
+
+    private PaymentGatewayResponse toPaymentGatewayResponse(com.pureeats.domain.entity.PaymentGateway g) {
+        return new PaymentGatewayResponse(g.getId(), g.getName(), g.getDescription(), g.getLogo(), g.getCode(), Boolean.TRUE.equals(g.getIsActive()));
     }
 
     private SlideResponse toSlideResponse(Slide s) {
@@ -128,6 +150,27 @@ public class ContentService {
         // or the client gets a bare "slide/xxx.jpg" it can't load. (MediaUrlResolver also passes an
         // already-absolute URL/data: URI straight through, so this is safe for any older row that
         // has one of those stored directly instead of a key.)
-        return new SlideResponse(s.getId(), s.getName(), mediaUrlResolver.resolve(s.getImage()), s.getImagePlaceholder(), s.getUrl());
+        return new SlideResponse(s.getId(), s.getName(), mediaUrlResolver.resolve(s.getImage()), s.getImagePlaceholder(), resolveSlideUrl(s));
+    }
+
+    /**
+     * The admin side models a slide's click target as {@code linkType} ("none"/"category"/
+     * "restaurant"/"url") plus whichever of {@code categoryId}/{@code restaurantId}/{@code url}
+     * matches - but the raw {@code url} column is only ever populated for {@code linkType == "url"}.
+     * The customer app's {@code PromoSlider} only ever looks at a single {@code url} string (null =
+     * not clickable), so for the category/restaurant cases we derive that string here from the id,
+     * matching the customer app's own route shapes ({@code /restaurants/:id}, {@code /category/:id})
+     * instead of ever exposing linkType/categoryId/restaurantId to the client.
+     */
+    private String resolveSlideUrl(Slide s) {
+        if (s.getLinkType() == null) {
+            return s.getUrl();
+        }
+        return switch (s.getLinkType()) {
+            case "restaurant" -> s.getRestaurantId() != null ? "/restaurants/" + s.getRestaurantId() : null;
+            case "category" -> s.getCategoryId() != null ? "/category/" + s.getCategoryId() : null;
+            case "url" -> s.getUrl();
+            default -> null;
+        };
     }
 }

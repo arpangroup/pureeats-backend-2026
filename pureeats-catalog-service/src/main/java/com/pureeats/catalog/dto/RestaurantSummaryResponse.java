@@ -25,6 +25,11 @@ public record RestaurantSummaryResponse(
         LocalTime openingTime,
         LocalTime closingTime,
         boolean isFeatured,
+        /** Admin/store-owner-set promo badge fields - both null means no badge should render (see restaurantOfferBadge() on the customer app). */
+        Integer offerDiscountPercent,
+        BigDecimal offerMaxDiscount,
+        /** Purely informational - whether this restaurant also seats walk-in/dine-in customers. Independent of actual order-fulfillment capability. */
+        boolean isDineInAvailable,
         /** The real-time, day-aware answer — computed server-side from the restaurant's actual weeklySchedule. Use this, not openingTime/closingTime, for any "is it open" / grey-out logic. */
         RestaurantOpenStatus openStatus
 ) {

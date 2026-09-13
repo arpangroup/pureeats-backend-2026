@@ -1,6 +1,9 @@
 package com.pureeats.user.dto;
 
+import com.pureeats.domain.enums.Gender;
 import com.pureeats.domain.enums.Role;
+
+import java.time.LocalDate;
 
 public record UserResponse(
         Long id,
@@ -9,6 +12,8 @@ public record UserResponse(
         String phone,
         String photo,
         Role role,
-        Long defaultAddressId
+        Long defaultAddressId,
+        LocalDate dob,
+        Gender gender
 ) {
 }

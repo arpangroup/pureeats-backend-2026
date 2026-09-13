@@ -1,5 +1,6 @@
 package com.pureeats.order.service;
 
+import com.pureeats.catalog.service.AppConfigService;
 import com.pureeats.geo.distance.DistanceCalculator;
 import com.pureeats.domain.entity.Restaurant;
 import com.pureeats.order.dto.DeliveryChargeResult;
@@ -18,6 +19,7 @@ import java.math.RoundingMode;
 public class OrderPricingService {
 
     private final DistanceCalculator distanceCalculator;
+    private final AppConfigService appConfigService;
 
     @Value("${pureeats.tax.percentage:5}")
     private BigDecimal taxPercentage;
@@ -28,6 +30,11 @@ public class OrderPricingService {
 
     public BigDecimal taxPercentage() {
         return taxPercentage;
+    }
+
+    /** Flat, admin-configurable (Settings → App config) — 0 until an admin sets one. */
+    public BigDecimal platformFee() {
+        return appConfigService.getPlatformFee();
     }
 
     public BigDecimal restaurantCharge(Restaurant restaurant, BigDecimal amount) {

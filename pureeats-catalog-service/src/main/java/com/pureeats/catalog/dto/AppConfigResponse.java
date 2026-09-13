@@ -1,5 +1,6 @@
 package com.pureeats.catalog.dto;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 /** What the app itself fetches at boot - severity is computed server-side from the client's own version, never trusted from the client. */
@@ -36,6 +37,8 @@ public record AppConfigResponse(
         String firebaseStorageBucket,
         String firebaseMessagingSenderId,
         String firebaseAppId,
-        String firebaseVapidKey
+        String firebaseVapidKey,
+        /** Flat fee added to every order's payable total — 0 until an admin sets one. */
+        BigDecimal platformFee
 ) {
 }
