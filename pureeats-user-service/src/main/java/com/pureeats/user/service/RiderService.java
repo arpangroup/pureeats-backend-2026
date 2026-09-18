@@ -132,8 +132,14 @@ public class RiderService {
     }
 
     private RiderProfileResponse toResponse(User user, DeliveryGuyDetail detail) {
+        // Two independent photo columns exist for historical reasons: DeliveryGuyDetail.photo
+        // (set by this app's own upload endpoint, or the admin's delivery-guy-specific edit form)
+        // and User.photo (set by the admin's generic "Users" edit page, AdminUserController#uploadPhoto).
+        // Prefer the rider-specific one but fall back to the user-identity one so a photo set via
+        // either admin path actually shows up here.
+        String photoKey = detail.getPhoto() != null ? detail.getPhoto() : user.getPhoto();
         return new RiderProfileResponse(detail.getId(), user.getId(), detail.getName(), user.getEmail(), user.getPhone(),
-                mediaUrlResolver.resolve(detail.getPhoto()), detail.getVehicleNumber(), detail.getAge(), detail.getGender(),
+                mediaUrlResolver.resolve(photoKey), detail.getVehicleNumber(), detail.getAge(), detail.getGender(),
                 detail.getDescription(), detail.getCommissionRate(), detail.getMaxAcceptDeliveryLimit(), detail.getRating(),
                 Boolean.TRUE.equals(detail.getIsNotifiable()), Boolean.TRUE.equals(detail.getIsOnline()),
                 Boolean.TRUE.equals(detail.getIsActive()));

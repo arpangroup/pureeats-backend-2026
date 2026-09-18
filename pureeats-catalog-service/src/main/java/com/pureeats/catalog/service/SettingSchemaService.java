@@ -322,6 +322,10 @@ public class SettingSchemaService {
                 group("Order list", "Bike", List.of(
                         field("show_full_address_order_list", "Show full address on order list", "boolean", "false")
                                 .info("When off, the delivery app shows only the area/locality until the order is accepted.")
+                )),
+                group("Location tracking", "MapPin", List.of(
+                        field("driver_location_tracking_enabled", "Enable driver location tracking", "boolean", "true")
+                                .info("When off, every delivery partner's app stops sending GPS pings and shows a \"Maintenance mode\" banner instead of the online/offline toggle - use this to pause location tracking platform-wide (e.g. during a backend issue) without disabling the app itself.")
                 ))
         ));
     }
