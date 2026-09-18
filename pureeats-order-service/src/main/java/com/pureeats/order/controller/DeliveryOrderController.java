@@ -31,6 +31,13 @@ public class DeliveryOrderController {
         return ApiResponse.success(deliveryOrderService.availableOrders());
     }
 
+    @GetMapping("/orders/mine")
+    @Operation(summary = "List the signed-in rider's own delivery history")
+    public ApiResponse<List<OrderSummaryResponse>> mine(@AuthenticationPrincipal AuthenticatedUser principal) {
+        log.debug("Listing delivery history for rider {}", principal.userId());
+        return ApiResponse.success(deliveryOrderService.myOrders(principal.userId()));
+    }
+
     @PostMapping("/orders/{orderId}/accept")
     @Operation(summary = "Accept an order for delivery")
     public ApiResponse<OrderResponse> accept(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long orderId) {
@@ -58,6 +65,22 @@ public class DeliveryOrderController {
     public ApiResponse<Void> pingGps(@Valid @RequestBody GpsPingRequest request) {
         log.debug("GPS ping received for order {}", request.orderId());
         deliveryOrderService.recordGpsPing(request);
+        return ApiResponse.success("Location updated", null);
+    }
+
+    @PostMapping("/status")
+    @Operation(summary = "Toggle the signed-in rider's own online/offline availability")
+    public ApiResponse<Void> setStatus(@AuthenticationPrincipal AuthenticatedUser principal, @Valid @RequestBody RiderStatusRequest request) {
+        log.info("Rider {} setting online status to {}", principal.userId(), request.isOnline());
+        deliveryOrderService.setOnlineStatus(principal.userId(), request.isOnline());
+        return ApiResponse.success(request.isOnline() ? "You're online" : "You're offline", null);
+    }
+
+    @PostMapping("/location")
+    @Operation(summary = "Report the signed-in rider's own current location (independent of any single order - see /gps for order-scoped tracking)")
+    public ApiResponse<Void> pingLocation(@AuthenticationPrincipal AuthenticatedUser principal, @Valid @RequestBody LocationPingRequest request) {
+        log.debug("Location ping received for rider {}", principal.userId());
+        deliveryOrderService.updateMyLocation(principal.userId(), request.lat(), request.lng());
         return ApiResponse.success("Location updated", null);
     }
 

@@ -12,7 +12,9 @@ public enum PushAudience {
     /** Every device registered from the customer-facing React app. */
     CUSTOMER("all_customers"),
     /** Every device registered from the admin panel (admin/employee/restaurant-owner/delivery roles alike - the panel doesn't distinguish at registration time). */
-    STAFF("all_staff");
+    STAFF("all_staff"),
+    /** Every device registered from the rider-facing delivery PWA - lets a "new order available" broadcast reach every online rider in one topic send, no per-user loop. */
+    DELIVERY("all_delivery_partners");
 
     private final String topic;
 

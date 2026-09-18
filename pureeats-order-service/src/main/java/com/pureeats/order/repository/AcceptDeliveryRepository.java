@@ -11,4 +11,6 @@ public interface AcceptDeliveryRepository extends JpaRepository<AcceptDelivery, 
     java.util.List<AcceptDelivery> findByUserIdAndIsCompleteFalse(Integer userId);
 
     java.util.List<AcceptDelivery> findByIsCompleteFalse();
+
+    java.util.List<AcceptDelivery> findByUserIdOrderByIdDesc(Integer userId);
 }

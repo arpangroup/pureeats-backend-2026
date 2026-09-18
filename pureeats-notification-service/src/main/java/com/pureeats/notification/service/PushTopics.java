@@ -18,6 +18,7 @@ public final class PushTopics {
 
     public static final String ALL_CUSTOMERS = PushAudience.CUSTOMER.topic();
     public static final String ALL_STAFF = PushAudience.STAFF.topic();
+    public static final String ALL_DELIVERY_PARTNERS = PushAudience.DELIVERY.topic();
 
     private PushTopics() {
     }

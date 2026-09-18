@@ -235,6 +235,14 @@ public class OrderService {
                 "Order #" + order.getUniqueOrderId() + " placed at " + restaurant.getName(),
                 Map.of("orderId", order.getId(), "uniqueOrderId", order.getUniqueOrderId(),
                         "restaurantName", restaurant.getName(), "payable", payable));
+        // Auto-accepting restaurants land straight in RESTAURANT_ACCEPTED, so a delivery (non
+        // self-pickup) order is already visible in DeliveryOrderService#availableOrders() right now -
+        // let online riders know immediately instead of waiting for them to poll. A non-auto-accepting
+        // restaurant's order is still PLACED here (not yet pickable), so the equivalent broadcast for
+        // that path fires from StoreOwnerOrderService#accept instead, once the owner actually accepts it.
+        if (autoAccept && order.getDeliveryType() == 0) {
+            orderNotificationService.notifyDeliveryPartnersOfAvailableOrder(order.getId(), restaurant.getName(), payable);
+        }
 
         return toResponse(order);
     }
@@ -449,7 +457,8 @@ public class OrderService {
         }
     }
 
-    private OrderSummaryResponse toSummary(Order order) {
+    /** Package-private (not {@code private}) so {@link DeliveryOrderService#myOrders} can reuse the exact same mapping for a rider's own order history, same convention as {@link #toResponse}. */
+    OrderSummaryResponse toSummary(Order order) {
         OrderStatusCode status = orderStatusService.codeFor(order.getOrderstatusId());
         Restaurant restaurant = restaurantRepository.findById(order.getRestaurantId().longValue()).orElse(null);
         String restaurantImage = restaurant != null

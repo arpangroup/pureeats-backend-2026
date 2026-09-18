@@ -2,12 +2,15 @@ package com.pureeats.app.deliveryguy.controller;
 
 import com.pureeats.app.deliveryguy.dto.AdminDeliveryGuyRequest;
 import com.pureeats.app.deliveryguy.dto.AdminDeliveryGuyResponse;
+import com.pureeats.app.deliveryguy.dto.AdminLocationUpdateRequest;
 import com.pureeats.app.deliveryguy.dto.TripDetailResponse;
 import com.pureeats.app.deliveryguy.service.AdminDeliveryGuyService;
 import com.pureeats.domain.common.response.ApiResponse;
 import com.pureeats.domain.common.response.PageResponse;
+import com.pureeats.user.service.DeliveryGuyLocationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
@@ -25,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -37,6 +41,7 @@ import java.util.Map;
 public class AdminDeliveryGuyController {
 
     private final AdminDeliveryGuyService deliveryGuyService;
+    private final DeliveryGuyLocationService deliveryGuyLocationService;
 
     @GetMapping("/api/v1/admin/delivery-guys")
     public ApiResponse<PageResponse<AdminDeliveryGuyResponse>> list(
@@ -86,5 +91,13 @@ public class AdminDeliveryGuyController {
     @Operation(summary = "Per-order earnings for a rider, identified by their User id")
     public ApiResponse<List<TripDetailResponse>> earnings(@PathVariable Long riderUserId) {
         return ApiResponse.success(deliveryGuyService.earningsForRider(riderUserId));
+    }
+
+    @PostMapping("/api/v1/admin/delivery-guys/{id}/location")
+    @Operation(summary = "Admin override - set a delivery partner's last known location directly, identified by their DeliveryGuyDetail id")
+    public ApiResponse<Void> setLocation(@PathVariable Long id, @Valid @RequestBody AdminLocationUpdateRequest request) {
+        log.info("Admin request to set location for delivery partner {}", id);
+        deliveryGuyLocationService.updateLocation(id, new BigDecimal(request.lat()), new BigDecimal(request.lng()));
+        return ApiResponse.success("Location updated", null);
     }
 }

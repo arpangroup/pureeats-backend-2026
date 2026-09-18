@@ -3,6 +3,7 @@ package com.pureeats.order.service;
 import com.pureeats.catalog.service.RestaurantService;
 import com.pureeats.domain.common.exception.BadRequestException;
 import com.pureeats.domain.entity.Order;
+import com.pureeats.domain.entity.Restaurant;
 import com.pureeats.domain.enums.OrderStatusCode;
 import com.pureeats.notification.enums.NotificationRecipientRole;
 import com.pureeats.order.dto.OrderResponse;
@@ -69,6 +70,15 @@ public class StoreOwnerOrderService {
         orderNotificationService.notify(NotificationRecipientRole.CUSTOMER, order.getUserId().longValue(), "Order accepted",
                 "Your order #" + order.getUniqueOrderId() + " has been accepted by the restaurant",
                 Map.of("orderId", order.getId(), "status", OrderStatusCode.RESTAURANT_ACCEPTED.name()));
+
+        // The order is now visible in DeliveryOrderService#availableOrders() (RESTAURANT_ACCEPTED +
+        // not self-pickup) - let online riders know immediately. Mirrors the equivalent broadcast in
+        // OrderService#placeOrder for the auto-accept path, which this manual-accept path skips since
+        // the order was still PLACED (not yet pickable) at placement time.
+        if (order.getDeliveryType() == 0) {
+            Restaurant restaurant = restaurantService.assertOwnership(ownerUserId, order.getRestaurantId().longValue());
+            orderNotificationService.notifyDeliveryPartnersOfAvailableOrder(order.getId(), restaurant.getName(), order.getPayable());
+        }
         return orderService.toResponse(order);
     }
 

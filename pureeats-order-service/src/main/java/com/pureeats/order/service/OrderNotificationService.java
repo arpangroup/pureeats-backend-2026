@@ -1,12 +1,15 @@
 package com.pureeats.order.service;
 
 import com.pureeats.domain.entity.User;
+import com.pureeats.notification.dto.FcmPushRequest;
 import com.pureeats.notification.dto.NotificationRequest;
 import com.pureeats.notification.enums.NotificationChannel;
 import com.pureeats.notification.enums.NotificationRecipientRole;
 import com.pureeats.notification.enums.NotificationType;
+import com.pureeats.notification.service.FcmSender;
 import com.pureeats.notification.service.NotificationRoutingService;
 import com.pureeats.notification.service.NotificationService;
+import com.pureeats.notification.service.PushTopics;
 import com.pureeats.user.repository.UserRepository;
 import com.pureeats.user.service.RoleService;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +17,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -38,6 +43,7 @@ public class OrderNotificationService {
     private final NotificationService notificationService;
     private final UserRepository userRepository;
     private final RoleService roleService;
+    private final FcmSender fcmSender;
 
     private static final List<com.pureeats.domain.enums.Role> ADMIN_LIKE_ROLES =
             List.of(com.pureeats.domain.enums.Role.SUPER_ADMIN, com.pureeats.domain.enums.Role.ADMIN, com.pureeats.domain.enums.Role.EMPLOYEE);
@@ -129,6 +135,35 @@ public class OrderNotificationService {
         if (!data.isEmpty()) params.put("data", data);
         notificationService.sendToChannelsAsync(NotificationType.NEW_ORDER, null, userId, params,
                 Set.of(NotificationChannel.PUSH, NotificationChannel.IN_APP));
+    }
+
+    /**
+     * Broadcasts "a new order needs a rider" to every online delivery partner in one FCM call, via
+     * a direct topic send to {@link PushTopics#ALL_DELIVERY_PARTNERS} - every delivery-app device is
+     * auto-subscribed to that topic at push-token registration (see {@code PushTokenService#save}),
+     * so this needs no per-user loop over every rider's tokens. Bypasses {@link
+     * NotificationRoutingService} and {@link NotificationService} entirely, same reasoning as {@link
+     * #notifyAdminsOfNewOrder}: "every rider currently online" is a fixed operational broadcast, not
+     * a per-recipient configurable preference.
+     * <p>
+     * {@code category} is hardcoded to the literal string {@code "NEW_ORDER"}, landing as {@code
+     * data.type} on the FCM payload - mirroring exactly what {@code PushNotificationSender} does for
+     * every other push (see its {@code category -> data.put("type", category)} mapping), since this
+     * call bypasses that class and has to build the same wire shape itself. The rider app's
+     * foreground handler checks {@code payload.data.type === 'NEW_ORDER'} to show a full-screen
+     * alert without an extra fetch, so {@code orderId}/{@code restaurantName}/{@code payable} ride
+     * along in {@code data} too.
+     */
+    @Transactional(readOnly = true)
+    public void notifyDeliveryPartnersOfAvailableOrder(Long orderId, String restaurantName, BigDecimal payable) {
+        Map<String, String> data = new HashMap<>();
+        data.put("type", "NEW_ORDER");
+        data.put("orderId", String.valueOf(orderId));
+        data.put("restaurantName", restaurantName);
+        data.put("payable", String.valueOf(payable));
+        fcmSender.send(FcmPushRequest.visible(null, PushTopics.ALL_DELIVERY_PARTNERS,
+                "New order available", "Pickup available at " + restaurantName + " - " + payable + " payout", null, data, null, null));
+        log.info("Broadcast new-order-available push to delivery partners for order {} ({})", orderId, restaurantName);
     }
 
     private boolean needsExternalDestination(NotificationChannel channel) {

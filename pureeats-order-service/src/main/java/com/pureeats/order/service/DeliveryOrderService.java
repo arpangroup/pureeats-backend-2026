@@ -11,6 +11,7 @@ import com.pureeats.order.dto.*;
 import com.pureeats.order.repository.*;
 import com.pureeats.user.repository.DeliveryGuyDetailRepository;
 import com.pureeats.user.repository.UserRepository;
+import com.pureeats.user.service.DeliveryGuyLocationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -43,6 +44,7 @@ public class DeliveryOrderService {
     private final UserRepository userRepository;
     private final DeliveryGuyDetailRepository deliveryGuyDetailRepository;
     private final OrderStatusLogService orderStatusLogService;
+    private final DeliveryGuyLocationService deliveryGuyLocationService;
 
     @Value("${pureeats.commission.basis:FULL_ORDER}")
     private CommissionBasis commissionBasis;
@@ -252,6 +254,42 @@ public class DeliveryOrderService {
                     return new ResourceNotFoundException("No GPS ping recorded for this order yet");
                 });
         return new GpsLocationResponse(gps.getDeliveryLat(), gps.getDeliveryLong(), gps.getHeading(), gps.getBearing());
+    }
+
+    /**
+     * Self-service online/offline toggle for the signed-in rider. Going offline deliberately leaves
+     * {@code lastLat}/{@code lastLng}/{@code lastSeenAt} untouched (stale-but-present) rather than
+     * clearing them - an admin/ops view showing "last seen at 5:42pm near X" for an offline rider is
+     * more useful than showing nothing, and it costs nothing since {@link #availableOrders} /
+     * anything rider-nearby-facing should already be filtering on {@code isOnline} itself.
+     */
+    @Transactional
+    public void setOnlineStatus(Long riderUserId, boolean isOnline) {
+        DeliveryGuyDetail rider = riderProfile(riderUserId);
+        rider.setIsOnline(isOnline);
+        deliveryGuyDetailRepository.save(rider);
+        log.info("Rider {} is now {}", riderUserId, isOnline ? "ONLINE" : "OFFLINE");
+    }
+
+    /**
+     * Self-service, principal-scoped location ping - resolves the caller's own {@link
+     * DeliveryGuyDetail} the same way every other rider action does ({@link #riderProfile}), then
+     * delegates the actual write to {@link DeliveryGuyLocationService#updateLocation}, the same
+     * method the admin id-scoped endpoint calls, so the write logic itself isn't duplicated.
+     */
+    @Transactional
+    public void updateMyLocation(Long riderUserId, String lat, String lng) {
+        DeliveryGuyDetail rider = riderProfile(riderUserId);
+        deliveryGuyLocationService.updateLocation(rider.getId(), new BigDecimal(lat), new BigDecimal(lng));
+    }
+
+    /** The signed-in rider's own delivery history, mirroring {@code OrderController#myOrders}'s "my orders" shape but sourced from {@link AcceptDeliveryRepository} (assignments) rather than {@code OrderRepository#findByUserId} (which is the customer's own orders). */
+    @Transactional(readOnly = true)
+    public List<OrderSummaryResponse> myOrders(Long riderUserId) {
+        return acceptDeliveryRepository.findByUserIdOrderByIdDesc(riderUserId.intValue()).stream()
+                .map(accept -> orderService.findOrThrow(accept.getOrderId().longValue()))
+                .map(orderService::toSummary)
+                .toList();
     }
 
     private void recordCashCollection(Long riderUserId, BigDecimal amount, String uniqueOrderId) {
