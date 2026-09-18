@@ -43,13 +43,15 @@ public class AdminUserController {
     private final AddressService addressService;
 
     @GetMapping
-    @Operation(summary = "List users, optionally filtered by userType (defaults to CUSTOMER) and search")
+    @Operation(summary = "List users, optionally filtered by userType (defaults to CUSTOMER), search, and accountStatus " +
+            "(a status name, or \"ALL\" - defaults to ACTIVE-only, so deleted/blocked/disabled/locked accounts are filtered out unless asked for)")
     public ApiResponse<PageResponse<AdminUserResponse>> listUsers(
             @RequestParam(required = false) Role userType,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) String accountStatus,
             @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
-        log.debug("Admin listing users, userType={}", userType);
-        return ApiResponse.success(adminUserService.listUsers(userType, search, pageable));
+        log.debug("Admin listing users, userType={}, accountStatus={}", userType, accountStatus);
+        return ApiResponse.success(adminUserService.listUsers(userType, search, accountStatus, pageable));
     }
 
     @GetMapping("/{id}")

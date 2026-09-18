@@ -1,9 +1,11 @@
 package com.pureeats.user.service;
 
+import com.pureeats.domain.common.exception.BadRequestException;
 import com.pureeats.domain.common.exception.ResourceNotFoundException;
 import com.pureeats.domain.common.response.PageResponse;
 import com.pureeats.domain.entity.DeliveryGuyDetail;
 import com.pureeats.domain.entity.User;
+import com.pureeats.domain.enums.AccountStatus;
 import com.pureeats.domain.enums.Role;
 import com.pureeats.media.service.MediaAssetService;
 import com.pureeats.media.storage.MediaUrlResolver;
@@ -20,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /** Admin-panel user directory - listing/detail is read-only, plus a scoped update path (identity fields, active flag, role grant) and a photo upload, gated by {@code /api/v1/admin/**} at the URL layer. */
 @Slf4j
@@ -39,12 +42,44 @@ public class AdminUserService {
     private final DeliveryGuyDetailRepository deliveryGuyDetailRepository;
     private final RiderService riderService;
 
-    public PageResponse<AdminUserResponse> listUsers(Role userType, String search, Pageable pageable) {
+    /**
+     * {@code accountStatusFilter} is a plain string so the frontend can pass either a concrete
+     * {@link AccountStatus} name or the sentinel {@code "ALL"} - anything else is rejected rather
+     * than silently ignored, since a typo'd filter value should never fall through to "show
+     * everyone" by accident. Absent/blank defaults to ACTIVE-only (which also matches legacy rows
+     * where the column is NULL) - deleted/blocked/disabled/locked accounts are filtered OUT of the
+     * admin list unless explicitly asked for, which is the whole point of this filter existing.
+     */
+    public PageResponse<AdminUserResponse> listUsers(Role userType, String search, String accountStatusFilter, Pageable pageable) {
         Role role = userType != null ? userType : Role.CUSTOMER;
-        Page<User> page = adminUserRepository.findByRoleName(role.legacyName(), USER_MORPH_TYPE, search, pageable);
-        log.debug("Admin listed {} users of role {}", page.getNumberOfElements(), role);
+        boolean matchAll = "ALL".equalsIgnoreCase(accountStatusFilter);
+        List<AccountStatus> statuses;
+        boolean includeNullAsActive;
+        if (matchAll) {
+            statuses = List.of();
+            includeNullAsActive = false;
+        } else if (accountStatusFilter == null || accountStatusFilter.isBlank()) {
+            statuses = List.of(AccountStatus.ACTIVE);
+            includeNullAsActive = true;
+        } else {
+            AccountStatus parsed = parseStatus(accountStatusFilter);
+            statuses = List.of(parsed);
+            includeNullAsActive = parsed == AccountStatus.ACTIVE;
+        }
+        Page<User> page = adminUserRepository.findByRoleNameAndStatus(role.legacyName(), USER_MORPH_TYPE, search,
+                matchAll, statuses, includeNullAsActive, pageable);
+        log.debug("Admin listed {} users of role {} (status filter: {})", page.getNumberOfElements(), role,
+                matchAll ? "ALL" : statuses);
         return PageResponse.of(page.getContent().stream().map(u -> toResponse(u, role)).toList(),
                 page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
+    }
+
+    private AccountStatus parseStatus(String raw) {
+        try {
+            return AccountStatus.valueOf(raw.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException("Unknown account status filter: " + raw);
+        }
     }
 
     public AdminUserResponse getUser(Long id) {
@@ -126,8 +161,9 @@ public class AdminUserService {
     }
 
     private AdminUserResponse toResponse(User u, Role role, String photo) {
+        AccountStatus status = u.getAccountStatus() != null ? u.getAccountStatus() : AccountStatus.ACTIVE;
         return new AdminUserResponse(u.getId(), u.getName(), u.getEmail(), u.getPhone(), mediaUrlResolver.resolve(photo), role,
-                User.STATUS_ACTIVE.equals(u.getIsActive()), u.getDefaultAddressId(), u.getDeliveryGuyDetailId(),
+                User.STATUS_ACTIVE.equals(u.getIsActive()), status.name(), u.getDefaultAddressId(), u.getDeliveryGuyDetailId(),
                 u.getDeliveryPin(), u.getCreatedAt(), u.getUpdatedAt());
     }
 }

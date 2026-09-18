@@ -65,8 +65,11 @@ public class DashboardService {
         BigDecimal totalRevenue = orderRepository.sumTotal();
         long activeRestaurants = restaurantRepository.countByIsActiveTrueAndIsAcceptedTrue();
         long totalRestaurants = restaurantRepository.count();
-        long totalCustomers = adminUserService.listUsers(Role.CUSTOMER, null, PageRequest.of(0, 1)).totalElements();
-        long totalRiders = adminUserService.listUsers(Role.DELIVERY, null, PageRequest.of(0, 1)).totalElements();
+        // No accountStatus filter passed here -> defaults to ACTIVE-only (see AdminUserService#listUsers),
+        // so these dashboard counts no longer silently include deleted/blocked/disabled accounts
+        // the way an unfiltered count would have.
+        long totalCustomers = adminUserService.listUsers(Role.CUSTOMER, null, null, PageRequest.of(0, 1)).totalElements();
+        long totalRiders = adminUserService.listUsers(Role.DELIVERY, null, null, PageRequest.of(0, 1)).totalElements();
         long onlineRiders = acceptDeliveryRepository.findByIsCompleteFalse().stream()
                 .map(AcceptDelivery::getUserId).distinct().count();
         double avgRating = ratingRepository.findAll().stream().mapToInt(Rating::getRating).average().orElse(0);
