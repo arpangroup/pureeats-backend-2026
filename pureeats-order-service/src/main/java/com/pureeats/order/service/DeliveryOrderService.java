@@ -1,5 +1,8 @@
 package com.pureeats.order.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pureeats.catalog.repository.RestaurantRepository;
 import com.pureeats.domain.common.exception.BadRequestException;
 import com.pureeats.domain.common.exception.ForbiddenException;
 import com.pureeats.domain.common.exception.ResourceNotFoundException;
@@ -45,22 +48,75 @@ public class DeliveryOrderService {
     private final DeliveryGuyDetailRepository deliveryGuyDetailRepository;
     private final OrderStatusLogService orderStatusLogService;
     private final DeliveryGuyLocationService deliveryGuyLocationService;
+    private final RestaurantRepository restaurantRepository;
+    private final OrderItemRepository orderItemRepository;
+    private final OrderPricingService orderPricingService;
+    private final ObjectMapper objectMapper;
 
     @Value("${pureeats.commission.basis:FULL_ORDER}")
     private CommissionBasis commissionBasis;
 
+    /**
+     * Rider-scoped (not just role-scoped): {@code payoutEstimate} is computed against the CALLING
+     * rider's own commission rate, mirroring {@link #creditRiderAndSettle}'s math exactly, so what's
+     * shown here is what they'd actually be credited if they accept - two riders with different
+     * commission rates would see different payout numbers for the same order.
+     */
     @Transactional
-    public List<OrderSummaryResponse> availableOrders() {
+    public List<DeliveryAvailableOrderResponse> availableOrders(Long riderUserId) {
+        DeliveryGuyDetail rider = riderProfile(riderUserId);
         List<Integer> statusIds = List.of(
                 orderStatusService.idFor(OrderStatusCode.RESTAURANT_ACCEPTED),
                 orderStatusService.idFor(OrderStatusCode.READY_FOR_PICKUP));
         return orderRepository.findByOrderstatusIdInOrderByCreatedAtDesc(statusIds).stream()
                 .filter(o -> o.getDeliveryType() == 0 && acceptDeliveryRepository.findByOrderId(o.getId().intValue()).isEmpty())
-                .map(o -> {
-                    OrderStatusCode status = orderStatusService.codeFor(o.getOrderstatusId());
-                    return new OrderSummaryResponse(o.getId(), o.getUniqueOrderId(), status.label(),
-                            o.getRestaurantId().longValue(), null, null, o.getPayable(), o.getCreatedAt(), null);
-                }).toList();
+                .map(o -> toAvailableOrderResponse(o, rider))
+                .toList();
+    }
+
+    private DeliveryAvailableOrderResponse toAvailableOrderResponse(Order order, DeliveryGuyDetail rider) {
+        Restaurant restaurant = restaurantRepository.findById(order.getRestaurantId().longValue()).orElse(null);
+        String customerLat = null;
+        String customerLng = null;
+        try {
+            if (order.getLocation() != null) {
+                JsonNode node = objectMapper.readTree(order.getLocation());
+                customerLat = node.path("latitude").asText(null);
+                customerLng = node.path("longitude").asText(null);
+            }
+        } catch (Exception e) {
+            log.warn("Could not parse stored location JSON for order {}: {}", order.getId(), e.getMessage());
+        }
+
+        BigDecimal distanceKm = restaurant != null
+                ? orderPricingService.distanceKm(restaurant, customerLat, customerLng)
+                : BigDecimal.ZERO;
+
+        BigDecimal commissionBase = commissionBasis == CommissionBasis.DELIVERY_CHARGE_ONLY
+                ? order.getDeliveryCharge() : order.getTotal();
+        BigDecimal payoutEstimate = commissionBase.multiply(rider.getCommissionRate())
+                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+
+        int itemsCount = orderItemRepository.findByOrderId(order.getId().intValue()).size();
+
+        return new DeliveryAvailableOrderResponse(
+                order.getId(), order.getUniqueOrderId(),
+                restaurant != null ? restaurant.getName() : "Unknown",
+                restaurant != null ? restaurant.getAddress() : "",
+                restaurant != null ? parseCoordinate(restaurant.getLatitude()) : BigDecimal.ZERO,
+                restaurant != null ? parseCoordinate(restaurant.getLongitude()) : BigDecimal.ZERO,
+                order.getAddress(),
+                parseCoordinate(customerLat), parseCoordinate(customerLng),
+                distanceKm, payoutEstimate, itemsCount, order.getCreatedAt());
+    }
+
+    private BigDecimal parseCoordinate(String value) {
+        if (value == null || value.isBlank()) return BigDecimal.ZERO;
+        try {
+            return new BigDecimal(value);
+        } catch (NumberFormatException e) {
+            return BigDecimal.ZERO;
+        }
     }
 
     @Transactional

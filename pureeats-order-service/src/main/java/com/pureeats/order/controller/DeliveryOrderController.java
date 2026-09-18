@@ -26,9 +26,9 @@ public class DeliveryOrderController {
     private final DeliveryOrderService deliveryOrderService;
 
     @GetMapping("/orders/available")
-    @Operation(summary = "List orders available to be picked up for delivery")
-    public ApiResponse<List<OrderSummaryResponse>> available() {
-        return ApiResponse.success(deliveryOrderService.availableOrders());
+    @Operation(summary = "List orders available to be picked up for delivery, with a payout estimate against the caller's own commission rate")
+    public ApiResponse<List<DeliveryAvailableOrderResponse>> available(@AuthenticationPrincipal AuthenticatedUser principal) {
+        return ApiResponse.success(deliveryOrderService.availableOrders(principal.userId()));
     }
 
     @GetMapping("/orders/mine")
