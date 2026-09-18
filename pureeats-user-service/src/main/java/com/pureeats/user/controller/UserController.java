@@ -57,6 +57,14 @@ public class UserController {
         return ApiResponse.success("Photo updated", userService.updatePhoto(principal.userId(), file));
     }
 
+    @DeleteMapping
+    @Operation(summary = "Soft-delete the signed-in user's own account - data is retained, but the account can never log in again")
+    public ApiResponse<Void> deleteAccount(@AuthenticationPrincipal AuthenticatedUser principal) {
+        log.info("Account deletion requested by user {}", principal.userId());
+        userService.deleteOwnAccount(principal.userId());
+        return ApiResponse.success("Account deleted", null);
+    }
+
     @PostMapping("/phone/otp")
     @Operation(summary = "Start verification of a new phone number for the signed-in user")
     public ApiResponse<LoginChallengeResponse> requestPhoneChange(@AuthenticationPrincipal AuthenticatedUser principal,

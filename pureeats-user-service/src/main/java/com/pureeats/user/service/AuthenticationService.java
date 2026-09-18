@@ -362,6 +362,10 @@ public class AuthenticationService {
                 log.warn("Account usability check failed for user {} - account DISABLED", user.getId());
                 throw new ForbiddenException("ACCOUNT_DISABLED", "This account has been disabled.");
             }
+            case DELETED -> {
+                log.warn("Account usability check failed for user {} - account DELETED", user.getId());
+                throw new ForbiddenException("ACCOUNT_DELETED", "This account has been deleted. Create a new account to continue.");
+            }
             case TEMPORARILY_LOCKED -> {
                 if (user.getLockedUntil() != null && user.getLockedUntil().isAfter(LocalDateTime.now())) {
                     log.warn("Account usability check failed for user {} - temporarily locked until {}", user.getId(), user.getLockedUntil());

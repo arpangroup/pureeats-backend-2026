@@ -2,6 +2,7 @@ package com.pureeats.user.service;
 
 import com.pureeats.domain.common.exception.ResourceNotFoundException;
 import com.pureeats.domain.entity.User;
+import com.pureeats.domain.enums.AccountStatus;
 import com.pureeats.media.service.MediaAssetService;
 import com.pureeats.media.storage.MediaUrlResolver;
 import com.pureeats.user.dto.UpdateUserRequest;
@@ -61,6 +62,26 @@ public class UserService {
         userRepository.save(user);
         log.info("Profile photo updated for user {}", userId);
         return UserMapper.toResponse(user, roleService.resolveRole(userId), mediaUrlResolver.resolve(storageKey));
+    }
+
+    /**
+     * Self-service soft delete - "owner validation" is implicit and total: {@code userId} always
+     * comes from the caller's own JWT ({@code @AuthenticationPrincipal}), never a path parameter,
+     * so there is no way to delete anyone else's account through this endpoint. Data is
+     * deliberately NOT erased (per product decision - "treated as deleted", not removed); this
+     * only flips {@code accountStatus}, which {@link AuthenticationService#assertAccountUsable}
+     * already checks on every login-challenge/verify/refresh call, so the account is immediately
+     * unable to log in again. The frontend is responsible for clearing its own local session right
+     * after this call succeeds - any access token already issued stays technically valid until it
+     * naturally expires or is refreshed, same as the existing BLOCKED/DISABLED accounts today.
+     */
+    @Transactional
+    public void deleteOwnAccount(Long userId) {
+        User user = findUserOrThrow(userId);
+        user.setAccountStatus(AccountStatus.DELETED);
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+        log.info("User {} deleted their own account", userId);
     }
 
     User findUserOrThrow(Long userId) {
