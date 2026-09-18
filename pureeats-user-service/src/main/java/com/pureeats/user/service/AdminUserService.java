@@ -2,6 +2,7 @@ package com.pureeats.user.service;
 
 import com.pureeats.domain.common.exception.ResourceNotFoundException;
 import com.pureeats.domain.common.response.PageResponse;
+import com.pureeats.domain.entity.DeliveryGuyDetail;
 import com.pureeats.domain.entity.User;
 import com.pureeats.domain.enums.Role;
 import com.pureeats.media.service.MediaAssetService;
@@ -9,6 +10,7 @@ import com.pureeats.media.storage.MediaUrlResolver;
 import com.pureeats.user.dto.AdminUserResponse;
 import com.pureeats.user.dto.AdminUserUpdateRequest;
 import com.pureeats.user.repository.AdminUserRepository;
+import com.pureeats.user.repository.DeliveryGuyDetailRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -34,6 +36,7 @@ public class AdminUserService {
     private final RoleService roleService;
     private final MediaUrlResolver mediaUrlResolver;
     private final MediaAssetService mediaAssetService;
+    private final DeliveryGuyDetailRepository deliveryGuyDetailRepository;
 
     public PageResponse<AdminUserResponse> listUsers(Role userType, String search, Pageable pageable) {
         Role role = userType != null ? userType : Role.CUSTOMER;
@@ -49,9 +52,21 @@ public class AdminUserService {
                     log.warn("Admin lookup for user {} found nothing", id);
                     return new ResourceNotFoundException("User not found.");
                 });
-        return toResponse(user, roleService.resolveRole(user.getId()));
+        // Only the single-record detail fetch falls back to DeliveryGuyDetail.photo when
+        // User.photo is blank (not listUsers, to avoid an N+1 lookup per row on a list) - this
+        // is what fixes an EXISTING mismatch (a rider who already uploaded via the app, before
+        // uploadPhoto started keeping both columns in sync) without a data backfill; new writes
+        // on either side now keep both columns equal so this fallback should rarely matter going
+        // forward.
+        String photo = user.getPhoto();
+        if ((photo == null || photo.isBlank()) && user.getDeliveryGuyDetailId() != null) {
+            photo = deliveryGuyDetailRepository.findById(user.getDeliveryGuyDetailId().longValue())
+                    .map(DeliveryGuyDetail::getPhoto).orElse(photo);
+        }
+        return toResponse(user, roleService.resolveRole(user.getId()), photo);
     }
 
+    /** Also mirrors onto DeliveryGuyDetail.photo when this user is a rider - see RiderService#uploadPhoto's own doc comment for why these two columns must be kept in sync (User.photo and DeliveryGuyDetail.photo are independent for historical reasons, and this is the other direction of the same fix: an admin uploading a photo here shouldn't leave the rider app or order-tracking's rider card showing a stale one). */
     @Transactional
     public AdminUserResponse uploadPhoto(Long id, MultipartFile file, Long uploadedBy) {
         User user = adminUserRepository.findById(id)
@@ -63,6 +78,14 @@ public class AdminUserService {
         user.setPhoto(storageKey);
         user.setUpdatedAt(LocalDateTime.now());
         adminUserRepository.save(user);
+        if (user.getDeliveryGuyDetailId() != null) {
+            deliveryGuyDetailRepository.findById(user.getDeliveryGuyDetailId().longValue()).ifPresent(detail -> {
+                detail.setPhoto(storageKey);
+                detail.setUpdatedAt(LocalDateTime.now());
+                detail.setUpdatedBy(uploadedBy);
+                deliveryGuyDetailRepository.save(detail);
+            });
+        }
         log.info("Admin {} updated photo for user {}", uploadedBy, id);
         return toResponse(user, roleService.resolveRole(id));
     }
@@ -96,7 +119,11 @@ public class AdminUserService {
     }
 
     private AdminUserResponse toResponse(User u, Role role) {
-        return new AdminUserResponse(u.getId(), u.getName(), u.getEmail(), u.getPhone(), mediaUrlResolver.resolve(u.getPhoto()), role,
+        return toResponse(u, role, u.getPhoto());
+    }
+
+    private AdminUserResponse toResponse(User u, Role role, String photo) {
+        return new AdminUserResponse(u.getId(), u.getName(), u.getEmail(), u.getPhone(), mediaUrlResolver.resolve(photo), role,
                 User.STATUS_ACTIVE.equals(u.getIsActive()), u.getDefaultAddressId(), u.getDeliveryGuyDetailId(),
                 u.getDeliveryPin(), u.getCreatedAt(), u.getUpdatedAt());
     }

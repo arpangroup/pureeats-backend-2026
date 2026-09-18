@@ -104,7 +104,7 @@ public class RiderService {
         return toResponse(user, detail);
     }
 
-    /** Mirrors {@code AdminUserService#uploadPhoto}'s pattern - a photo is a file, handled as its own multipart action, entirely separate from the JSON profile-fields update above. */
+    /** Mirrors {@code AdminUserService#uploadPhoto}'s pattern - a photo is a file, handled as its own multipart action, entirely separate from the JSON profile-fields update above. Writes BOTH DeliveryGuyDetail.photo (what this app and order-tracking's riderAssignedData read) AND User.photo (what the admin panel's generic "Edit user" page reads) - these are two independent columns for historical reasons (see #toResponse's own fallback comment), and a rider uploading their own photo here should not leave the admin's view of them stale. */
     @Transactional
     @CacheEvict(cacheNames = RIDER_PROFILES_CACHE, key = "#userId")
     public RiderProfileResponse uploadPhoto(Long userId, MultipartFile file) {
@@ -115,6 +115,9 @@ public class RiderService {
         detail.setUpdatedAt(LocalDateTime.now());
         detail.setUpdatedBy(userId);
         deliveryGuyDetailRepository.save(detail);
+        user.setPhoto(storageKey);
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
         log.info("Rider {} updated their own profile photo", userId);
         return toResponse(user, detail);
     }
