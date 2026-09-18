@@ -1,9 +1,12 @@
 package com.pureeats.user.service;
 
 import com.pureeats.domain.common.exception.ConflictException;
+import com.pureeats.domain.common.exception.ResourceNotFoundException;
 import com.pureeats.domain.entity.DeliveryGuyDetail;
 import com.pureeats.domain.entity.User;
 import com.pureeats.domain.enums.Role;
+import com.pureeats.media.service.MediaAssetService;
+import com.pureeats.media.storage.MediaUrlResolver;
 import com.pureeats.user.dto.RiderProfileRequest;
 import com.pureeats.user.dto.RiderProfileResponse;
 import com.pureeats.user.repository.DeliveryGuyDetailRepository;
@@ -14,6 +17,7 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -31,6 +35,10 @@ public class RiderService {
     private final UserRepository userRepository;
     private final DeliveryGuyDetailRepository deliveryGuyDetailRepository;
     private final RoleService roleService;
+    private final MediaUrlResolver mediaUrlResolver;
+    private final MediaAssetService mediaAssetService;
+
+    private static final String OWNER_TYPE_DELIVERY_GUY = "DELIVERY_GUY";
 
     /** Cache name for rider/driver-detail lookups - see {@code CacheConfig} in pureeats-app for the swappable (in-memory now, Redis-ready later) {@code CacheManager}. */
     static final String RIDER_PROFILES_CACHE = "riderProfiles";
@@ -46,10 +54,9 @@ public class RiderService {
         }
 
         DeliveryGuyDetail detail = new DeliveryGuyDetail();
-        detail.setName(user.getName());
+        detail.setName(request.name() != null && !request.name().isBlank() ? request.name() : user.getName());
         detail.setAge(request.age());
         detail.setGender(request.gender());
-        detail.setPhoto(request.photo());
         detail.setDescription(request.description());
         detail.setVehicleNumber(request.vehicleNumber());
         detail.setCommissionRate(DEFAULT_COMMISSION_RATE);
@@ -67,28 +74,68 @@ public class RiderService {
         roleService.assignRole(userId, Role.DELIVERY);
         log.info("Rider profile {} created for user {}", detail.getId(), userId);
 
-        return toResponse(detail);
+        return toResponse(user, detail);
     }
 
-    /** Driver details don't change often (rating updates aside, which are a separate rating-service concern) so this is cached per-rider; {@link #registerAsRider} evicts on (re-)creation. */
+    /** Driver details don't change often (rating updates aside, which are a separate rating-service concern) so this is cached per-rider; {@link #registerAsRider}/{@link #updateProfile}/{@link #uploadPhoto} evict on any write. */
     @Transactional(readOnly = true)
     @Cacheable(cacheNames = RIDER_PROFILES_CACHE, key = "#userId")
     public RiderProfileResponse getProfile(Long userId) {
         User user = userService.findUserOrThrow(userId);
-        if (user.getDeliveryGuyDetailId() == null) {
-            log.warn("Rider profile lookup failed for user {} - no rider profile", userId);
-            throw new com.pureeats.domain.common.exception.ResourceNotFoundException("No rider profile for this account");
-        }
-        DeliveryGuyDetail detail = deliveryGuyDetailRepository.findById(user.getDeliveryGuyDetailId().longValue())
-                .orElseThrow(() -> {
-                    log.warn("Rider profile {} referenced by user {} not found", user.getDeliveryGuyDetailId(), userId);
-                    return new com.pureeats.domain.common.exception.ResourceNotFoundException("Rider profile not found");
-                });
-        return toResponse(detail);
+        DeliveryGuyDetail detail = resolveOwnDetail(user);
+        return toResponse(user, detail);
     }
 
-    private RiderProfileResponse toResponse(DeliveryGuyDetail detail) {
-        return new RiderProfileResponse(detail.getId(), detail.getVehicleNumber(), detail.getCommissionRate(),
-                detail.getMaxAcceptDeliveryLimit(), detail.getRating(), Boolean.TRUE.equals(detail.getIsNotifiable()));
+    /** Partial update of the rider's own editable text fields, post-onboarding - unlike {@link #registerAsRider}, this edits the EXISTING DeliveryGuyDetail rather than rejecting because one already exists. Null/blank request fields leave the current value as-is. */
+    @Transactional
+    @CacheEvict(cacheNames = RIDER_PROFILES_CACHE, key = "#userId")
+    public RiderProfileResponse updateProfile(Long userId, RiderProfileRequest request) {
+        User user = userService.findUserOrThrow(userId);
+        DeliveryGuyDetail detail = resolveOwnDetail(user);
+        if (request.name() != null && !request.name().isBlank()) detail.setName(request.name());
+        if (request.vehicleNumber() != null && !request.vehicleNumber().isBlank()) detail.setVehicleNumber(request.vehicleNumber());
+        if (request.age() != null) detail.setAge(request.age());
+        if (request.gender() != null) detail.setGender(request.gender());
+        if (request.description() != null) detail.setDescription(request.description());
+        detail.setUpdatedAt(LocalDateTime.now());
+        detail.setUpdatedBy(userId);
+        deliveryGuyDetailRepository.save(detail);
+        log.info("Rider {} updated their own profile", userId);
+        return toResponse(user, detail);
+    }
+
+    /** Mirrors {@code AdminUserService#uploadPhoto}'s pattern - a photo is a file, handled as its own multipart action, entirely separate from the JSON profile-fields update above. */
+    @Transactional
+    @CacheEvict(cacheNames = RIDER_PROFILES_CACHE, key = "#userId")
+    public RiderProfileResponse uploadPhoto(Long userId, MultipartFile file) {
+        User user = userService.findUserOrThrow(userId);
+        DeliveryGuyDetail detail = resolveOwnDetail(user);
+        String storageKey = mediaAssetService.upload(file, OWNER_TYPE_DELIVERY_GUY, detail.getId(), userId).storageKey();
+        detail.setPhoto(storageKey);
+        detail.setUpdatedAt(LocalDateTime.now());
+        detail.setUpdatedBy(userId);
+        deliveryGuyDetailRepository.save(detail);
+        log.info("Rider {} updated their own profile photo", userId);
+        return toResponse(user, detail);
+    }
+
+    private DeliveryGuyDetail resolveOwnDetail(User user) {
+        if (user.getDeliveryGuyDetailId() == null) {
+            log.warn("Rider profile lookup failed for user {} - no rider profile", user.getId());
+            throw new ResourceNotFoundException("No rider profile for this account");
+        }
+        return deliveryGuyDetailRepository.findById(user.getDeliveryGuyDetailId().longValue())
+                .orElseThrow(() -> {
+                    log.warn("Rider profile {} referenced by user {} not found", user.getDeliveryGuyDetailId(), user.getId());
+                    return new ResourceNotFoundException("Rider profile not found");
+                });
+    }
+
+    private RiderProfileResponse toResponse(User user, DeliveryGuyDetail detail) {
+        return new RiderProfileResponse(detail.getId(), user.getId(), detail.getName(), user.getEmail(), user.getPhone(),
+                mediaUrlResolver.resolve(detail.getPhoto()), detail.getVehicleNumber(), detail.getAge(), detail.getGender(),
+                detail.getDescription(), detail.getCommissionRate(), detail.getMaxAcceptDeliveryLimit(), detail.getRating(),
+                Boolean.TRUE.equals(detail.getIsNotifiable()), Boolean.TRUE.equals(detail.getIsOnline()),
+                Boolean.TRUE.equals(detail.getIsActive()));
     }
 }

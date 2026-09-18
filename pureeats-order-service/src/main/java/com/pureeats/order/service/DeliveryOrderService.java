@@ -56,6 +56,13 @@ public class DeliveryOrderService {
     @Value("${pureeats.commission.basis:FULL_ORDER}")
     private CommissionBasis commissionBasis;
 
+    /** An order still sitting unassigned in RESTAURANT_ACCEPTED/READY_FOR_PICKUP past this age is
+     * treated as stale (abandoned, or demo/seed data) rather than genuinely available - see
+     * {@link #availableOrders}. Ops can reassign a specific stale order by hand (admin override)
+     * regardless of this window; this only bounds what's surfaced to riders browsing/polling. */
+    @Value("${pureeats.delivery.available-order-window-hours:2}")
+    private long availableOrderWindowHours;
+
     /**
      * Rider-scoped (not just role-scoped): {@code payoutEstimate} is computed against the CALLING
      * rider's own commission rate, mirroring {@link #creditRiderAndSettle}'s math exactly, so what's
@@ -68,7 +75,8 @@ public class DeliveryOrderService {
         List<Integer> statusIds = List.of(
                 orderStatusService.idFor(OrderStatusCode.RESTAURANT_ACCEPTED),
                 orderStatusService.idFor(OrderStatusCode.READY_FOR_PICKUP));
-        return orderRepository.findByOrderstatusIdInOrderByCreatedAtDesc(statusIds).stream()
+        LocalDateTime cutoff = LocalDateTime.now().minusHours(availableOrderWindowHours);
+        return orderRepository.findByOrderstatusIdInAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(statusIds, cutoff).stream()
                 .filter(o -> o.getDeliveryType() == 0 && acceptDeliveryRepository.findByOrderId(o.getId().intValue()).isEmpty())
                 .map(o -> toAvailableOrderResponse(o, rider))
                 .toList();

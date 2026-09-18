@@ -18,6 +18,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     List<Order> findByOrderstatusIdInOrderByCreatedAtDesc(List<Integer> orderstatusIds);
 
+    /** Same as above, additionally bounded by age - see DeliveryOrderService#availableOrders, which uses this so a rider's "available orders" list can't surface indefinitely-stale/abandoned orders (demo/seed data included). */
+    List<Order> findByOrderstatusIdInAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(List<Integer> orderstatusIds, LocalDateTime from);
+
     /** Admin listing - every order across every customer/restaurant, optionally filtered. */
     @Query("select o from Order o where (:restaurantId is null or o.restaurantId = :restaurantId) " +
             "and (:statusId is null or o.orderstatusId = :statusId) " +

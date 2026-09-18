@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @Slf4j
 @RestController
@@ -38,5 +39,21 @@ public class RiderController {
     public ApiResponse<RiderProfileResponse> getProfile(@AuthenticationPrincipal AuthenticatedUser principal) {
         log.debug("Fetching rider profile for user {}", principal.userId());
         return ApiResponse.success(riderService.getProfile(principal.userId()));
+    }
+
+    @PutMapping
+    @Operation(summary = "Update the signed-in rider's own profile fields (name/vehicle/age/gender/description)")
+    public ApiResponse<RiderProfileResponse> updateProfile(@AuthenticationPrincipal AuthenticatedUser principal,
+                                                             @Valid @RequestBody RiderProfileRequest request) {
+        log.info("Rider {} updating their own profile", principal.userId());
+        return ApiResponse.success("Profile updated", riderService.updateProfile(principal.userId(), request));
+    }
+
+    @PostMapping("/photo")
+    @Operation(summary = "Upload/replace the signed-in rider's own profile photo")
+    public ApiResponse<RiderProfileResponse> uploadPhoto(@AuthenticationPrincipal AuthenticatedUser principal,
+                                                           @RequestParam("file") MultipartFile file) {
+        log.info("Rider {} uploading a new profile photo", principal.userId());
+        return ApiResponse.success("Photo updated", riderService.uploadPhoto(principal.userId(), file));
     }
 }
