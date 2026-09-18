@@ -7,6 +7,7 @@ import com.pureeats.domain.enums.Role;
 import com.pureeats.media.service.MediaAssetService;
 import com.pureeats.media.storage.MediaUrlResolver;
 import com.pureeats.user.dto.AdminUserResponse;
+import com.pureeats.user.dto.AdminUserUpdateRequest;
 import com.pureeats.user.repository.AdminUserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,7 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 
-/** Admin-panel user listing/detail - read-only, gated by {@code /api/v1/admin/**} at the URL layer. */
+/** Admin-panel user directory - listing/detail is read-only, plus a scoped update path (identity fields, active flag, role grant) and a photo upload, gated by {@code /api/v1/admin/**} at the URL layer. */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -63,6 +64,34 @@ public class AdminUserService {
         user.setUpdatedAt(LocalDateTime.now());
         adminUserRepository.save(user);
         log.info("Admin {} updated photo for user {}", uploadedBy, id);
+        return toResponse(user, roleService.resolveRole(id));
+    }
+
+    /**
+     * Partial update - only non-null fields on {@code request} are applied, so the same endpoint
+     * serves both the "save profile" form (name/email/phone/isActive) and the separate "change
+     * role" action (role only) that UserDetailView.tsx uses. A role change is additive via
+     * {@link RoleService#assignRole} (grants the new role, doesn't revoke any existing one) -
+     * {@link RoleService#resolveRole}'s priority ordering means the highest-privilege held role
+     * still wins, matching how every other role grant in this codebase already works.
+     */
+    @Transactional
+    public AdminUserResponse updateUser(Long id, AdminUserUpdateRequest request, Long updatedBy) {
+        User user = adminUserRepository.findById(id)
+                .orElseThrow(() -> {
+                    log.warn("Admin {} attempted to update non-existent user {}", updatedBy, id);
+                    return new ResourceNotFoundException("User not found.");
+                });
+        if (request.name() != null) user.setName(request.name());
+        if (request.email() != null) user.setEmail(request.email());
+        if (request.phone() != null) user.setPhone(request.phone());
+        if (request.isActive() != null) user.setIsActive(request.isActive() ? User.STATUS_ACTIVE : User.STATUS_INACTIVE);
+        user.setUpdatedAt(LocalDateTime.now());
+        adminUserRepository.save(user);
+        if (request.role() != null) {
+            roleService.assignRole(id, request.role());
+        }
+        log.info("Admin {} updated user {}", updatedBy, id);
         return toResponse(user, roleService.resolveRole(id));
     }
 

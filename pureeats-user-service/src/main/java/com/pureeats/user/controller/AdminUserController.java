@@ -5,6 +5,7 @@ import com.pureeats.domain.common.response.PageResponse;
 import com.pureeats.domain.enums.Role;
 import com.pureeats.user.dto.AddressResponse;
 import com.pureeats.user.dto.AdminUserResponse;
+import com.pureeats.user.dto.AdminUserUpdateRequest;
 import com.pureeats.user.security.AuthenticatedUser;
 import com.pureeats.user.service.AddressService;
 import com.pureeats.user.service.AdminUserService;
@@ -20,6 +21,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -27,13 +30,13 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
-/** Admin-panel user directory - list by {@code userType} (defaults to CUSTOMER) and detail. */
+/** Admin-panel user directory - list/detail by {@code userType} (defaults to CUSTOMER), a scoped update, and a photo upload. */
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/admin/users")
 @RequiredArgsConstructor
 @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
-@Tag(name = "Admin Users", description = "Read-only user directory - ADMIN or SUPER_ADMIN only")
+@Tag(name = "Admin Users", description = "User directory and edit - ADMIN or SUPER_ADMIN only")
 public class AdminUserController {
 
     private final AdminUserService adminUserService;
@@ -61,6 +64,14 @@ public class AdminUserController {
     public ApiResponse<List<AddressResponse>> listAddresses(@PathVariable Long id) {
         log.debug("Admin listing addresses for user {}", id);
         return ApiResponse.success(addressService.list(id));
+    }
+
+    @PutMapping("/{id}")
+    @Operation(summary = "Update a user's identity fields (name/email/phone/isActive) and/or grant a role")
+    public ApiResponse<AdminUserResponse> updateUser(@PathVariable Long id, @RequestBody AdminUserUpdateRequest request,
+                                                       @AuthenticationPrincipal AuthenticatedUser principal) {
+        log.info("Admin {} updating user {}", principal.userId(), id);
+        return ApiResponse.success("User updated", adminUserService.updateUser(id, request, principal.userId()));
     }
 
     @PostMapping("/{id}/photo")
