@@ -16,6 +16,7 @@ import com.pureeats.order.repository.TripDetailRepository;
 import com.pureeats.user.repository.DeliveryGuyDetailRepository;
 import com.pureeats.user.repository.DeliveryGuyRestaurantRepository;
 import com.pureeats.user.repository.UserRepository;
+import com.pureeats.user.service.RiderService;
 import com.pureeats.user.service.RoleService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,6 +45,7 @@ public class AdminDeliveryGuyService {
     private final UserRepository userRepository;
     private final RoleService roleService;
     private final TripDetailRepository tripDetailRepository;
+    private final RiderService riderService;
 
     @Transactional(readOnly = true)
     public PageResponse<AdminDeliveryGuyResponse> listPaged(String search, Pageable pageable) {
@@ -99,6 +101,11 @@ public class AdminDeliveryGuyService {
         applyRequest(detail, request);
         detail.setUpdatedAt(LocalDateTime.now());
         deliveryGuyDetailRepository.save(detail);
+        // GET /users/me/rider-profile caches per-rider keyed by userId (RiderService), not by this
+        // DeliveryGuyDetail id - without this, a rating/vehicle/notifiable change made here (e.g.
+        // the admin panel's delivery-guy detail page) stays invisible through that endpoint until
+        // the cache's 30-minute TTL expires.
+        findLinkedUser(id).ifPresent(user -> riderService.evictProfileCache(user.getId()));
         log.info("Updated delivery partner {}", id);
         return toResponse(detail);
     }

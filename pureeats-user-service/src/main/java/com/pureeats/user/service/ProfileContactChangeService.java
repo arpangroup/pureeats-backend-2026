@@ -54,6 +54,7 @@ public class ProfileContactChangeService {
     private final AuthSecurityProperties properties;
     private final RateLimiter rateLimiter;
     private final com.pureeats.media.storage.MediaUrlResolver mediaUrlResolver;
+    private final RiderService riderService;
 
     @Transactional
     public LoginChallengeResponse requestPhoneChange(Long userId, String newPhone, RequestMetadata metadata) {
@@ -82,6 +83,7 @@ public class ProfileContactChangeService {
         user.setPhoneVerifiedAt(LocalDateTime.now());
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
+        riderService.evictProfileCache(userId);
         log.info("Phone number changed for user {}", userId);
         return UserMapper.toResponse(user, roleService.resolveRole(userId), mediaUrlResolver.resolve(user.getPhoto()));
     }
@@ -97,6 +99,7 @@ public class ProfileContactChangeService {
         user.setEmailVerifiedAt(LocalDateTime.now());
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
+        riderService.evictProfileCache(userId);
         log.info("Email changed for user {}", userId);
         return UserMapper.toResponse(user, roleService.resolveRole(userId), mediaUrlResolver.resolve(user.getPhoto()));
     }

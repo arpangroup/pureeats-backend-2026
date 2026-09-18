@@ -37,6 +37,7 @@ public class AdminUserService {
     private final MediaUrlResolver mediaUrlResolver;
     private final MediaAssetService mediaAssetService;
     private final DeliveryGuyDetailRepository deliveryGuyDetailRepository;
+    private final RiderService riderService;
 
     public PageResponse<AdminUserResponse> listUsers(Role userType, String search, Pageable pageable) {
         Role role = userType != null ? userType : Role.CUSTOMER;
@@ -86,6 +87,7 @@ public class AdminUserService {
                 deliveryGuyDetailRepository.save(detail);
             });
         }
+        riderService.evictProfileCache(id);
         log.info("Admin {} updated photo for user {}", uploadedBy, id);
         return toResponse(user, roleService.resolveRole(id));
     }
@@ -114,6 +116,7 @@ public class AdminUserService {
         if (request.role() != null) {
             roleService.assignRole(id, request.role());
         }
+        riderService.evictProfileCache(id);
         log.info("Admin {} updated user {}", updatedBy, id);
         return toResponse(user, roleService.resolveRole(id));
     }

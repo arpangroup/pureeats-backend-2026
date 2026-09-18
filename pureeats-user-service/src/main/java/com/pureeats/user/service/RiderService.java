@@ -40,8 +40,8 @@ public class RiderService {
 
     private static final String OWNER_TYPE_DELIVERY_GUY = "DELIVERY_GUY";
 
-    /** Cache name for rider/driver-detail lookups - see {@code CacheConfig} in pureeats-app for the swappable (in-memory now, Redis-ready later) {@code CacheManager}. */
-    static final String RIDER_PROFILES_CACHE = "riderProfiles";
+    /** Cache name for rider/driver-detail lookups - see {@code CacheConfig} in pureeats-app for the swappable (in-memory now, Redis-ready later) {@code CacheManager}. Public: AdminUserService and AdminDeliveryGuyService call {@link #evictProfileCache} after their own writes to the same underlying data (they can't declare their own @CacheEvict on this cache name since Spring resolves the SpEL #userId key against their own method's parameters, which are deliveryGuyDetailId-shaped, not userId-shaped). */
+    public static final String RIDER_PROFILES_CACHE = "riderProfiles";
 
     @Transactional
     @CacheEvict(cacheNames = RIDER_PROFILES_CACHE, key = "#userId")
@@ -120,6 +120,23 @@ public class RiderService {
         userRepository.save(user);
         log.info("Rider {} updated their own profile photo", userId);
         return toResponse(user, detail);
+    }
+
+    /**
+     * Called by every OTHER writer of data this cache serves - AdminUserService (generic user
+     * edit/photo), AdminDeliveryGuyService (admin delivery-partner edit, the write that left a
+     * rating change invisible via this endpoint until the 30-minute cache TTL expired), and
+     * ProfileContactChangeService (the OTP-verified phone/email change flow every app's Edit
+     * Profile screen uses, including this one's own EditRiderProfilePage - the write that left a
+     * newly-added phone number invisible here). Each of those methods lives in a different service
+     * (different SpEL parameter shapes - deliveryGuyDetailId, not userId), so they can't declare
+     * their own {@code @CacheEvict(cacheNames = RIDER_PROFILES_CACHE, key = "#userId")} directly;
+     * this gives them a userId-keyed eviction to call explicitly instead. A no-op for a userId this
+     * cache never held (not a rider, or already evicted) - Spring's cache abstraction treats
+     * evicting a missing key as a normal no-op, not an error.
+     */
+    @CacheEvict(cacheNames = RIDER_PROFILES_CACHE, key = "#userId")
+    public void evictProfileCache(Long userId) {
     }
 
     private DeliveryGuyDetail resolveOwnDetail(User user) {
