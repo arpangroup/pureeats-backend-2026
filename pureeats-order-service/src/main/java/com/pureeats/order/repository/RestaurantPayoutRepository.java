@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface RestaurantPayoutRepository extends JpaRepository<RestaurantPayout, Long> {
     Page<RestaurantPayout> findAllByOrderByCreatedAtDesc(Pageable pageable);
+
+    Page<RestaurantPayout> findByRestaurantIdOrderByCreatedAtDesc(Integer restaurantId, Pageable pageable);
 }

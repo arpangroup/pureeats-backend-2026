@@ -1,6 +1,7 @@
 package com.pureeats.order.service;
 
 import com.pureeats.catalog.repository.RestaurantRepository;
+import com.pureeats.catalog.service.RestaurantService;
 import com.pureeats.domain.common.exception.ResourceNotFoundException;
 import com.pureeats.domain.common.response.PageResponse;
 import com.pureeats.domain.entity.Restaurant;
@@ -29,6 +30,7 @@ public class RestaurantPayoutService {
     private final RestaurantEarningRepository restaurantEarningRepository;
     private final RestaurantPayoutRepository restaurantPayoutRepository;
     private final RestaurantRepository restaurantRepository;
+    private final RestaurantService restaurantService;
 
     @Transactional
     public void recordEarning(Integer restaurantId, BigDecimal amount) {
@@ -87,8 +89,19 @@ public class RestaurantPayoutService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<AdminRestaurantPayoutResponse> listPaged(Pageable pageable) {
-        Page<RestaurantPayout> page = restaurantPayoutRepository.findAllByOrderByCreatedAtDesc(pageable);
+    public PageResponse<AdminRestaurantPayoutResponse> listPaged(Long restaurantId, Pageable pageable) {
+        Page<RestaurantPayout> page = restaurantId != null
+                ? restaurantPayoutRepository.findByRestaurantIdOrderByCreatedAtDesc(restaurantId.intValue(), pageable)
+                : restaurantPayoutRepository.findAllByOrderByCreatedAtDesc(pageable);
+        List<AdminRestaurantPayoutResponse> content = page.getContent().stream().map(this::toResponse).toList();
+        return PageResponse.of(content, page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
+    }
+
+    /** Store-owner-scoped payout history for one of their own restaurants - ownership-checked, same response shape as the admin listing. */
+    @Transactional(readOnly = true)
+    public PageResponse<AdminRestaurantPayoutResponse> listForOwner(Long ownerUserId, Long restaurantId, Pageable pageable) {
+        restaurantService.assertOwnership(ownerUserId, restaurantId);
+        Page<RestaurantPayout> page = restaurantPayoutRepository.findByRestaurantIdOrderByCreatedAtDesc(restaurantId.intValue(), pageable);
         List<AdminRestaurantPayoutResponse> content = page.getContent().stream().map(this::toResponse).toList();
         return PageResponse.of(content, page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
     }

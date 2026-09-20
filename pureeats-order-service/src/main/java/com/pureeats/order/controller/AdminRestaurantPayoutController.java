@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** Admin settlement of store payout requests - ADMIN or SUPER_ADMIN only. */
@@ -31,10 +32,11 @@ public class AdminRestaurantPayoutController {
     private final RestaurantPayoutService restaurantPayoutService;
 
     @GetMapping("/api/v1/admin/restaurant-payouts")
-    @Operation(summary = "List every payout request, newest first")
+    @Operation(summary = "List every payout request, newest first - optionally scoped to one restaurant (e.g. for a restaurant detail page's payout history)")
     public ApiResponse<PageResponse<AdminRestaurantPayoutResponse>> list(
+            @RequestParam(required = false) Long restaurantId,
             @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ApiResponse.success(restaurantPayoutService.listPaged(pageable));
+        return ApiResponse.success(restaurantPayoutService.listPaged(restaurantId, pageable));
     }
 
     @GetMapping("/api/v1/admin/restaurant-payouts/{id}")
