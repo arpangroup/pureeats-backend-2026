@@ -176,6 +176,23 @@ public class RestaurantService {
         return restaurantRepository.findAllById(restaurantIds).stream().map(this::toSummary).toList();
     }
 
+    /** Admin-panel "Owner ↔ Stores" mapping screen - replaces every {@code RestaurantUser} link for this owner in one shot. */
+    @Transactional
+    public List<Long> updateOwnedRestaurants(Long ownerId, List<Long> restaurantIds) {
+        restaurantUserRepository.deleteByUserId(ownerId);
+        List<Long> ids = restaurantIds == null ? List.of() : restaurantIds;
+        LocalDateTime now = LocalDateTime.now();
+        for (Long restaurantId : ids) {
+            RestaurantUser link = new RestaurantUser();
+            link.setUserId(ownerId);
+            link.setRestaurantId(restaurantId);
+            link.setCreatedAt(now);
+            link.setUpdatedAt(now);
+            restaurantUserRepository.save(link);
+        }
+        return ids;
+    }
+
     @Transactional
     @CacheEvict(cacheNames = RESTAURANTS_CACHE, allEntries = true)
     public RestaurantDetailResponse create(Long ownerUserId, RestaurantCreateRequest request) {

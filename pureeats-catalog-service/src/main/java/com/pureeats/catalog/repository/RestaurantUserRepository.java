@@ -12,4 +12,6 @@ public interface RestaurantUserRepository extends JpaRepository<RestaurantUser, 
     List<RestaurantUser> findByRestaurantId(Long restaurantId);
 
     Optional<RestaurantUser> findByUserIdAndRestaurantId(Long userId, Long restaurantId);
+
+    void deleteByUserId(Long userId);
 }

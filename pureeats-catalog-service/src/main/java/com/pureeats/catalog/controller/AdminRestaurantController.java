@@ -37,6 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 /** Admin-panel store directory - every restaurant regardless of active/accepted status. */
 @Slf4j
@@ -129,6 +130,20 @@ public class AdminRestaurantController {
         log.debug("Admin: delete gallery image {} from restaurant {}", mediaId, id);
         restaurantService.deleteImage(id, mediaId);
         return ApiResponse.success("Image removed", null);
+    }
+
+    @GetMapping("/api/v1/admin/restaurant-owners/{ownerId}/restaurants")
+    @Operation(summary = "List restaurants assigned to a restaurant-owner user (admin-scoped - any ownerId, not just the caller)")
+    public ApiResponse<List<RestaurantSummaryResponse>> restaurantsForOwner(@PathVariable Long ownerId) {
+        log.debug("Admin: list restaurants owned by user {}", ownerId);
+        return ApiResponse.success(restaurantService.listOwnedBy(ownerId));
+    }
+
+    @PutMapping("/api/v1/admin/restaurant-owners/{ownerId}/restaurants")
+    @Operation(summary = "Replace the set of restaurants assigned to a restaurant-owner user")
+    public ApiResponse<List<Long>> updateRestaurantsForOwner(@PathVariable Long ownerId, @RequestBody Map<String, List<Long>> body) {
+        log.info("Admin: set restaurants owned by user {}", ownerId);
+        return ApiResponse.success("Assignments updated", restaurantService.updateOwnedRestaurants(ownerId, body.get("restaurantIds")));
     }
 
     @GetMapping("/api/v1/admin/restaurant-categories")

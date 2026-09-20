@@ -4,6 +4,7 @@ import com.pureeats.domain.common.response.ApiResponse;
 import com.pureeats.domain.common.response.PageResponse;
 import com.pureeats.domain.enums.Role;
 import com.pureeats.user.dto.AddressResponse;
+import com.pureeats.user.dto.AdminUserCreateRequest;
 import com.pureeats.user.dto.AdminUserResponse;
 import com.pureeats.user.dto.AdminUserUpdateRequest;
 import com.pureeats.user.security.AuthenticatedUser;
@@ -11,11 +12,13 @@ import com.pureeats.user.service.AddressService;
 import com.pureeats.user.service.AdminUserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,6 +28,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -59,6 +63,15 @@ public class AdminUserController {
     public ApiResponse<AdminUserResponse> getUser(@PathVariable Long id) {
         log.debug("Admin fetching user detail for {}", id);
         return ApiResponse.success(adminUserService.getUser(id));
+    }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Create a user with a role (\"Add user\" action) - backs Users/Employees/Restaurant Owners/Delivery Partners alike")
+    public ApiResponse<AdminUserResponse> createUser(@Valid @RequestBody AdminUserCreateRequest request,
+                                                       @AuthenticationPrincipal AuthenticatedUser principal) {
+        log.info("Admin {} creating user with role {}", principal.userId(), request.role());
+        return ApiResponse.success("User created", adminUserService.createUser(request, principal.userId()));
     }
 
     @GetMapping("/{id}/addresses")

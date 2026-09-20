@@ -57,4 +57,8 @@ public interface AdminUserRepository extends JpaRepository<User, Long> {
                                         @Param("search") String search, @Param("matchAllStatuses") boolean matchAllStatuses,
                                         @Param("statuses") List<AccountStatus> statuses, @Param("includeNullAsActive") boolean includeNullAsActive,
                                         Pageable pageable);
+
+    boolean existsByEmail(String email);
+
+    boolean existsByPhone(String phone);
 }

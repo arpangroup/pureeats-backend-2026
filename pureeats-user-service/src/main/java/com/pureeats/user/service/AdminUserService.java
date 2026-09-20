@@ -1,6 +1,7 @@
 package com.pureeats.user.service;
 
 import com.pureeats.domain.common.exception.BadRequestException;
+import com.pureeats.domain.common.exception.ConflictException;
 import com.pureeats.domain.common.exception.ResourceNotFoundException;
 import com.pureeats.domain.common.response.PageResponse;
 import com.pureeats.domain.entity.DeliveryGuyDetail;
@@ -9,6 +10,7 @@ import com.pureeats.domain.enums.AccountStatus;
 import com.pureeats.domain.enums.Role;
 import com.pureeats.media.service.MediaAssetService;
 import com.pureeats.media.storage.MediaUrlResolver;
+import com.pureeats.user.dto.AdminUserCreateRequest;
 import com.pureeats.user.dto.AdminUserResponse;
 import com.pureeats.user.dto.AdminUserUpdateRequest;
 import com.pureeats.user.repository.AdminUserRepository;
@@ -80,6 +82,34 @@ public class AdminUserService {
         } catch (IllegalArgumentException e) {
             throw new BadRequestException("Unknown account status filter: " + raw);
         }
+    }
+
+    /**
+     * Admin-panel "Add user" action - creates a bare {@link User} row (OTP-only, no password) and
+     * grants it {@code request.role()}. Backs the Users/Employees/Restaurant Owners/Delivery
+     * Partners "Add" buttons alike, since they're all just this plus a different {@code role}.
+     */
+    @Transactional
+    public AdminUserResponse createUser(AdminUserCreateRequest request, Long createdBy) {
+        if (adminUserRepository.existsByEmail(request.email())) {
+            throw new ConflictException("EMAIL_TAKEN", "A user with this email already exists.");
+        }
+        if (request.phone() != null && !request.phone().isBlank() && adminUserRepository.existsByPhone(request.phone())) {
+            throw new ConflictException("PHONE_TAKEN", "A user with this phone number already exists.");
+        }
+        User user = new User();
+        user.setName(request.name());
+        user.setEmail(request.email());
+        user.setPhone(request.phone() != null && request.phone().isBlank() ? null : request.phone());
+        user.setIsActive(request.isActive() == null || request.isActive() ? User.STATUS_ACTIVE : User.STATUS_INACTIVE);
+        user.setAccountStatus(AccountStatus.ACTIVE);
+        LocalDateTime now = LocalDateTime.now();
+        user.setCreatedAt(now);
+        user.setUpdatedAt(now);
+        user = adminUserRepository.save(user);
+        roleService.assignRole(user.getId(), request.role());
+        log.info("Admin {} created user {} with role {}", createdBy, user.getId(), request.role());
+        return toResponse(user, request.role());
     }
 
     public AdminUserResponse getUser(Long id) {
