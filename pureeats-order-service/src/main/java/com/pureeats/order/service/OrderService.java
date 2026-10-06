@@ -170,7 +170,7 @@ public class OrderService {
                 itemTotal, discount, amountAfterDiscount, tax, orderPricingService.taxPercentage(),
                 restaurantCharge, restaurant.getRestaurantCharges(), deliveryCharge, deliveryChargeResult.basis(),
                 deliveryChargeResult.distanceKm(), restaurant.getLatitude(), restaurant.getLongitude(),
-                orderLatitude, orderLongitude)));
+                orderLatitude, orderLongitude, deliveryChargeResult.rates())));
 
         if (request.paymentMode() == PaymentMode.RAZORPAY) {
             // The amount Checkout was opened for (CreateRazorpayOrderRequest.amount, see
