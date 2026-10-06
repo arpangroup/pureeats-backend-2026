@@ -132,11 +132,14 @@ public class CartValidationService {
         BigDecimal amountAfterDiscount = itemTotal.subtract(discount);
         BigDecimal tax = orderPricingService.tax(amountAfterDiscount);
         BigDecimal restaurantCharge = orderPricingService.restaurantCharge(restaurant, amountAfterDiscount);
-        BigDecimal platformFee = orderPricingService.platformFee();
+        // Same calls as OrderService.placeOrder, so the cart preview always matches what the order charges.
+        var platformFeeResult = orderPricingService.platformFee(amountAfterDiscount);
+        BigDecimal platformFee = platformFeeResult.amount();
         BigDecimal payable = amountAfterDiscount.add(tax).add(restaurantCharge).add(deliveryChargeResult.amount()).add(platformFee);
 
         CartPricingResponse pricing = new CartPricingResponse(itemTotal, discount, tax, restaurantCharge,
-                deliveryChargeResult.amount(), deliveryChargeResult.basis(), deliveryChargeResult.distanceKm(), platformFee, payable);
+                deliveryChargeResult.amount(), deliveryChargeResult.basis(), deliveryChargeResult.distanceKm(), platformFee, payable,
+                orderPricingService.taxPercentage(), restaurant.getRestaurantCharges(), platformFeeResult.type(), platformFeeResult.rate());
 
         boolean anyUnavailable = restaurantIssue != null || itemResponses.stream().anyMatch(i -> !i.available());
 

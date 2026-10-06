@@ -93,6 +93,7 @@ public class SecurityConfig {
                                 "/api/v1/geo/reverse-geocode",
                                 "/api/v1/geo/simulator/**",
                                 "/api/v1/pricing/delivery-quote",
+                                "/api/v1/pricing/rates",
                                 "/api/v1/promo-sliders",
                                 "/api/v1/languages",
                                 "/api/v1/payment-gateways",

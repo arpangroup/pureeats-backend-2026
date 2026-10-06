@@ -6,6 +6,7 @@ import com.pureeats.domain.common.response.ApiResponse;
 import com.pureeats.domain.entity.Restaurant;
 import com.pureeats.order.dto.DeliveryChargeResult;
 import com.pureeats.order.dto.DeliveryQuoteResponse;
+import com.pureeats.order.dto.PricingRatesResponse;
 import com.pureeats.order.service.OrderPricingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -36,5 +37,17 @@ public class PricingController {
                 .orElseThrow(() -> new ResourceNotFoundException("Restaurant not found: " + restaurantId));
         DeliveryChargeResult result = orderPricingService.computeDeliveryCharge(restaurant, false, false, lat, lng);
         return ApiResponse.success(new DeliveryQuoteResponse(result.amount(), result.distanceKm(), result.basis()));
+    }
+
+    @GetMapping("/api/v1/pricing/rates")
+    @Operation(summary = "Current tax %, the restaurant's packaging-charge % and the platform fee rule - for a guest cart estimate that matches checkout")
+    public ApiResponse<PricingRatesResponse> rates(@RequestParam Long restaurantId) {
+        Restaurant restaurant = restaurantRepository.findById(restaurantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Restaurant not found: " + restaurantId));
+        // Fee mode/rate don't depend on the amount; ZERO just avoids computing a real fee here.
+        var fee = orderPricingService.platformFee(java.math.BigDecimal.ZERO);
+        return ApiResponse.success(new PricingRatesResponse(orderPricingService.taxPercentage(),
+                restaurant.getRestaurantCharges() != null ? restaurant.getRestaurantCharges() : java.math.BigDecimal.ZERO,
+                fee.type(), fee.rate(), fee.cap()));
     }
 }
