@@ -3,6 +3,7 @@ package com.pureeats.order.service;
 import com.pureeats.catalog.service.AppConfigService;
 import com.pureeats.geo.distance.DistanceCalculator;
 import com.pureeats.domain.entity.Restaurant;
+import com.pureeats.order.dto.DeliveryChargeRates;
 import com.pureeats.order.dto.DeliveryChargeResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -61,17 +62,19 @@ public class OrderPricingService {
             BigDecimal charge = restaurant.getBaseDeliveryCharge();
             int baseDistance = restaurant.getBaseDeliveryDistance() != null ? restaurant.getBaseDeliveryDistance() : 0;
             Integer extraDistanceStep = restaurant.getExtraDeliveryDistance();
+            int extraUnits = 0;
             if (distanceKm.doubleValue() > baseDistance && extraDistanceStep != null && extraDistanceStep > 0
                     && restaurant.getExtraDeliveryCharge() != null) {
                 double extraKm = distanceKm.doubleValue() - baseDistance;
-                int extraUnits = (int) Math.ceil(extraKm / extraDistanceStep);
+                extraUnits = (int) Math.ceil(extraKm / extraDistanceStep);
                 charge = charge.add(restaurant.getExtraDeliveryCharge().multiply(BigDecimal.valueOf(extraUnits)));
             }
             log.debug("Computed dynamic delivery charge {} for restaurant {} at distance {}km", charge, restaurant.getId(), distanceKm);
-            return new DeliveryChargeResult(charge, distanceKm, "DYNAMIC");
+            return new DeliveryChargeResult(charge, distanceKm, "DYNAMIC", new DeliveryChargeRates(null, restaurant.getBaseDeliveryCharge(),
+                    baseDistance, restaurant.getExtraDeliveryCharge(), extraDistanceStep, extraUnits));
         }
         BigDecimal flat = restaurant.getDeliveryCharges() != null ? restaurant.getDeliveryCharges() : BigDecimal.ZERO;
-        return new DeliveryChargeResult(flat, distanceKm, "FIXED");
+        return new DeliveryChargeResult(flat, distanceKm, "FIXED", new DeliveryChargeRates(flat, null, null, null, null, null));
     }
 
     /** Standalone distance lookup - lets a caller (e.g. cart-validation rules) know the distance before/independent of computing a delivery charge from it. Null customer coordinates (no address chosen yet) yield zero, same fallback {@link #computeDeliveryCharge} already had, since every {@link DistanceCalculator} implementation guarantees that on unparseable input. */
