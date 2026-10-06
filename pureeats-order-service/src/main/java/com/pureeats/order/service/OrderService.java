@@ -456,6 +456,11 @@ public class OrderService {
      * store's current commission rate (or the default). Used by both completion paths (rider delivery
      * and self-pickup) so they can't drift apart.
      */
+    /** The order's stored pricing breakdown, or null for orders placed before it was recorded. */
+    public PricingBreakdown breakdownOf(Order order) {
+        return deserializeBreakdown(order.getPricingBreakdown());
+    }
+
     public BigDecimal restaurantPayoutFor(Order order) {
         PricingBreakdown breakdown = deserializeBreakdown(order.getPricingBreakdown());
         if (breakdown != null && breakdown.restaurantPayout() != null) {
