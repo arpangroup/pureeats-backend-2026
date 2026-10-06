@@ -293,7 +293,8 @@ public class DeliveryOrderService {
             log.debug("Credited rider {} tip {} for order {}", riderUserId, tip, order.getId());
         }
 
-        BigDecimal restaurantEarning = order.getTotal().subtract(order.getRestaurantCharge());
+        // item total − commission + packaging charge (see OrderService#restaurantPayoutFor).
+        BigDecimal restaurantEarning = orderService.restaurantPayoutFor(order);
         restaurantPayoutService.recordEarning(order.getRestaurantId(), restaurantEarning);
 
         BigDecimal cashCollected = BigDecimal.ZERO;

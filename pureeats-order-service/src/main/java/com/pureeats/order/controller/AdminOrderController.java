@@ -47,6 +47,7 @@ public class AdminOrderController {
     private final OrderStatusService orderStatusService;
     private final OrderStatusLogService orderStatusLogService;
     private final DeliveryOrderService deliveryOrderService;
+    private final com.pureeats.order.service.OrderEarningsService orderEarningsService;
 
     @GetMapping("/api/v1/admin/orders")
     @Operation(summary = "List every order, optionally filtered by restaurant, status, or a uniqueOrderId search")
@@ -62,6 +63,12 @@ public class AdminOrderController {
     @Operation(summary = "Get an order's full detail, regardless of who placed it")
     public ApiResponse<OrderResponse> getById(@PathVariable Long id) {
         return ApiResponse.success(orderService.getOrderForAdmin(id));
+    }
+
+    @GetMapping("/api/v1/admin/orders/{id}/earnings")
+    @Operation(summary = "Who earns what from this order - restaurant payout, delivery partner earning and the platform's share, with the rates behind each")
+    public ApiResponse<com.pureeats.order.dto.OrderEarningsSplitResponse> earnings(@PathVariable Long id) {
+        return ApiResponse.success(orderEarningsService.split(id));
     }
 
     @GetMapping("/api/v1/admin/order-statuses")

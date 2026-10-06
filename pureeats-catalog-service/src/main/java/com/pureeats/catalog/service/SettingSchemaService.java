@@ -35,6 +35,14 @@ public class SettingSchemaService {
     public static final String ORDER_ALERT_SOUND_URL = "order_alert_sound_url";
     /** Order tax rate (%) - applied to every order by OrderPricingService. Key kept as "default_tax_percent" so any value already saved under it takes effect. */
     public static final String TAX_PERCENTAGE = "default_tax_percent";
+    /** Platform's cut of a restaurant's item sales, for stores without their own commission rate - deducted from the restaurant payout. */
+    public static final String DEFAULT_COMMISSION_RATE = "default_commission_rate";
+    /** FLAT or PERCENTAGE - how PLATFORM_FEE_AMOUNT / PLATFORM_FEE_PERCENTAGE turn into the platform fee on an order. */
+    public static final String PLATFORM_FEE_TYPE = "platform_fee_type";
+    public static final String PLATFORM_FEE_AMOUNT = "platform_fee_amount";
+    public static final String PLATFORM_FEE_PERCENTAGE = "platform_fee_percentage";
+    /** Upper limit for a PERCENTAGE platform fee (0 = no cap). */
+    public static final String PLATFORM_FEE_MAX_AMOUNT = "platform_fee_max_amount";
     public static final String MAX_ACTIVE_ORDERS_PER_CUSTOMER = "max_active_orders_per_customer";
     public static final String MAX_ACTIVE_ORDERS_MESSAGE = "max_active_orders_message";
     public static final String DRIVER_AUTO_OFFLINE_ENABLED = "driver_auto_offline_enabled";
@@ -81,11 +89,32 @@ public class SettingSchemaService {
                         field("support_email", "Support email", "email", ""),
                         field("support_phone", "Support phone", "text", "")
                 )),
-                group("Commerce", "Defaults applied to new restaurants and payouts.", "Percent", List.of(
+                group("Commerce", "Tax charged to customers and the platform's commission on restaurant sales.", "Percent", List.of(
                         field(TAX_PERCENTAGE, "Tax on orders (%)", "number", "5")
-                                .info("Applied to every new order on the amount after discount. Orders already placed keep the rate they were charged."),
-                        field("default_commission_rate", "Default commission (%)", "number", "15"),
+                                .info("Charged to the customer on the amount after discount. Example: items ₹400, coupon −₹50 → ₹350 × 5% = ₹17.50 tax. "
+                                        + "Applies to new orders and the cart preview; orders already placed keep the rate they were charged."),
+                        field(DEFAULT_COMMISSION_RATE, "Default commission (%)", "number", "15")
+                                .info("The platform's cut of a restaurant's item total, deducted from the restaurant's payout - customers never see it. "
+                                        + "Used for every store that has no commission rate of its own (a store's own rate, set on its edit page, wins). "
+                                        + "Example: items ₹500 at 15% → ₹75 commission; the restaurant is paid ₹500 − ₹75 + its packaging charge."),
                         field("min_withdrawal_amount", "Minimum withdrawal (₹)", "number", "500")
+                                .info("Reserved for self-service payout requests (e.g. a balance below ₹500 can't be withdrawn). "
+                                        + "Not enforced yet - payouts are currently recorded by an admin.")
+                )),
+                group("Platform fee", "A charge the platform adds to every customer bill, on top of items, tax, packaging and delivery.", "Wallet", List.of(
+                        field(PLATFORM_FEE_TYPE, "Platform fee type", "dropdown", "FLAT")
+                                .options(option("Flat amount (₹ per order)", "FLAT"), option("Percentage of the order", "PERCENTAGE"))
+                                .info("Flat: the same fee on every order. Percentage: a % of the amount after discount, optionally capped. "
+                                        + "Shown to customers as \"Platform fee\" in the cart, at checkout, on order tracking and on the invoice. Kept by the platform."),
+                        field(PLATFORM_FEE_AMOUNT, "Flat fee (₹)", "number", "0")
+                                .placeholder("e.g. 5")
+                                .info("Used when the type is Flat. Example: ₹5 → every order pays ₹5, whether it's ₹150 or ₹1,500. 0 = no platform fee."),
+                        field(PLATFORM_FEE_PERCENTAGE, "Percentage fee (%)", "number", "0")
+                                .placeholder("e.g. 2")
+                                .info("Used when the type is Percentage, on the amount after discount. Example: 2% of a ₹350 order = ₹7. 0 = no platform fee."),
+                        field(PLATFORM_FEE_MAX_AMOUNT, "Maximum fee (₹)", "number", "0")
+                                .placeholder("e.g. 25")
+                                .info("Cap for a Percentage fee. Example: 2% capped at ₹25 → a ₹2,000 order pays ₹25, not ₹40. 0 = no cap. Ignored for Flat.")
                 )),
                 group("Platform", "Take the customer app offline for maintenance.", "Settings", List.of(
                         field("maintenance_mode", "Maintenance mode", "boolean", "false")

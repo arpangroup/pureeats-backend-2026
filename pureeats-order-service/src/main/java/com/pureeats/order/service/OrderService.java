@@ -156,8 +156,11 @@ public class OrderService {
         DeliveryChargeResult deliveryChargeResult = orderPricingService.computeDeliveryCharge(
                 restaurant, isSelfPickup, freeDelivery, orderLatitude, orderLongitude);
         BigDecimal deliveryCharge = deliveryChargeResult.amount();
-        BigDecimal platformFee = orderPricingService.platformFee();
+        PlatformFeeResult platformFeeResult = orderPricingService.platformFee(amountAfterDiscount);
+        BigDecimal platformFee = platformFeeResult.amount();
         BigDecimal payable = amountAfterDiscount.add(tax).add(restaurantCharge).add(deliveryCharge).add(platformFee).add(order.getDriverTipAmount());
+        BigDecimal commissionPercentage = orderPricingService.commissionPercentage(restaurant);
+        BigDecimal commission = orderPricingService.commission(itemTotal, commissionPercentage);
 
         order.setTotal(itemTotal);
         order.setDiscountAmount(discount);
@@ -170,7 +173,9 @@ public class OrderService {
                 itemTotal, discount, amountAfterDiscount, tax, orderPricingService.taxPercentage(),
                 restaurantCharge, restaurant.getRestaurantCharges(), deliveryCharge, deliveryChargeResult.basis(),
                 deliveryChargeResult.distanceKm(), restaurant.getLatitude(), restaurant.getLongitude(),
-                orderLatitude, orderLongitude, deliveryChargeResult.rates())));
+                orderLatitude, orderLongitude, deliveryChargeResult.rates(),
+                platformFeeResult.type(), platformFeeResult.rate(), platformFeeResult.cap(),
+                commissionPercentage, commission, orderPricingService.restaurantPayout(itemTotal, commission, restaurantCharge))));
 
         if (request.paymentMode() == PaymentMode.RAZORPAY) {
             // The amount Checkout was opened for (CreateRazorpayOrderRequest.amount, see
@@ -443,6 +448,28 @@ public class OrderService {
             log.warn("Failed to serialize pricing breakdown for order", e);
             return null;
         }
+    }
+
+    /**
+     * What the restaurant is owed for a completed order: item total − commission + packaging charge, as
+     * snapshotted at placement. Orders placed before payouts were snapshotted are computed with the
+     * store's current commission rate (or the default). Used by both completion paths (rider delivery
+     * and self-pickup) so they can't drift apart.
+     */
+    /** The order's stored pricing breakdown, or null for orders placed before it was recorded. */
+    public PricingBreakdown breakdownOf(Order order) {
+        return deserializeBreakdown(order.getPricingBreakdown());
+    }
+
+    public BigDecimal restaurantPayoutFor(Order order) {
+        PricingBreakdown breakdown = deserializeBreakdown(order.getPricingBreakdown());
+        if (breakdown != null && breakdown.restaurantPayout() != null) {
+            return breakdown.restaurantPayout();
+        }
+        Restaurant restaurant = restaurantRepository.findById(order.getRestaurantId().longValue()).orElse(null);
+        BigDecimal itemTotal = order.getTotal() != null ? order.getTotal() : BigDecimal.ZERO;
+        BigDecimal commission = orderPricingService.commission(itemTotal, orderPricingService.commissionPercentage(restaurant));
+        return orderPricingService.restaurantPayout(itemTotal, commission, order.getRestaurantCharge());
     }
 
     private PricingBreakdown deserializeBreakdown(String json) {

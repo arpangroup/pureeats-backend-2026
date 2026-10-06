@@ -12,6 +12,13 @@ public record CartPricingResponse(
         String deliveryChargeBasis,
         BigDecimal distanceKm,
         BigDecimal platformFee,
-        BigDecimal payable
+        BigDecimal payable,
+        /** Rates behind the amounts above, so the cart can label each line ("Tax (5%)", "Platform fee (2%)"). */
+        BigDecimal taxPercentage,
+        BigDecimal restaurantChargePercentage,
+        /** FLAT or PERCENTAGE. */
+        String platformFeeType,
+        /** ₹ (FLAT) or % (PERCENTAGE). */
+        BigDecimal platformFeeRate
 ) {
 }

@@ -108,7 +108,8 @@ public class StoreOwnerOrderService {
         orderStatusLogService.record(order.getId(), OrderStatusCode.READY_FOR_PICKUP, OrderStatusCode.SELF_PICKUP_COMPLETED, "STORE_OWNER", ownerUserId, null);
         log.info("Order {} transitioned READY_FOR_PICKUP -> SELF_PICKUP_COMPLETED by store owner {}", orderId, ownerUserId);
 
-        BigDecimal restaurantEarning = order.getTotal().subtract(order.getRestaurantCharge());
+        // item total − commission + packaging charge (see OrderService#restaurantPayoutFor).
+        BigDecimal restaurantEarning = orderService.restaurantPayoutFor(order);
         restaurantPayoutService.recordEarning(order.getRestaurantId(), restaurantEarning);
         return orderService.toResponse(order);
     }
