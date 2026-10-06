@@ -60,6 +60,10 @@ pureeats:
       # coupon check.
       window-minutes: ${ORDER_RATE_LIMIT_WINDOW_MINUTES:10}
       max-orders: ${ORDER_RATE_LIMIT_MAX_ORDERS:3}
+  delivery:
+    # How often RiderInactivityScheduler checks for online riders whose app stopped pinging - the
+    # timeout itself is admin-editable (Settings -> Delivery Application -> Inactivity auto-offline).
+    inactivity-check-interval-ms: ${RIDER_INACTIVITY_CHECK_INTERVAL_MS:60000}
   commission:
     basis: ${COMMISSION_BASIS:FULL_ORDER}
   settings:

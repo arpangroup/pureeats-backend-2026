@@ -72,6 +72,25 @@ public class DeliveryGuyDetail {
     @Column(name = "last_seen_at")
     private LocalDateTime lastSeenAt;
 
+    /**
+     * Why the rider last went offline - one of {@link #OFFLINE_REASON_SELF},
+     * {@link #OFFLINE_REASON_INACTIVITY} or {@link #OFFLINE_REASON_ADMIN}; null while online (or for
+     * rows that predate this column). Plain string rather than an enum column on purpose - Hibernate
+     * would otherwise emit a CHECK constraint that goes stale the moment a reason is added (see the
+     * users_account_status_check incident).
+     */
+    @Column(name = "offline_reason", length = 32)
+    private String offlineReason;
+
+    /** When {@link #isOnline} last flipped, whoever flipped it. */
+    @Column(name = "status_changed_at")
+    private LocalDateTime statusChangedAt;
+
+    public static final String OFFLINE_REASON_SELF = "SELF";
+    /** Set by RiderInactivityScheduler - no location ping within the configured timeout ("forced stop"). */
+    public static final String OFFLINE_REASON_INACTIVITY = "INACTIVITY";
+    public static final String OFFLINE_REASON_ADMIN = "ADMIN";
+
     @Column(name = "created_by")
     private Long createdBy;
 

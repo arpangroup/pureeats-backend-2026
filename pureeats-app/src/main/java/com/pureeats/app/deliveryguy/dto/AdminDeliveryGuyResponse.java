@@ -21,6 +21,9 @@ public record AdminDeliveryGuyResponse(
         BigDecimal lastLat,
         BigDecimal lastLng,
         LocalDateTime lastSeenAt,
+        /** Why the rider is offline: SELF, INACTIVITY (auto-offlined by RiderInactivityScheduler - shown as "Forced stop") or ADMIN; null while online. */
+        String offlineReason,
+        LocalDateTime statusChangedAt,
         Long createdBy,
         Long updatedBy,
         LocalDateTime createdAt,

@@ -1,5 +1,7 @@
 package com.pureeats.order.service.cartvalidation;
 
+import com.pureeats.catalog.service.SettingValueService;
+import com.pureeats.order.service.OrderStatusService;
 import com.pureeats.catalog.dto.CouponApplyResponse;
 import com.pureeats.geo.distance.HaversineDistanceCalculator;
 import com.pureeats.catalog.repository.AddonCategoryItemRepository;
@@ -38,7 +40,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -65,6 +69,7 @@ class CartValidationServiceTest {
     private CouponService couponService;
     private OrderPricingService orderPricingService;
     private CartValidationService cartValidationService;
+    private OrderStatusService orderStatusService;
 
     @BeforeEach
     void setUp() {
@@ -78,16 +83,24 @@ class CartValidationServiceTest {
 
         // Every rule the real pipeline runs (see CartValidationRule beans), same set the Spring
         // context auto-collects in production - keeps this suite representative of the real gate.
+        // Admin-editable settings never saved yet - every getter falls through to the caller's own
+        // default, i.e. exactly the schema defaults.
+        SettingValueService settingValueService = mock(SettingValueService.class);
+        lenient().when(settingValueService.getInt(anyString(), anyInt())).thenAnswer(inv -> inv.getArgument(1));
+        lenient().when(settingValueService.getBoolean(anyString(), anyBoolean())).thenAnswer(inv -> inv.getArgument(1));
+        lenient().when(settingValueService.getString(anyString(), any())).thenAnswer(inv -> inv.getArgument(1));
         OrderFrequencyRule orderFrequencyRule = new OrderFrequencyRule(orderRepository);
         ReflectionTestUtils.setField(orderFrequencyRule, "windowMinutes", 10);
         ReflectionTestUtils.setField(orderFrequencyRule, "maxOrders", 3);
+        orderStatusService = mock(OrderStatusService.class);
+        ActiveOrderLimitRule activeOrderLimitRule = new ActiveOrderLimitRule(orderRepository, orderStatusService, settingValueService);
         lenient().when(orderRepository.findByUserIdOrderByCreatedAtDesc(anyInt())).thenReturn(List.of());
 
         List<CartValidationRule> rules = List.of(
                 new RestaurantAvailabilityRule(new RestaurantScheduleCodec(new ObjectMapper()), new RestaurantOpenStatusService()),
                 new ItemAvailabilityRule(), new ItemStockRule(),
                 new AddonSelectionRule(addonRepository, addonCategoryItemRepository),
-                new DeliveryRadiusRule(), new MinimumOrderAmountRule(), new PaymentMethodRule(), orderFrequencyRule);
+                new DeliveryRadiusRule(), new MinimumOrderAmountRule(), new PaymentMethodRule(), orderFrequencyRule, activeOrderLimitRule);
         cartValidationService = new CartValidationService(restaurantRepository, itemRepository, addonRepository,
                 addressRepository, couponService, orderPricingService, rules);
     }
@@ -268,5 +281,22 @@ class CartValidationServiceTest {
                 RESTAURANT_ID, List.of(new PlaceOrderItemRequest(ITEM_ID, 1, null)),
                 DeliveryType.DELIVERY, BigDecimal.valueOf(2), "COD", 99L));
         assertTrue(ex.getMessage().contains("orders in the last"));
+    }
+
+    @Test
+    void assertPlaceable_tooManyOrdersInQueue_throws() {
+        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(activeRestaurant()));
+        when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(activeItem()));
+        // Older than the 10-minute rate-limit window, so only the queue limit can fire.
+        com.pureeats.domain.entity.Order open = new com.pureeats.domain.entity.Order();
+        open.setCreatedAt(java.time.LocalDateTime.now().minusHours(1));
+        open.setOrderstatusId(2);
+        when(orderStatusService.codeFor(2)).thenReturn(com.pureeats.domain.enums.OrderStatusCode.PREPARING);
+        when(orderRepository.findByUserIdOrderByCreatedAtDesc(99)).thenReturn(List.of(open, open, open));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> cartValidationService.assertPlaceable(
+                RESTAURANT_ID, List.of(new PlaceOrderItemRequest(ITEM_ID, 1, null)),
+                DeliveryType.DELIVERY, BigDecimal.valueOf(2), "COD", 99L));
+        assertTrue(ex.getMessage().contains("3 orders in progress"));
     }
 }

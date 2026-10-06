@@ -10,6 +10,8 @@ import com.pureeats.catalog.service.SettingSchemaService;
 import com.pureeats.domain.common.exception.BadRequestException;
 import com.pureeats.domain.common.response.ApiResponse;
 import com.pureeats.domain.common.response.PageResponse;
+import com.pureeats.media.dto.MediaUploadResponse;
+import com.pureeats.media.service.MediaAssetService;
 import com.pureeats.user.security.AuthenticatedUser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -21,10 +23,12 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -46,6 +50,7 @@ public class AdminSettingsController {
     private final SettingSchemaService settingSchemaService;
     private final SettingHistoryService settingHistoryService;
     private final AppConfigService appConfigService;
+    private final MediaAssetService mediaAssetService;
 
     @GetMapping("/api/v1/admin/settings/schema")
     @Operation(summary = "Every settings section/group/field the admin panel should render, and their types/defaults/help copy")
@@ -62,6 +67,20 @@ public class AdminSettingsController {
             throw new BadRequestException("Incorrect confirmation password");
         }
         return ApiResponse.success("Settings updated", contentService.updateSettings(updates, principal.userId()));
+    }
+
+    /**
+     * Stores an MP3/WAV for an {@code audio}-type setting field (e.g. the new-order alert sound) and
+     * returns its public URL - deliberately does NOT write the setting itself: the admin panel puts the
+     * returned URL into the field and it's persisted by the normal PUT /api/v1/admin/settings save, so
+     * the confirmation-password gate and field-level history apply exactly as for every other field.
+     */
+    @PostMapping("/api/v1/admin/settings/audio")
+    @Operation(summary = "Upload an MP3/WAV (max 2MB) for an audio setting field - returns the URL to save as that field's value")
+    public ApiResponse<MediaUploadResponse> uploadAudio(@AuthenticationPrincipal AuthenticatedUser principal,
+                                                         @RequestParam("file") MultipartFile file) {
+        log.info("Admin {} uploading settings audio '{}' ({} bytes)", principal.userId(), file.getOriginalFilename(), file.getSize());
+        return ApiResponse.success("Audio uploaded", mediaAssetService.uploadAudio(file, "SETTING_AUDIO", 0L, principal.userId()));
     }
 
     @GetMapping("/api/v1/admin/settings/history")

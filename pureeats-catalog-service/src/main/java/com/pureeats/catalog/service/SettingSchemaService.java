@@ -30,6 +30,17 @@ import java.util.stream.Collectors;
 @Service
 public class SettingSchemaService {
 
+    // Keys read back by business logic elsewhere (via SettingValueService) - kept as constants so a
+    // rename here can't silently desync from the code that honours the value.
+    public static final String ORDER_ALERT_SOUND_URL = "order_alert_sound_url";
+    public static final String MAX_ACTIVE_ORDERS_PER_CUSTOMER = "max_active_orders_per_customer";
+    public static final String MAX_ACTIVE_ORDERS_MESSAGE = "max_active_orders_message";
+    public static final String DRIVER_AUTO_OFFLINE_ENABLED = "driver_auto_offline_enabled";
+    public static final String DRIVER_INACTIVITY_TIMEOUT_MINUTES = "driver_inactivity_timeout_minutes";
+
+    public static final String DEFAULT_MAX_ACTIVE_ORDERS_MESSAGE =
+            "You already have {count} orders in progress - please wait for one to be delivered before placing another.";
+
     public List<SettingSectionDefinition> schema() {
         return List.of(
                 generalSection(),
@@ -84,6 +95,10 @@ public class SettingSchemaService {
                         field("max_time_accept_delivery", "Max time to accept delivery", "number", "5")
                                 .placeholder("e.g. 5")
                                 .info("Minutes a delivery partner has to accept an assigned order before it's reassigned.")
+                )),
+                group("Order alert sound", "Played on the admin panel, restaurant partner dashboard and driver app when a new order arrives.", "Bell", List.of(
+                        field(ORDER_ALERT_SOUND_URL, "New order sound", "audio", "")
+                                .info("Upload an MP3 or WAV file (max 2MB). Leave empty to use the built-in chime - it needs no download and is also the automatic fallback if the custom file can't be played.")
                 ))
         ));
     }
@@ -301,6 +316,13 @@ public class SettingSchemaService {
                                 .info("Shows friendly relative timestamps (\"2 hours ago\") instead of raw dates."),
                         field("round_up_delivery_charge", "Round up dynamic delivery charge", "boolean", "false")
                                 .info("Rounds the calculated delivery fee up to the nearest whole currency unit.")
+                )),
+                group("Order limits", "Caps how many orders a customer can have in progress at once. Use {count} as a placeholder in the message. (The orders-per-time-window rate limit is configured in application.yml - pureeats.order.rate-limit.*.)", "Timer", List.of(
+                        field(MAX_ACTIVE_ORDERS_PER_CUSTOMER, "Max orders in queue per customer", "number", "3")
+                                .placeholder("e.g. 3")
+                                .info("How many not-yet-delivered orders a customer may have in progress at once. 0 = no limit."),
+                        field(MAX_ACTIVE_ORDERS_MESSAGE, "Message shown when the queue limit is hit", "textarea", DEFAULT_MAX_ACTIVE_ORDERS_MESSAGE)
+                                .placeholder(DEFAULT_MAX_ACTIVE_ORDERS_MESSAGE)
                 ))
         ));
     }
@@ -326,6 +348,11 @@ public class SettingSchemaService {
                 group("Location tracking", "MapPin", List.of(
                         field("driver_location_tracking_enabled", "Enable driver location tracking", "boolean", "true")
                                 .info("When off, every delivery partner's app stops sending GPS pings and shows a \"Maintenance mode\" banner instead of the online/offline toggle - use this to pause location tracking platform-wide (e.g. during a backend issue) without disabling the app itself.")
+                )),
+                group("Inactivity auto-offline", "Bike", List.of(
+                        field(DRIVER_AUTO_OFFLINE_ENABLED, "Auto-offline inactive drivers", "boolean", "true")
+                                .info("A scheduler marks an online driver offline once their app stops reporting location for the timeout below. The admin panel shows these as a \"Forced stop\". Drivers with a delivery in progress are never auto-offlined."),
+                        field(DRIVER_INACTIVITY_TIMEOUT_MINUTES, "Inactivity timeout (minutes)", "number", "10").placeholder("e.g. 10")
                 ))
         ));
     }

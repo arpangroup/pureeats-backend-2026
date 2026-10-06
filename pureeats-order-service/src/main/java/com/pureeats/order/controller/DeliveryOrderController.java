@@ -32,10 +32,22 @@ public class DeliveryOrderController {
     }
 
     @GetMapping("/orders/mine")
-    @Operation(summary = "List the signed-in rider's own delivery history")
-    public ApiResponse<List<OrderSummaryResponse>> mine(@AuthenticationPrincipal AuthenticatedUser principal) {
+    @Operation(summary = "List the signed-in rider's own delivery history (every assignment, newest first)")
+    public ApiResponse<List<DeliveryAssignmentResponse>> mine(@AuthenticationPrincipal AuthenticatedUser principal) {
         log.debug("Listing delivery history for rider {}", principal.userId());
         return ApiResponse.success(deliveryOrderService.myOrders(principal.userId()));
+    }
+
+    @GetMapping("/orders/active")
+    @Operation(summary = "Orders currently assigned to the signed-in rider and not yet finished - self-accepted or assigned by an admin")
+    public ApiResponse<List<DeliveryAssignmentResponse>> active(@AuthenticationPrincipal AuthenticatedUser principal) {
+        return ApiResponse.success(deliveryOrderService.activeOrders(principal.userId()));
+    }
+
+    @GetMapping("/status")
+    @Operation(summary = "The signed-in rider's server-side online/offline status, including why they went offline (SELF / INACTIVITY / ADMIN)")
+    public ApiResponse<RiderStatusResponse> getStatus(@AuthenticationPrincipal AuthenticatedUser principal) {
+        return ApiResponse.success(deliveryOrderService.getOnlineStatus(principal.userId()));
     }
 
     @PostMapping("/orders/{orderId}/accept")

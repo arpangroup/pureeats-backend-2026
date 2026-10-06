@@ -19,6 +19,8 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -34,6 +36,14 @@ import java.util.UUID;
 public class MediaAssetService {
 
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of("image/jpeg", "image/png", "image/webp");
+
+    /** MP3/WAV, under every content type browsers are known to label them with - see {@link #uploadAudio}. */
+    private static final Map<String, String> AUDIO_CONTENT_TYPE_EXTENSIONS = Map.of(
+            "audio/mpeg", ".mp3", "audio/mp3", ".mp3", "audio/mpeg3", ".mp3", "audio/x-mpeg-3", ".mp3",
+            "audio/wav", ".wav", "audio/x-wav", ".wav", "audio/wave", ".wav", "audio/vnd.wave", ".wav");
+
+    /** Short alert sounds only - a 2MB MP3 is already well over a minute of audio. */
+    public static final long MAX_AUDIO_SIZE_BYTES = 2L * 1024 * 1024;
 
     private final MediaAssetRepository mediaAssetRepository;
     private final MediaStorage mediaStorage;
@@ -64,7 +74,40 @@ public class MediaAssetService {
             throw new BadRequestException("Only JPEG, PNG, or WebP images are allowed");
         }
 
-        String extension = extensionFor(contentType);
+        return storeAndRecord(file, ownerType, ownerId, uploadedBy, contentType, extensionFor(contentType));
+    }
+
+    /**
+     * Same pipeline as {@link #upload}, for a short MP3/WAV alert sound (e.g. the admin-configurable
+     * new-order sound) instead of an image. Accepts the file when either its declared content type or
+     * its filename extension says MP3/WAV - some browsers/OSes send a WAV as {@code audio/x-wav}, others
+     * an MP3 as plain {@code application/octet-stream}.
+     */
+    @Transactional
+    public MediaUploadResponse uploadAudio(MultipartFile file, String ownerType, Long ownerId, Long uploadedBy) {
+        if (file == null || file.isEmpty()) {
+            log.warn("Audio upload rejected for {}/{}: no file was uploaded", ownerType, ownerId);
+            throw new BadRequestException("No file was uploaded");
+        }
+        if (file.getSize() > MAX_AUDIO_SIZE_BYTES) {
+            log.warn("Audio upload rejected for {}/{}: file size {} exceeds limit {}", ownerType, ownerId, file.getSize(), MAX_AUDIO_SIZE_BYTES);
+            throw new BadRequestException("Audio must be smaller than " + (MAX_AUDIO_SIZE_BYTES / (1024 * 1024)) + "MB");
+        }
+        String declared = file.getContentType() != null ? file.getContentType().toLowerCase(Locale.ROOT) : "";
+        String filename = file.getOriginalFilename() != null ? file.getOriginalFilename().toLowerCase(Locale.ROOT) : "";
+        String extension = AUDIO_CONTENT_TYPE_EXTENSIONS.get(declared);
+        if (extension == null) {
+            extension = filename.endsWith(".mp3") ? ".mp3" : filename.endsWith(".wav") ? ".wav" : null;
+        }
+        if (extension == null) {
+            log.warn("Audio upload rejected for {}/{}: unsupported content type {} / filename {}", ownerType, ownerId, declared, filename);
+            throw new BadRequestException("Only MP3 or WAV audio files are allowed");
+        }
+        String contentType = ".mp3".equals(extension) ? "audio/mpeg" : "audio/wav";
+        return storeAndRecord(file, ownerType, ownerId, uploadedBy, contentType, extension);
+    }
+
+    private MediaUploadResponse storeAndRecord(MultipartFile file, String ownerType, Long ownerId, Long uploadedBy, String contentType, String extension) {
         String storageKey = ownerType.toLowerCase() + "/" + UUID.randomUUID() + extension;
 
         try {

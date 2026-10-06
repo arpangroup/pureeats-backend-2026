@@ -52,6 +52,12 @@ public class DeliveryOrderService {
     private final OrderItemRepository orderItemRepository;
     private final OrderPricingService orderPricingService;
     private final ObjectMapper objectMapper;
+    private final OrderStatusLogRepository orderStatusLogRepository;
+
+    /** Statuses after which an assignment is no longer "active" even if its AcceptDelivery row was never marked complete (e.g. the customer cancelled after a rider was assigned). */
+    private static final java.util.Set<OrderStatusCode> TERMINAL_STATUSES = java.util.EnumSet.of(
+            OrderStatusCode.DELIVERED, OrderStatusCode.SELF_PICKUP_COMPLETED, OrderStatusCode.CANCELLED,
+            OrderStatusCode.REJECTED, OrderStatusCode.RETURNED, OrderStatusCode.AUTO_CANCELLED);
 
     @Value("${pureeats.commission.basis:FULL_ORDER}")
     private CommissionBasis commissionBasis;
@@ -330,9 +336,25 @@ public class DeliveryOrderService {
     @Transactional
     public void setOnlineStatus(Long riderUserId, boolean isOnline) {
         DeliveryGuyDetail rider = riderProfile(riderUserId);
+        LocalDateTime now = LocalDateTime.now();
+        if (!Boolean.valueOf(isOnline).equals(rider.getIsOnline())) {
+            rider.setStatusChangedAt(now);
+        }
         rider.setIsOnline(isOnline);
+        rider.setOfflineReason(isOnline ? null : DeliveryGuyDetail.OFFLINE_REASON_SELF);
+        // Going online counts as "seen" - otherwise a rider whose first GPS fix is still pending could be
+        // swept straight back offline by RiderInactivityScheduler on the strength of an old lastSeenAt.
+        if (isOnline) rider.setLastSeenAt(now);
         deliveryGuyDetailRepository.save(rider);
         log.info("Rider {} is now {}", riderUserId, isOnline ? "ONLINE" : "OFFLINE");
+    }
+
+    /** The signed-in rider's own server-side status - lets the app notice it was force-stopped (see RiderInactivityScheduler) while backgrounded. */
+    @Transactional(readOnly = true)
+    public RiderStatusResponse getOnlineStatus(Long riderUserId) {
+        DeliveryGuyDetail rider = riderProfile(riderUserId);
+        return new RiderStatusResponse(Boolean.TRUE.equals(rider.getIsOnline()), rider.getOfflineReason(),
+                rider.getStatusChangedAt(), rider.getLastSeenAt());
     }
 
     /**
@@ -347,13 +369,88 @@ public class DeliveryOrderService {
         deliveryGuyLocationService.updateLocation(rider.getId(), new BigDecimal(lat), new BigDecimal(lng));
     }
 
-    /** The signed-in rider's own delivery history, mirroring {@code OrderController#myOrders}'s "my orders" shape but sourced from {@link AcceptDeliveryRepository} (assignments) rather than {@code OrderRepository#findByUserId} (which is the customer's own orders). */
+    /** The signed-in rider's own delivery history (every assignment, newest first), sourced from {@link AcceptDeliveryRepository} (assignments) rather than {@code OrderRepository#findByUserId} (which is the customer's own orders). */
     @Transactional(readOnly = true)
-    public List<OrderSummaryResponse> myOrders(Long riderUserId) {
+    public List<DeliveryAssignmentResponse> myOrders(Long riderUserId) {
+        DeliveryGuyDetail rider = riderProfile(riderUserId);
         return acceptDeliveryRepository.findByUserIdOrderByIdDesc(riderUserId.intValue()).stream()
-                .map(accept -> orderService.findOrThrow(accept.getOrderId().longValue()))
-                .map(orderService::toSummary)
+                .map(accept -> orderRepository.findById(accept.getOrderId().longValue()).orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .map(order -> toAssignmentResponse(order, rider))
                 .toList();
+    }
+
+    /**
+     * Every order currently assigned to the signed-in rider and not yet finished - including ones an
+     * admin assigned to them directly ({@link #assignDriverAsAdmin}), which never pass through the
+     * rider's own accept flow and so would otherwise never appear in the app.
+     */
+    @Transactional(readOnly = true)
+    public List<DeliveryAssignmentResponse> activeOrders(Long riderUserId) {
+        DeliveryGuyDetail rider = riderProfile(riderUserId);
+        return acceptDeliveryRepository.findByUserIdAndIsCompleteFalse(riderUserId.intValue()).stream()
+                .map(accept -> orderRepository.findById(accept.getOrderId().longValue()).orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .filter(order -> !TERMINAL_STATUSES.contains(orderStatusService.codeFor(order.getOrderstatusId())))
+                .sorted(java.util.Comparator.comparing(Order::getCreatedAt, java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())))
+                .map(order -> toAssignmentResponse(order, rider))
+                .toList();
+    }
+
+    private DeliveryAssignmentResponse toAssignmentResponse(Order order, DeliveryGuyDetail rider) {
+        Restaurant restaurant = restaurantRepository.findById(order.getRestaurantId().longValue()).orElse(null);
+        String customerLat = null;
+        String customerLng = null;
+        try {
+            if (order.getLocation() != null) {
+                JsonNode node = objectMapper.readTree(order.getLocation());
+                customerLat = node.path("latitude").asText(null);
+                customerLng = node.path("longitude").asText(null);
+            }
+        } catch (Exception e) {
+            log.warn("Could not parse stored location JSON for order {}: {}", order.getId(), e.getMessage());
+        }
+        BigDecimal distanceKm = restaurant != null ? orderPricingService.distanceKm(restaurant, customerLat, customerLng) : BigDecimal.ZERO;
+        BigDecimal commissionBase = commissionBasis == CommissionBasis.DELIVERY_CHARGE_ONLY ? order.getDeliveryCharge() : order.getTotal();
+        BigDecimal payoutEstimate = commissionBase != null && rider.getCommissionRate() != null
+                ? commissionBase.multiply(rider.getCommissionRate()).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+
+        User customer = userRepository.findById(order.getUserId().longValue()).orElse(null);
+        List<DeliveryAssignmentResponse.Item> items = orderItemRepository.findByOrderId(order.getId().intValue()).stream()
+                .map(i -> new DeliveryAssignmentResponse.Item(i.getName(), i.getQuantity() != null ? i.getQuantity() : 1))
+                .toList();
+
+        LocalDateTime acceptedAt = null;
+        LocalDateTime pickedUpAt = null;
+        LocalDateTime deliveredAt = null;
+        String assignedBy = "DELIVERY";
+        for (var entry : orderStatusLogRepository.findByOrderIdOrderByCreatedAtAsc(order.getId())) {
+            if (OrderStatusCode.RIDER_ASSIGNED.name().equals(entry.getToStatus())) {
+                acceptedAt = entry.getCreatedAt();
+                assignedBy = entry.getActorType() != null ? entry.getActorType() : assignedBy;
+            } else if (OrderStatusCode.PICKED_UP.name().equals(entry.getToStatus())) {
+                pickedUpAt = entry.getCreatedAt();
+            } else if (OrderStatusCode.DELIVERED.name().equals(entry.getToStatus())) {
+                deliveredAt = entry.getCreatedAt();
+            }
+        }
+
+        OrderStatusCode status = orderStatusService.codeFor(order.getOrderstatusId());
+        return new DeliveryAssignmentResponse(
+                order.getId(), order.getUniqueOrderId(), status != null ? status.name() : "UNKNOWN", assignedBy,
+                order.getRestaurantId().longValue(),
+                restaurant != null ? restaurant.getName() : "Unknown",
+                restaurant != null ? restaurant.getAddress() : "",
+                restaurant != null ? parseCoordinate(restaurant.getLatitude()) : BigDecimal.ZERO,
+                restaurant != null ? parseCoordinate(restaurant.getLongitude()) : BigDecimal.ZERO,
+                restaurant != null ? restaurant.getContactNumber() : null,
+                customer != null ? customer.getName() : "Customer",
+                order.getAddress(),
+                parseCoordinate(customerLat), parseCoordinate(customerLng),
+                customer != null ? customer.getPhone() : null,
+                items, order.getPayable(), order.getPaymentMode(), payoutEstimate, distanceKm,
+                order.getCreatedAt(), acceptedAt, pickedUpAt, deliveredAt);
     }
 
     private void recordCashCollection(Long riderUserId, BigDecimal amount, String uniqueOrderId) {

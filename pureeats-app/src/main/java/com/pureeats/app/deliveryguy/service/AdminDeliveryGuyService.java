@@ -163,7 +163,12 @@ public class AdminDeliveryGuyService {
         detail.setMaxAcceptDeliveryLimit(request.maxAcceptDeliveryLimit() != null ? request.maxAcceptDeliveryLimit() : orDefault(detail.getMaxAcceptDeliveryLimit(), 1));
         if (request.isNotifiable() != null) detail.setIsNotifiable(request.isNotifiable());
         if (request.isActive() != null) detail.setIsActive(request.isActive());
-        if (request.isOnline() != null) detail.setIsOnline(request.isOnline());
+        if (request.isOnline() != null && !request.isOnline().equals(detail.getIsOnline())) {
+            detail.setIsOnline(request.isOnline());
+            detail.setStatusChangedAt(LocalDateTime.now());
+            detail.setOfflineReason(request.isOnline() ? null : DeliveryGuyDetail.OFFLINE_REASON_ADMIN);
+            if (request.isOnline()) detail.setLastSeenAt(LocalDateTime.now());
+        }
         detail.setRating(request.rating() != null ? request.rating() : orDefault(detail.getRating(), BigDecimal.ZERO));
         if (request.photo() != null) detail.setPhoto(request.photo());
         if (detail.getIsActive() == null) detail.setIsActive(true);
@@ -201,7 +206,7 @@ public class AdminDeliveryGuyService {
                 parseAge(d.getAge()), d.getGender(), d.getPhoto(), d.getDescription(), d.getVehicleNumber(), d.getCommissionRate(),
                 Boolean.TRUE.equals(d.getIsNotifiable()), d.getMaxAcceptDeliveryLimit(), d.getRating(),
                 Boolean.TRUE.equals(d.getIsActive()), Boolean.TRUE.equals(d.getIsOnline()), d.getLastLat(), d.getLastLng(),
-                d.getLastSeenAt(), d.getCreatedBy(), d.getUpdatedBy(), d.getCreatedAt(), d.getUpdatedAt(),
+                d.getLastSeenAt(), d.getOfflineReason(), d.getStatusChangedAt(), d.getCreatedBy(), d.getUpdatedBy(), d.getCreatedAt(), d.getUpdatedAt(),
                 user != null ? user.getEmail() : null, user != null ? user.getPhone() : null,
                 user != null && User.STATUS_ACTIVE.equals(user.getIsActive()));
     }

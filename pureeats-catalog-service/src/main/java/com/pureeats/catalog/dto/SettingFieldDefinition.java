@@ -15,7 +15,7 @@ import java.util.List;
 public record SettingFieldDefinition(
         String key,
         String label,
-        /** One of: text | password | number | email | url | textarea | boolean | dropdown | radio — mirrors the admin panel's SettingFieldType. */
+        /** One of: text | password | number | email | url | textarea | boolean | dropdown | radio | audio (value = an uploaded file's URL, see AdminSettingsController#uploadAudio; blank = built-in default) — mirrors the admin panel's SettingFieldType. */
         String fieldType,
         String defaultValue,
         String placeholder,

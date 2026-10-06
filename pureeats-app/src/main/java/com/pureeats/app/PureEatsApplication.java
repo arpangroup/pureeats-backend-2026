@@ -6,6 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.persistence.autoconfigure.EntityScan;
 import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.util.TimeZone;
 
@@ -21,6 +22,8 @@ import java.util.TimeZone;
 @SpringBootApplication(scanBasePackages = "com.pureeats", exclude = UserDetailsServiceAutoConfiguration.class)
 @EntityScan(basePackages = {"com.pureeats.domain.entity", "com.pureeats.user.entity", "com.pureeats.notification.entity", "com.pureeats.media.entity", "com.pureeats.order.entity", "com.pureeats.catalog.entity"})
 @EnableJpaRepositories(basePackages = "com.pureeats")
+// Background jobs - currently just RiderInactivityScheduler (auto-offline of riders whose app went quiet).
+@EnableScheduling
 @Slf4j
 public class PureEatsApplication {
 
