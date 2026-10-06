@@ -4,7 +4,6 @@ import com.pureeats.catalog.service.SettingSchemaService;
 import com.pureeats.catalog.service.SettingValueService;
 import com.pureeats.domain.entity.DeliveryGuyDetail;
 import com.pureeats.domain.entity.User;
-import com.pureeats.order.repository.AcceptDeliveryRepository;
 import com.pureeats.user.repository.DeliveryGuyDetailRepository;
 import com.pureeats.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -33,7 +32,7 @@ public class RiderInactivityScheduler {
 
     private final DeliveryGuyDetailRepository deliveryGuyDetailRepository;
     private final UserRepository userRepository;
-    private final AcceptDeliveryRepository acceptDeliveryRepository;
+    private final DeliveryOrderService deliveryOrderService;
     private final SettingValueService settingValueService;
 
     @Scheduled(fixedDelayString = "${pureeats.delivery.inactivity-check-interval-ms:60000}",
@@ -75,7 +74,7 @@ public class RiderInactivityScheduler {
     private boolean hasDeliveryInProgress(DeliveryGuyDetail rider) {
         return userRepository.findByDeliveryGuyDetailId(rider.getId().intValue())
                 .map(User::getId)
-                .map(userId -> !acceptDeliveryRepository.findByUserIdAndIsCompleteFalse(userId.intValue()).isEmpty())
+                .map(userId -> deliveryOrderService.countDeliveriesInProgress(userId) > 0)
                 .orElse(false);
     }
 }
