@@ -78,7 +78,7 @@ class CartValidationServiceTest {
         // Not every test's path reaches the platformFee() add-on in computePricing - lenient() so
         // the ones that don't aren't flagged for an unnecessary stub, same as orderRepository below.
         lenient().when(appConfigService.getPlatformFee()).thenReturn(BigDecimal.ZERO);
-        orderPricingService = new OrderPricingService(new HaversineDistanceCalculator(), appConfigService);
+        orderPricingService = new OrderPricingService(new HaversineDistanceCalculator(), appConfigService, mock(SettingValueService.class));
         ReflectionTestUtils.setField(orderPricingService, "taxPercentage", BigDecimal.valueOf(5));
 
         // Every rule the real pipeline runs (see CartValidationRule beans), same set the Spring

@@ -33,6 +33,8 @@ public class SettingSchemaService {
     // Keys read back by business logic elsewhere (via SettingValueService) - kept as constants so a
     // rename here can't silently desync from the code that honours the value.
     public static final String ORDER_ALERT_SOUND_URL = "order_alert_sound_url";
+    /** Order tax rate (%) - applied to every order by OrderPricingService. Key kept as "default_tax_percent" so any value already saved under it takes effect. */
+    public static final String TAX_PERCENTAGE = "default_tax_percent";
     public static final String MAX_ACTIVE_ORDERS_PER_CUSTOMER = "max_active_orders_per_customer";
     public static final String MAX_ACTIVE_ORDERS_MESSAGE = "max_active_orders_message";
     public static final String DRIVER_AUTO_OFFLINE_ENABLED = "driver_auto_offline_enabled";
@@ -80,7 +82,8 @@ public class SettingSchemaService {
                         field("support_phone", "Support phone", "text", "")
                 )),
                 group("Commerce", "Defaults applied to new restaurants and payouts.", "Percent", List.of(
-                        field("default_tax_percent", "Default tax (%)", "number", "5"),
+                        field(TAX_PERCENTAGE, "Tax on orders (%)", "number", "5")
+                                .info("Applied to every new order on the amount after discount. Orders already placed keep the rate they were charged."),
                         field("default_commission_rate", "Default commission (%)", "number", "15"),
                         field("min_withdrawal_amount", "Minimum withdrawal (₹)", "number", "500")
                 )),
@@ -273,7 +276,7 @@ public class SettingSchemaService {
     // ---- Tax settings ----
     // First pass, filled in to unblock a compile error (schema() called this before it existed) —
     // adjust the actual fields to whatever "Tax Settings" is meant to cover. Deliberately distinct
-    // keys from General → Commerce's default_tax_percent, which is a per-new-restaurant default,
+    // keys from General → Commerce's default_tax_percent (TAX_PERCENTAGE), which is the actual order tax rate,
     // not a platform-wide display/registration setting.
 
     private SettingSectionDefinition taxSettingSection() {

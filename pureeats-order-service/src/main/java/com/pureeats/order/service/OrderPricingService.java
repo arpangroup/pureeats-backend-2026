@@ -1,6 +1,8 @@
 package com.pureeats.order.service;
 
 import com.pureeats.catalog.service.AppConfigService;
+import com.pureeats.catalog.service.SettingSchemaService;
+import com.pureeats.catalog.service.SettingValueService;
 import com.pureeats.geo.distance.DistanceCalculator;
 import com.pureeats.domain.entity.Restaurant;
 import com.pureeats.order.dto.DeliveryChargeRates;
@@ -21,15 +23,28 @@ public class OrderPricingService {
 
     private final DistanceCalculator distanceCalculator;
     private final AppConfigService appConfigService;
+    private final SettingValueService settingValueService;
 
+    /** Fallback only - used until an admin saves Settings -> General -> Commerce -> Tax on orders. */
     @Value("${pureeats.tax.percentage:5}")
     private BigDecimal taxPercentage;
 
     public BigDecimal tax(BigDecimal amount) {
-        return percentOf(amount, taxPercentage);
+        return percentOf(amount, taxPercentage());
     }
 
+    /** Admin-configurable order tax rate (setting {@link SettingSchemaService#TAX_PERCENTAGE}), falling back to {@code pureeats.tax.percentage}. */
     public BigDecimal taxPercentage() {
+        String configured = settingValueService.getString(SettingSchemaService.TAX_PERCENTAGE, null);
+        if (configured != null) {
+            try {
+                BigDecimal value = new BigDecimal(configured);
+                if (value.signum() >= 0 && value.compareTo(BigDecimal.valueOf(100)) <= 0) return value;
+                log.warn("Ignoring out-of-range tax setting '{}' - using fallback {}", configured, taxPercentage);
+            } catch (NumberFormatException e) {
+                log.warn("Ignoring non-numeric tax setting '{}' - using fallback {}", configured, taxPercentage);
+            }
+        }
         return taxPercentage;
     }
 
