@@ -5,6 +5,7 @@ import com.pureeats.domain.enums.OrderStatusCode;
 import com.pureeats.order.dto.OrderStatusLogResponse;
 import com.pureeats.order.dto.OrderTimelineResponse;
 import com.pureeats.order.entity.OrderStatusLog;
+import com.pureeats.order.repository.AcceptDeliveryRepository;
 import com.pureeats.order.repository.OrderStatusLogRepository;
 import com.pureeats.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,16 @@ public class OrderStatusLogService {
 
     private final OrderStatusLogRepository orderStatusLogRepository;
     private final UserRepository userRepository;
+    private final AcceptDeliveryRepository acceptDeliveryRepository;
+
+    /**
+     * Transitions that end an order WITHOUT a delivery - the assigned rider (if any) is free again.
+     * DELIVERED is deliberately absent: DeliveryOrderService#completeDelivery closes that assignment
+     * itself, together with crediting the rider.
+     */
+    private static final java.util.Set<OrderStatusCode> RELEASES_RIDER = java.util.EnumSet.of(
+            OrderStatusCode.CANCELLED, OrderStatusCode.REJECTED, OrderStatusCode.RETURNED,
+            OrderStatusCode.AUTO_CANCELLED, OrderStatusCode.SELF_PICKUP_COMPLETED);
 
     @Transactional
     public void record(Long orderId, OrderStatusCode from, OrderStatusCode to, String actorType, Long actorUserId, String note) {
@@ -37,6 +48,24 @@ public class OrderStatusLogService {
         entry.setNote(note);
         entry.setCreatedAt(LocalDateTime.now());
         orderStatusLogRepository.save(entry);
+        releaseRiderIfEnded(orderId, to);
+    }
+
+    /**
+     * Every status transition (customer cancel, store-owner reject/cancel, admin status override, ...)
+     * is recorded through {@link #record}, which makes this the one place to free the rider when an
+     * order ends without being delivered. Previously the AcceptDelivery row was only ever closed on
+     * delivery, so a cancelled assignment held one of the rider's concurrent-delivery slots forever.
+     */
+    private void releaseRiderIfEnded(Long orderId, OrderStatusCode to) {
+        if (!RELEASES_RIDER.contains(to)) return;
+        acceptDeliveryRepository.findByOrderId(orderId.intValue())
+                .filter(accept -> !Boolean.TRUE.equals(accept.getIsComplete()))
+                .ifPresent(accept -> {
+                    accept.setIsComplete(true);
+                    acceptDeliveryRepository.save(accept);
+                    log.info("Released rider {} from order {} ({})", accept.getUserId(), orderId, to);
+                });
     }
 
     @Transactional(readOnly = true)

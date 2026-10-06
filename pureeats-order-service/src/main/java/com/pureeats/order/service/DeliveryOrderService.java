@@ -142,10 +142,11 @@ public class DeliveryOrderService {
             log.warn("Rejected delivery acceptance for order {}: already assigned to a rider", orderId);
             throw new BadRequestException("This order has already been assigned to a rider");
         }
-        long activeCount = acceptDeliveryRepository.findByUserIdAndIsCompleteFalse(riderUserId.intValue()).size();
-        if (activeCount >= rider.getMaxAcceptDeliveryLimit()) {
+        long activeCount = countDeliveriesInProgress(riderUserId);
+        int limit = rider.getMaxAcceptDeliveryLimit() != null && rider.getMaxAcceptDeliveryLimit() > 0 ? rider.getMaxAcceptDeliveryLimit() : 1;
+        if (activeCount >= limit) {
             log.warn("Rejected delivery acceptance for rider {}: at concurrent delivery limit ({}/{})",
-                    riderUserId, activeCount, rider.getMaxAcceptDeliveryLimit());
+                    riderUserId, activeCount, limit);
             throw new BadRequestException("You have reached your maximum concurrent delivery limit");
         }
 
@@ -395,6 +396,20 @@ public class DeliveryOrderService {
                 .sorted(java.util.Comparator.comparing(Order::getCreatedAt, java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())))
                 .map(order -> toAssignmentResponse(order, rider))
                 .toList();
+    }
+
+    /**
+     * Assignments that still genuinely occupy the rider. An AcceptDelivery row is only marked complete
+     * on delivery, so one whose order was later cancelled/rejected/returned stays "incomplete"
+     * forever - counting those raw (as this used to) permanently ate into the rider's concurrent
+     * limit, and a rider with a few such leftovers could never accept another order.
+     */
+    public long countDeliveriesInProgress(Long riderUserId) {
+        return acceptDeliveryRepository.findByUserIdAndIsCompleteFalse(riderUserId.intValue()).stream()
+                .map(accept -> orderRepository.findById(accept.getOrderId().longValue()).orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .filter(order -> !TERMINAL_STATUSES.contains(orderStatusService.codeFor(order.getOrderstatusId())))
+                .count();
     }
 
     private DeliveryAssignmentResponse toAssignmentResponse(Order order, DeliveryGuyDetail rider) {
