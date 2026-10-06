@@ -73,7 +73,7 @@ public class RatingService {
         rating.setRateableId(request.rateableId());
         rating.setRating(request.rating());
         rating.setComment(request.comment());
-        rating.setTags(request.tags());
+        rating.setTags(request.tagsAsString());
         rating.setCreatedAt(LocalDateTime.now());
         rating.setUpdatedAt(LocalDateTime.now());
         rating = ratingRepository.save(rating);
