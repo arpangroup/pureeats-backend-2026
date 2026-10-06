@@ -25,7 +25,10 @@ public record RiderEarningResponse(
         BigDecimal commissionBase,
         /** True when the rate/basis above is the rider's CURRENT one (old trip without a snapshot), not the one in force at delivery. */
         boolean rateIsCurrent,
+        /** Total for the trip = commission + tip. */
         BigDecimal earning,
+        /** Customer's tip included in {@code earning} (zero for trips recorded before tips were credited). */
+        BigDecimal tipAmount,
         /** Cash collected from the customer on a COD order - held by the rider until settlement. */
         BigDecimal codCollected,
         boolean settled,

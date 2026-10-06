@@ -49,6 +49,7 @@ public class RiderEarningsService {
     private static final Pattern META_RATE = Pattern.compile("\"commissionRate\":([0-9.]+)");
     private static final Pattern META_BASIS = Pattern.compile("\"commissionBasis\":\"([A-Z_]+)\"");
     private static final Pattern META_BASE = Pattern.compile("\"commissionBase\":([0-9.]+)");
+    private static final Pattern META_TIP = Pattern.compile("\"tip\":([0-9.]+)");
 
     private final TripDetailRepository tripDetailRepository;
     private final RiderSettlementRepository riderSettlementRepository;
@@ -421,7 +422,7 @@ public class RiderEarningsService {
                 order != null ? order.getDeliveryCharge() : null,
                 order != null ? order.getPaymentMode() : null,
                 rate, basis, base, rateIsCurrent,
-                trip.getRiderEarning(), trip.getCashCollectedFromCustomer(),
+                trip.getRiderEarning(), match(META_TIP, meta).map(BigDecimal::new).orElse(BigDecimal.ZERO), trip.getCashCollectedFromCustomer(),
                 isSettled(trip), trip.getSettlementId(), trip.getSettledAt());
     }
 

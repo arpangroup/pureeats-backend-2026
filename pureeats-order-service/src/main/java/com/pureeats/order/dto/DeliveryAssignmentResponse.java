@@ -33,8 +33,11 @@ public record DeliveryAssignmentResponse(
         List<Item> items,
         BigDecimal total,
         String paymentMode,
+        /** Commission only - the tip is separate, see {@code tipAmount}. */
         BigDecimal payoutEstimate,
         BigDecimal distanceKm,
+        /** Customer's tip - paid to the rider in full on delivery. */
+        BigDecimal tipAmount,
         LocalDateTime createdAt,
         LocalDateTime acceptedAt,
         LocalDateTime pickedUpAt,
