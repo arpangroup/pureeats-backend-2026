@@ -26,6 +26,8 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /** Rider pings becoming an order's GPS trail, and the customer tracking view built from it. */
@@ -62,6 +64,7 @@ class DeliveryTrackingTest {
 
     @BeforeEach
     void setUp() {
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "commissionBasis", com.pureeats.domain.enums.CommissionBasis.FULL_ORDER);
         User riderUser = new User();
         riderUser.setId(RIDER);
         riderUser.setDeliveryGuyDetailId(4);
@@ -168,5 +171,75 @@ class DeliveryTrackingTest {
     @Test
     void tracking_isOwnerOnly() {
         assertThrows(ForbiddenException.class, () -> service.trackingForCustomer(999L, 77L));
+    }
+
+    // ---- tip + pickup/drop distance ----
+
+    @Test
+    void availableOrders_includeTipAndPickupAndDropDistance() {
+        DeliveryGuyDetail detail = deliveryGuyDetailRepository.findById(4L).orElseThrow();
+        detail.setCommissionRate(BigDecimal.TEN);
+        detail.setLastLat(new BigDecimal("12.9500"));
+        detail.setLastLng(new BigDecimal("77.6000"));
+        order.setDeliveryType(0);
+        order.setTotal(new BigDecimal("400"));
+        order.setDeliveryCharge(new BigDecimal("30"));
+        order.setDriverTipAmount(new BigDecimal("25"));
+        order.setCreatedAt(LocalDateTime.now());
+        when(orderStatusService.idFor(any())).thenReturn(2);
+        when(orderRepository.findByOrderstatusIdInAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(any(), any())).thenReturn(List.of(order));
+        when(acceptDeliveryRepository.findByOrderId(77)).thenReturn(Optional.empty());
+        when(orderPricingService.distanceKm(any(Restaurant.class), any(), any())).thenReturn(new BigDecimal("3.2"));
+        when(orderPricingService.distanceKm("12.9500", "77.6000", "12.9300", "77.6200")).thenReturn(new BigDecimal("1.4"));
+
+        var available = service.availableOrders(RIDER);
+
+        assertEquals(1, available.size());
+        assertEquals(new BigDecimal("25"), available.get(0).tipAmount());
+        assertEquals(new BigDecimal("1.4"), available.get(0).pickupDistanceKm());
+        assertEquals(new BigDecimal("3.2"), available.get(0).dropDistanceKm());
+        assertEquals(new BigDecimal("40.00"), available.get(0).payoutEstimate(), "payout is commission only; the tip is separate");
+    }
+
+    @Test
+    void availableOrders_withoutRiderPosition_haveNoPickupDistance() {
+        DeliveryGuyDetail detail = deliveryGuyDetailRepository.findById(4L).orElseThrow();
+        detail.setCommissionRate(BigDecimal.TEN);
+        order.setDeliveryType(0);
+        order.setTotal(new BigDecimal("400"));
+        order.setDeliveryCharge(new BigDecimal("30"));
+        order.setCreatedAt(LocalDateTime.now());
+        when(orderStatusService.idFor(any())).thenReturn(2);
+        when(orderRepository.findByOrderstatusIdInAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(any(), any())).thenReturn(List.of(order));
+        when(acceptDeliveryRepository.findByOrderId(77)).thenReturn(Optional.empty());
+        when(orderPricingService.distanceKm(any(Restaurant.class), any(), any())).thenReturn(new BigDecimal("3.2"));
+
+        var available = service.availableOrders(RIDER);
+
+        assertNull(available.get(0).pickupDistanceKm());
+        assertEquals(0, available.get(0).tipAmount().signum());
+    }
+
+    @Test
+    void deliver_creditsTheTipToTheRiderInFull_andCountsItInTheTripEarning() {
+        DeliveryGuyDetail detail = deliveryGuyDetailRepository.findById(4L).orElseThrow();
+        detail.setCommissionRate(BigDecimal.TEN);
+        order.setUniqueOrderId("PE-77");
+        order.setDeliveryPin("1234");
+        order.setPaymentMode("RAZORPAY");
+        order.setTotal(new BigDecimal("400"));
+        order.setRestaurantCharge(BigDecimal.ZERO);
+        order.setDeliveryCharge(new BigDecimal("30"));
+        order.setDriverTipAmount(new BigDecimal("25"));
+        when(orderStatusService.idFor(any())).thenReturn(8);
+
+        service.deliver(RIDER, 77L, "1234");
+
+        verify(walletService).credit(eq(RIDER), eq(new BigDecimal("40.00")), contains("Delivery earning"));
+        verify(walletService).credit(eq(RIDER), eq(new BigDecimal("25")), contains("Tip for order #PE-77"));
+        ArgumentCaptor<TripDetail> trip = ArgumentCaptor.forClass(TripDetail.class);
+        verify(tripDetailRepository).save(trip.capture());
+        assertEquals(new BigDecimal("65.00"), trip.getValue().getRiderEarning());
+        assertTrue(trip.getValue().getMeta().contains("\"tip\":25"));
     }
 }

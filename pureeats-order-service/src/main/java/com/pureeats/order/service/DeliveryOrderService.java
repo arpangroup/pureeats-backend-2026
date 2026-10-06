@@ -113,6 +113,11 @@ public class DeliveryOrderService {
 
         int itemsCount = orderItemRepository.findByOrderId(order.getId().intValue()).size();
 
+        BigDecimal pickupDistanceKm = restaurant != null && rider.getLastLat() != null && rider.getLastLng() != null
+                ? orderPricingService.distanceKm(rider.getLastLat().toPlainString(), rider.getLastLng().toPlainString(),
+                        restaurant.getLatitude(), restaurant.getLongitude())
+                : null;
+
         return new DeliveryAvailableOrderResponse(
                 order.getId(), order.getUniqueOrderId(),
                 restaurant != null ? restaurant.getName() : "Unknown",
@@ -121,7 +126,12 @@ public class DeliveryOrderService {
                 restaurant != null ? parseCoordinate(restaurant.getLongitude()) : BigDecimal.ZERO,
                 order.getAddress(),
                 parseCoordinate(customerLat), parseCoordinate(customerLng),
-                distanceKm, payoutEstimate, itemsCount, order.getCreatedAt());
+                distanceKm, payoutEstimate, itemsCount, order.getCreatedAt(),
+                tipOf(order), pickupDistanceKm, distanceKm);
+    }
+
+    private static BigDecimal tipOf(Order order) {
+        return order.getDriverTipAmount() != null && order.getDriverTipAmount().signum() > 0 ? order.getDriverTipAmount() : BigDecimal.ZERO;
     }
 
     private BigDecimal parseCoordinate(String value) {
@@ -275,6 +285,13 @@ public class DeliveryOrderService {
                 .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
         walletService.credit(riderUserId, riderEarning, "Delivery earning for order #" + order.getUniqueOrderId());
         log.debug("Credited rider {} earning {} for order {}", riderUserId, riderEarning, order.getId());
+        // The customer's tip goes to the rider in full - it's part of what the customer paid but was
+        // previously never credited to anyone. Its own wallet entry so the rider can see it.
+        BigDecimal tip = tipOf(order);
+        if (tip.signum() > 0) {
+            walletService.credit(riderUserId, tip, "Tip for order #" + order.getUniqueOrderId());
+            log.debug("Credited rider {} tip {} for order {}", riderUserId, tip, order.getId());
+        }
 
         BigDecimal restaurantEarning = order.getTotal().subtract(order.getRestaurantCharge());
         restaurantPayoutService.recordEarning(order.getRestaurantId(), restaurantEarning);
@@ -293,7 +310,8 @@ public class DeliveryOrderService {
         trip.setRiderId(riderUserId.intValue());
         trip.setDeliveryCollectionId(0);
         trip.setDistanceTravelled(tripDistanceKm(order));
-        trip.setRiderEarning(riderEarning);
+        // Earning = commission + tip, so pending settlement and analytics include what the rider was tipped.
+        trip.setRiderEarning(riderEarning.add(tip));
         trip.setRestaurantEarning(restaurantEarning);
         trip.setCashCollectedFromCustomer(cashCollected);
         // COD cash the rider now holds on the platform's behalf until their next settlement.
@@ -302,7 +320,8 @@ public class DeliveryOrderService {
         // even if their commission rate (or the platform-wide basis) changes later.
         trip.setMeta("{\"commissionRate\":" + rider.getCommissionRate().toPlainString()
                 + ",\"commissionBasis\":\"" + commissionBasis.name() + "\""
-                + ",\"commissionBase\":" + commissionBase.toPlainString() + "}");
+                + ",\"commissionBase\":" + commissionBase.toPlainString()
+                + ",\"tip\":" + tip.toPlainString() + "}");
         trip.setIsSettlementDone(0);
         trip.setCreatedAt(LocalDateTime.now());
         trip.setUpdatedAt(LocalDateTime.now());
@@ -610,7 +629,7 @@ public class DeliveryOrderService {
                 order.getAddress(),
                 parseCoordinate(customerLat), parseCoordinate(customerLng),
                 customer != null ? customer.getPhone() : null,
-                items, order.getPayable(), order.getPaymentMode(), payoutEstimate, distanceKm,
+                items, order.getPayable(), order.getPaymentMode(), payoutEstimate, distanceKm, tipOf(order),
                 order.getCreatedAt(), acceptedAt, pickedUpAt, deliveredAt);
     }
 

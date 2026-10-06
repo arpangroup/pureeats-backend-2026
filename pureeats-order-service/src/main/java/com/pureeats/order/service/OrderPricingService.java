@@ -79,6 +79,11 @@ public class OrderPricingService {
         return distanceCalculator.distanceKm(restaurant.getLatitude(), restaurant.getLongitude(), customerLatitude, customerLongitude);
     }
 
+    /** Straight-line distance between any two points (e.g. the rider's last GPS fix and a restaurant). Zero on missing/unparseable input. */
+    public BigDecimal distanceKm(String lat1, String lng1, String lat2, String lng2) {
+        return distanceCalculator.distanceKm(lat1, lng1, lat2, lng2);
+    }
+
     private BigDecimal percentOf(BigDecimal amount, BigDecimal percentage) {
         if (percentage == null) {
             return BigDecimal.ZERO;

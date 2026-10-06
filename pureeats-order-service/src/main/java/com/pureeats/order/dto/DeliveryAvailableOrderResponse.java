@@ -22,9 +22,17 @@ public record DeliveryAvailableOrderResponse(
         String customerAddress,
         BigDecimal customerLat,
         BigDecimal customerLng,
+        /** Restaurant -> customer (same as {@code dropDistanceKm}; kept for older app builds). */
         BigDecimal distanceKm,
+        /** Commission only - the tip is separate, see {@code tipAmount}. */
         BigDecimal payoutEstimate,
         int itemsCount,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        /** Customer's tip for the rider - paid to the rider in full on delivery, on top of {@code payoutEstimate}. */
+        BigDecimal tipAmount,
+        /** Rider's last reported position -> restaurant; null when the rider app hasn't reported a position yet. */
+        BigDecimal pickupDistanceKm,
+        /** Restaurant -> customer. */
+        BigDecimal dropDistanceKm
 ) {
 }
