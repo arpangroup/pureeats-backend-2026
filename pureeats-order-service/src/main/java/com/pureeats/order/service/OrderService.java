@@ -433,7 +433,27 @@ public class OrderService {
                 order.getDriverTipAmount(), order.getDiscountAmount(), order.getTotal(), order.getPayable(),
                 order.getPaymentMode(), order.getDeliveryPin(), order.getOrderComment(),
                 order.getTransactionId(), order.getDeliveryType(), order.getOrderFrom(), order.getCreatedAt(), order.getUpdatedAt(),
-                legalNextStatuses, deserializeBreakdown(order.getPricingBreakdown()), deliveryGuyId, deliveryGuyName, deliveryPartner);
+                legalNextStatuses, deserializeBreakdown(order.getPricingBreakdown()), deliveryGuyId, deliveryGuyName, deliveryPartner,
+                mapDirectionsUrl(restaurant, order.getLocation()));
+    }
+
+    /** https://www.google.com/maps/dir/?api=1&origin=lat,lng&destination=lat,lng - restaurant to the order's stored delivery point. */
+    private String mapDirectionsUrl(Restaurant restaurant, String orderLocationJson) {
+        if (restaurant == null || isBlank(restaurant.getLatitude()) || isBlank(restaurant.getLongitude()) || isBlank(orderLocationJson)) return null;
+        try {
+            var node = objectMapper.readTree(orderLocationJson);
+            String lat = node.path("latitude").asText("");
+            String lng = node.path("longitude").asText("");
+            if (lat.isBlank() || lng.isBlank()) return null;
+            return "https://www.google.com/maps/dir/?api=1&travelmode=driving&origin=" + restaurant.getLatitude().trim() + "," + restaurant.getLongitude().trim()
+                    + "&destination=" + lat.trim() + "," + lng.trim();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static boolean isBlank(String s) {
+        return s == null || s.isBlank();
     }
 
     private String serializeBreakdown(PricingBreakdown breakdown) {

@@ -40,6 +40,8 @@ public record OrderResponse(
         Long deliveryGuyId,
         String deliveryGuyName,
         /** Richer version of deliveryGuyId/deliveryGuyName above (kept for backward compat) — null until assigned. */
-        OrderDeliveryPartnerSummary deliveryPartner
+        OrderDeliveryPartnerSummary deliveryPartner,
+        /** Google Maps directions from the restaurant to the order's delivery point; null when either location is missing. */
+        String mapDirectionsUrl
 ) {
 }
