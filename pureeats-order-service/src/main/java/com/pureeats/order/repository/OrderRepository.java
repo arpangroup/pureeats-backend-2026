@@ -14,6 +14,8 @@ import java.util.List;
 public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findByUserIdOrderByCreatedAtDesc(Integer userId);
 
+    java.util.Optional<Order> findFirstByUniqueOrderId(String uniqueOrderId);
+
     List<Order> findByRestaurantIdAndOrderstatusIdOrderByCreatedAtDesc(Integer restaurantId, Integer orderstatusId);
 
     List<Order> findByOrderstatusIdInOrderByCreatedAtDesc(List<Integer> orderstatusIds);
