@@ -387,7 +387,133 @@ public class DeliveryOrderService {
     @Transactional
     public void updateMyLocation(Long riderUserId, String lat, String lng) {
         DeliveryGuyDetail rider = riderProfile(riderUserId);
-        deliveryGuyLocationService.updateLocation(rider.getId(), new BigDecimal(lat), new BigDecimal(lng));
+        BigDecimal latitude = new BigDecimal(lat);
+        BigDecimal longitude = new BigDecimal(lng);
+        deliveryGuyLocationService.updateLocation(rider.getId(), latitude, longitude);
+        recordBreadcrumbs(riderUserId, latitude, longitude);
+    }
+
+    /** Statuses during which the rider is physically on the order - their pings become the order's tracking path. */
+    private static final java.util.Set<OrderStatusCode> ON_THE_ROAD = java.util.EnumSet.of(
+            OrderStatusCode.RIDER_ASSIGNED, OrderStatusCode.PICKED_UP, OrderStatusCode.ON_THE_WAY);
+
+    /** Below this movement (~15 m) a new ping just refreshes the last point's timestamp instead of adding a point. */
+    private static final double MIN_BREADCRUMB_DEGREES = 0.00015;
+    private static final int MAX_PATH_POINTS = 400;
+    private static final long STALE_AFTER_SECONDS = 120;
+
+    /**
+     * Appends the rider's position to the GPS trail (GpsTable) of every order they're currently out on,
+     * so the customer's tracking map can show where the rider is and the path they've taken. The rider
+     * app only ever sends rider-level pings (POST /delivery/location) - the order-scoped POST /delivery/gps
+     * was never called, which is why GpsTable stayed empty and the customer map had nothing to show.
+     */
+    private void recordBreadcrumbs(Long riderUserId, BigDecimal lat, BigDecimal lng) {
+        LocalDateTime now = LocalDateTime.now();
+        for (AcceptDelivery accept : acceptDeliveryRepository.findByUserIdAndIsCompleteFalse(riderUserId.intValue())) {
+            Order order = orderRepository.findById(accept.getOrderId().longValue()).orElse(null);
+            if (order == null || !ON_THE_ROAD.contains(orderStatusService.codeFor(order.getOrderstatusId()))) continue;
+            GpsTable last = gpsTableRepository.findFirstByOrderIdOrderByUpdatedAtDesc(accept.getOrderId()).orElse(null);
+            if (last != null && closeTo(last, lat, lng)) {
+                last.setUpdatedAt(now);
+                gpsTableRepository.save(last);
+                continue;
+            }
+            GpsTable point = new GpsTable();
+            point.setOrderId(accept.getOrderId());
+            point.setDeliveryLat(lat.toPlainString());
+            point.setDeliveryLong(lng.toPlainString());
+            point.setCreatedAt(now);
+            point.setUpdatedAt(now);
+            gpsTableRepository.save(point);
+        }
+    }
+
+    private static boolean closeTo(GpsTable last, BigDecimal lat, BigDecimal lng) {
+        try {
+            return Math.abs(Double.parseDouble(last.getDeliveryLat()) - lat.doubleValue()) < MIN_BREADCRUMB_DEGREES
+                    && Math.abs(Double.parseDouble(last.getDeliveryLong()) - lng.doubleValue()) < MIN_BREADCRUMB_DEGREES;
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Live tracking for the customer's own order: restaurant + the order's delivery point, and while a
+     * rider is on it, their latest fix (order trail first, falling back to the rider's last known
+     * position) and the trail since assignment (downsampled to at most {@link #MAX_PATH_POINTS}).
+     */
+    @Transactional(readOnly = true)
+    public OrderTrackingResponse trackingForCustomer(Long customerUserId, Long orderId) {
+        Order order = orderService.findOrThrow(orderId);
+        if (!order.getUserId().equals(customerUserId.intValue())) {
+            throw new ForbiddenException("This order does not belong to you");
+        }
+        OrderStatusCode status = orderStatusService.codeFor(order.getOrderstatusId());
+        Restaurant restaurant = restaurantRepository.findById(order.getRestaurantId().longValue()).orElse(null);
+        OrderTrackingResponse.Point restaurantPoint = restaurant != null
+                ? point(restaurant.getLatitude(), restaurant.getLongitude()) : null;
+
+        OrderTrackingResponse.Point destination = null;
+        try {
+            if (order.getLocation() != null) {
+                JsonNode node = objectMapper.readTree(order.getLocation());
+                destination = point(node.path("latitude").asText(null), node.path("longitude").asText(null));
+            }
+        } catch (Exception e) {
+            log.warn("Could not parse stored location JSON for order {}: {}", order.getId(), e.getMessage());
+        }
+
+        OrderTrackingResponse.RiderPosition rider = null;
+        List<OrderTrackingResponse.Point> path = List.of();
+        if (status != null && ON_THE_ROAD.contains(status)) {
+            List<GpsTable> trail = gpsTableRepository.findByOrderIdOrderByCreatedAtAsc(order.getId().intValue());
+            path = downsample(trail).stream()
+                    .map(g -> point(g.getDeliveryLat(), g.getDeliveryLong()))
+                    .filter(java.util.Objects::nonNull)
+                    .toList();
+            if (!trail.isEmpty()) {
+                GpsTable last = trail.get(trail.size() - 1);
+                OrderTrackingResponse.Point p = point(last.getDeliveryLat(), last.getDeliveryLong());
+                LocalDateTime at = last.getUpdatedAt() != null ? last.getUpdatedAt() : last.getCreatedAt();
+                if (p != null) rider = riderPosition(p.lat(), p.lng(), at);
+            } else {
+                rider = acceptDeliveryRepository.findByOrderId(order.getId().intValue())
+                        .flatMap(a -> userRepository.findById(a.getUserId().longValue()))
+                        .filter(u -> u.getDeliveryGuyDetailId() != null)
+                        .flatMap(u -> deliveryGuyDetailRepository.findById(u.getDeliveryGuyDetailId().longValue()))
+                        .filter(d -> d.getLastLat() != null && d.getLastLng() != null)
+                        .map(d -> riderPosition(d.getLastLat(), d.getLastLng(), d.getLastSeenAt()))
+                        .orElse(null);
+            }
+        }
+        return new OrderTrackingResponse(order.getId(), status != null ? status.name() : "UNKNOWN", restaurantPoint, destination, rider, path);
+    }
+
+    private static OrderTrackingResponse.RiderPosition riderPosition(BigDecimal lat, BigDecimal lng, LocalDateTime at) {
+        boolean stale = at == null || at.isBefore(LocalDateTime.now().minusSeconds(STALE_AFTER_SECONDS));
+        return new OrderTrackingResponse.RiderPosition(lat, lng, at, stale);
+    }
+
+    private static List<GpsTable> downsample(List<GpsTable> trail) {
+        if (trail.size() <= MAX_PATH_POINTS) return trail;
+        double step = (double) trail.size() / MAX_PATH_POINTS;
+        List<GpsTable> out = new java.util.ArrayList<>(MAX_PATH_POINTS + 1);
+        for (int i = 0; i < MAX_PATH_POINTS; i++) out.add(trail.get((int) (i * step)));
+        out.add(trail.get(trail.size() - 1));
+        return out;
+    }
+
+    private static OrderTrackingResponse.Point point(String lat, String lng) {
+        if (lat == null || lng == null || lat.isBlank() || lng.isBlank()) return null;
+        try {
+            BigDecimal la = new BigDecimal(lat.trim());
+            BigDecimal lo = new BigDecimal(lng.trim());
+            if (la.signum() == 0 && lo.signum() == 0) return null;
+            return new OrderTrackingResponse.Point(la, lo);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /** The signed-in rider's own delivery history (every assignment, newest first), sourced from {@link AcceptDeliveryRepository} (assignments) rather than {@code OrderRepository#findByUserId} (which is the customer's own orders). */

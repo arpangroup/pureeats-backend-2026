@@ -7,4 +7,6 @@ import java.util.Optional;
 
 public interface GpsTableRepository extends JpaRepository<GpsTable, Long> {
     Optional<GpsTable> findFirstByOrderIdOrderByUpdatedAtDesc(Integer orderId);
+
+    java.util.List<GpsTable> findByOrderIdOrderByCreatedAtAsc(Integer orderId);
 }

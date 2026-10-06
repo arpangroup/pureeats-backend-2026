@@ -6,6 +6,7 @@ import com.pureeats.order.dto.OrderResponse;
 import com.pureeats.order.dto.OrderStatusSnapshot;
 import com.pureeats.order.dto.OrderSummaryResponse;
 import com.pureeats.order.dto.OrderTimelineResponse;
+import com.pureeats.order.dto.OrderTrackingResponse;
 import com.pureeats.order.dto.PlaceOrderRequest;
 import com.pureeats.order.service.DeliveryOrderService;
 import com.pureeats.order.service.InvoiceService;
@@ -68,6 +69,12 @@ public class OrderController {
     @Operation(summary = "Lightweight poll target - status + last-updated only, for clients that want to poll frequently without paying for the full order-detail joins on every tick")
     public ApiResponse<OrderStatusSnapshot> status(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long id) {
         return ApiResponse.success(orderService.getOrderStatus(principal.userId(), id));
+    }
+
+    @GetMapping("/{id}/tracking")
+    @Operation(summary = "Live tracking for the caller's own order: restaurant, the order's delivery point, and the rider's latest position + path while out on the order")
+    public ApiResponse<OrderTrackingResponse> tracking(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long id) {
+        return ApiResponse.success(deliveryOrderService.trackingForCustomer(principal.userId(), id));
     }
 
     @GetMapping("/{id}/timeline")
