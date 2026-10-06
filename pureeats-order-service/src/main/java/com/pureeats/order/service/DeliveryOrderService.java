@@ -292,15 +292,35 @@ public class DeliveryOrderService {
         trip.setRestaurantId(order.getRestaurantId());
         trip.setRiderId(riderUserId.intValue());
         trip.setDeliveryCollectionId(0);
-        trip.setDistanceTravelled(BigDecimal.ZERO);
+        trip.setDistanceTravelled(tripDistanceKm(order));
         trip.setRiderEarning(riderEarning);
         trip.setRestaurantEarning(restaurantEarning);
         trip.setCashCollectedFromCustomer(cashCollected);
-        trip.setCashOnHold(BigDecimal.ZERO);
+        // COD cash the rider now holds on the platform's behalf until their next settlement.
+        trip.setCashOnHold(cashCollected);
+        // Snapshot of how the earning was computed, so the rider's earning breakdown stays correct
+        // even if their commission rate (or the platform-wide basis) changes later.
+        trip.setMeta("{\"commissionRate\":" + rider.getCommissionRate().toPlainString()
+                + ",\"commissionBasis\":\"" + commissionBasis.name() + "\""
+                + ",\"commissionBase\":" + commissionBase.toPlainString() + "}");
         trip.setIsSettlementDone(0);
         trip.setCreatedAt(LocalDateTime.now());
         trip.setUpdatedAt(LocalDateTime.now());
         tripDetailRepository.save(trip);
+    }
+
+    /** Restaurant-to-customer distance for the trip record (same straight-line estimate shown when the rider accepted). */
+    private BigDecimal tripDistanceKm(Order order) {
+        try {
+            Restaurant restaurant = restaurantRepository.findById(order.getRestaurantId().longValue()).orElse(null);
+            if (restaurant == null || order.getLocation() == null) return BigDecimal.ZERO;
+            JsonNode node = objectMapper.readTree(order.getLocation());
+            BigDecimal km = orderPricingService.distanceKm(restaurant, node.path("latitude").asText(null), node.path("longitude").asText(null));
+            return km != null ? km : BigDecimal.ZERO;
+        } catch (Exception e) {
+            log.debug("Could not compute trip distance for order {}: {}", order.getId(), e.getMessage());
+            return BigDecimal.ZERO;
+        }
     }
 
     @Transactional

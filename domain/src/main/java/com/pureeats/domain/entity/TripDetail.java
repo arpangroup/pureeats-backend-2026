@@ -67,4 +67,11 @@ public class TripDetail {
 
     @Column(name = "is_settlement_done", nullable = false)
     private Integer isSettlementDone;
+
+    /** The RiderSettlement that paid this trip out (null while unsettled). */
+    @Column(name = "settlement_id")
+    private Long settlementId;
+
+    @Column(name = "settled_at")
+    private LocalDateTime settledAt;
 }
