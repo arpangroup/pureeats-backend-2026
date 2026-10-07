@@ -61,7 +61,7 @@ class OrderEarningsServiceTest {
         when(restaurantRepository.findById(3L)).thenReturn(Optional.of(new Restaurant()));
         when(orderPricingService.commissionPercentage(any())).thenReturn(new BigDecimal("15"));
         when(orderPricingService.commission(new BigDecimal("500"), new BigDecimal("15"))).thenReturn(new BigDecimal("75.00"));
-        when(orderService.restaurantPayoutFor(order)).thenReturn(new BigDecimal("445.00"));
+        lenient().when(orderService.restaurantPayoutFor(order)).thenReturn(new BigDecimal("445.00"));
         lenient().when(orderStatusService.codeFor(5)).thenReturn(OrderStatusCode.PICKED_UP);
         when(tripDetailRepository.findByOrderId(1)).thenReturn(Optional.empty());
     }
@@ -104,5 +104,29 @@ class OrderEarningsServiceTest {
         assertEquals(new BigDecimal("62.00"), s.platform().amount(), "75 + 7 + 30 - 0 - 50");
         BigDecimal sum = s.restaurant().amount().add(s.rider().amount()).add(s.platform().amount()).add(s.taxCollected());
         assertEquals(0, sum.compareTo(s.customerPaid()));
+    }
+
+    @Test
+    void deliveredUnderTheEarlierRule_showsWhatWasRecorded_andStillReconciles() {
+        // Recorded at delivery under the old rule: restaurant = items - packaging = 480; rider 70.
+        TripDetail trip = new TripDetail();
+        trip.setRestaurantEarning(new BigDecimal("480"));
+        trip.setRiderEarning(new BigDecimal("70"));
+        when(tripDetailRepository.findByOrderId(1)).thenReturn(Optional.of(trip));
+        when(orderPricingService.restaurantPayout(new BigDecimal("500"), new BigDecimal("75.00"), new BigDecimal("20"))).thenReturn(new BigDecimal("445.00"));
+        when(orderStatusService.codeFor(5)).thenReturn(OrderStatusCode.DELIVERED);
+        AcceptDelivery accept = new AcceptDelivery();
+        accept.setUserId(9);
+        when(acceptDeliveryRepository.findByOrderId(1)).thenReturn(Optional.of(accept));
+        when(userRepository.findById(9L)).thenReturn(Optional.empty());
+
+        OrderEarningsSplitResponse s = service.split(1L);
+
+        assertEquals(new BigDecimal("480.00"), s.restaurant().amount(), "the recorded amount, not today's formula (445)");
+        assertTrue(s.restaurant().recordedUnderEarlierRule());
+        assertTrue(s.restaurant().finalized());
+        assertEquals(new BigDecimal("70.00"), s.rider().amount());
+        BigDecimal sum = s.restaurant().amount().add(s.rider().amount()).add(s.platform().amount()).add(s.taxCollected());
+        assertEquals(0, sum.compareTo(s.customerPaid()), "still reconciles to what the customer paid");
     }
 }
