@@ -351,14 +351,14 @@ public class AuthenticationService {
 
     private void assertAccountUsable(User user) {
         if (User.STATUS_INACTIVE.equalsIgnoreCase(user.getIsActive())) {
-            throw new ForbiddenException("ACCOUNT_DEACTIVATED", "This account has been deactivated");
+            throw new ForbiddenException("ACCOUNT_DEACTIVATED", "User has been blocked");
         }
         AccountStatus status = user.getAccountStatus() != null ? user.getAccountStatus() : AccountStatus.ACTIVE;
         switch (status) {
             case BLOCKED -> {
                 log.warn("Account usability check failed for user {} - account BLOCKED", user.getId());
                 throw new ForbiddenException("ACCOUNT_BLOCKED",
-                        user.getLockReason() != null ? user.getLockReason() : "This account has been blocked.");
+                        user.getLockReason() != null ? user.getLockReason() : "User has been blocked");
             }
             case DISABLED -> {
                 log.warn("Account usability check failed for user {} - account DISABLED", user.getId());
