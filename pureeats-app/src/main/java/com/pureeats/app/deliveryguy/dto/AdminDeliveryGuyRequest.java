@@ -16,6 +16,16 @@ public record AdminDeliveryGuyRequest(
         Boolean isActive,
         Boolean isOnline,
         BigDecimal rating,
-        String photo
+        String photo,
+        // Sign-up details - each group is validated and saved only when sent.
+        String licenseNumber,
+        String idProofType,
+        String idProofNumber,
+        String vehicleType,
+        String payoutMethod,
+        String bankAccountHolder,
+        String bankAccountNumber,
+        String bankIfsc,
+        String upiId
 ) {
 }

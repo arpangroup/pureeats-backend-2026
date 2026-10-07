@@ -23,6 +23,17 @@ public class RiderProfileEditPolicy {
     public static final String ABOUT = "driver_edit_about";
     public static final String PHONE = "driver_edit_phone";
     public static final String EMAIL = "driver_edit_email";
+    public static final String LICENSE = "driver_edit_license";
+    public static final String ID_PROOF = "driver_edit_id_proof";
+    public static final String VEHICLE_TYPE = "driver_edit_vehicle_type";
+    public static final String PAYOUT = "driver_edit_payout";
+
+    /** Throws unless the field group may be changed from the app (used when a change was detected). */
+    public void assertEditable(String key, String label) {
+        if (!isEditable(key)) {
+            throw new BadRequestException(label + " can't be changed from the app - please contact support to update it.");
+        }
+    }
 
     private final NotificationSettingRepository settingRepository;
 
