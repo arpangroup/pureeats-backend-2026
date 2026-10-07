@@ -209,7 +209,8 @@ public class AuthenticationService {
     @Transactional
     public void logoutAll(Long userId, RequestMetadata metadata) {
         log.info("Logging out all sessions for user {}", userId);
-        sessionService.revokeAllForUser(userId);
+        // Revokes refresh sessions AND rejects every access token issued so far - other devices sign out on their next request.
+        accountAccessGuard.signOutEverywhere(userId);
         securityEventPublisher.publish(baseEvent(SecurityEventType.LOGOUT_ALL, userId, metadata).build());
     }
 

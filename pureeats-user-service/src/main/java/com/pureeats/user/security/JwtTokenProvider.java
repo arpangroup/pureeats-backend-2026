@@ -91,4 +91,14 @@ public class JwtTokenProvider {
             return null;
         }
     }
+
+    /** When a (valid) token was issued, or null - used to reject tokens issued before "log out of all devices". */
+    public java.time.Instant issuedAt(String token) {
+        try {
+            java.util.Date iat = Jwts.parser().verifyWith(key()).build().parseSignedClaims(token).getPayload().getIssuedAt();
+            return iat != null ? iat.toInstant() : null;
+        } catch (JwtException | IllegalArgumentException e) {
+            return null;
+        }
+    }
 }

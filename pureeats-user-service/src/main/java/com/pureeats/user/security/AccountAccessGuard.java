@@ -29,6 +29,8 @@ public class AccountAccessGuard {
 
     /** Error code the apps sign out on. */
     public static final String ACCOUNT_BLOCKED = "ACCOUNT_BLOCKED";
+    /** Error code for a token issued before the user signed out of all devices. */
+    public static final String SESSION_REVOKED = "SESSION_REVOKED";
     private static final Duration CACHE_TTL = Duration.ofSeconds(30);
 
     private final UserRepository userRepository;
@@ -39,6 +41,19 @@ public class AccountAccessGuard {
     }
 
     private final Map<Long, Decision> cache = new ConcurrentHashMap<>();
+    /**
+     * Per user: tokens issued before this instant are no longer accepted. In memory is enough - refresh
+     * sessions are revoked in the database, so after a restart a stale access token can only live out its
+     * short remaining lifetime (access tokens last 15 minutes).
+     */
+    private final Map<Long, Instant> signedOutAt = new ConcurrentHashMap<>();
+
+    /** True when this token was issued before the user signed out of every device. */
+    public boolean isRevoked(Long userId, Instant tokenIssuedAt) {
+        if (userId == null || tokenIssuedAt == null) return false;
+        Instant cutoff = signedOutAt.get(userId);
+        return cutoff != null && tokenIssuedAt.isBefore(cutoff);
+    }
 
     /** Empty when the user may continue; otherwise the message to show them. */
     public Optional<String> denialFor(Long userId) {
@@ -58,20 +73,37 @@ public class AccountAccessGuard {
         if (userId == null) return;
         cache.remove(userId);
         if (evaluate(userId).isPresent()) {
-            sessionService.revokeAllForUser(userId);
+            signOutEverywhere(userId);
             log.info("User {} can no longer use the app - all sessions revoked", userId);
         }
+    }
+
+    /**
+     * Signs the user out of every device now - "log out of all devices", or when their delivery partner profile
+     * is removed. Every token issued until now is rejected on its next request ({@link #isRevoked}) and all
+     * refresh sessions are revoked, so no app can sign back in without a fresh login.
+     */
+    public void signOutEverywhere(Long userId) {
+        if (userId == null) return;
+        cache.remove(userId);
+        // JWT issued-at has second precision - a token from this very second counts as "before".
+        signedOutAt.put(userId, Instant.now().plusSeconds(1).truncatedTo(java.time.temporal.ChronoUnit.SECONDS));
+        sessionService.revokeAllForUser(userId);
+        log.info("Signed user {} out of every device", userId);
     }
 
     private Optional<String> evaluate(Long userId) {
         User user = userRepository.findById(userId).orElse(null);
         // Deleting an account is a soft delete (status DELETED, handled below); no row means nothing to decide here.
         if (user == null) return Optional.empty();
-        if (User.STATUS_INACTIVE.equalsIgnoreCase(user.getIsActive())) {
+        if (user.getAccountStatus() != AccountStatus.DELETED && User.STATUS_INACTIVE.equalsIgnoreCase(user.getIsActive())) {
             return Optional.of("Your account has been blocked. Please contact support.");
         }
         AccountStatus status = user.getAccountStatus() != null ? user.getAccountStatus() : AccountStatus.ACTIVE;
-        if (status == AccountStatus.BLOCKED || status == AccountStatus.DISABLED || status == AccountStatus.DELETED) {
+        if (status == AccountStatus.DELETED) {
+            return Optional.of("This account has been deleted.");
+        }
+        if (status == AccountStatus.BLOCKED || status == AccountStatus.DISABLED) {
             return Optional.of(user.getLockReason() != null ? user.getLockReason() : "Your account has been blocked. Please contact support.");
         }
         return riderDenial(user);

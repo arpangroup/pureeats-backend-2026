@@ -45,16 +45,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String token = extractToken(request);
             if (token != null) {
                 AuthenticatedUser user = jwtTokenProvider.parseToken(token);
-                java.util.Optional<String> denial = user != null && accountAccessGuard != null
-                        ? accountAccessGuard.denialFor(user.userId()) : java.util.Optional.empty();
-                if (denial.isPresent()) {
-                    // 401 + ACCOUNT_BLOCKED: every app signs out on this (their token refresh fails too - sessions are revoked).
-                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                    response.setContentType("application/json");
-                    response.setCharacterEncoding("UTF-8");
-                    response.getWriter().write("{\"success\":false,\"errorCode\":\"" + AccountAccessGuard.ACCOUNT_BLOCKED
-                            + "\",\"message\":\"" + denial.get().replace("\\", "\\\\").replace("\"", "\\\"") + "\"}");
-                    return;
+                if (user != null && accountAccessGuard != null) {
+                    java.util.Optional<String> denial = accountAccessGuard.denialFor(user.userId());
+                    // 401 + these codes: every app signs out (their token refresh fails too - sessions are revoked).
+                    if (denial.isPresent()) {
+                        reject(response, AccountAccessGuard.ACCOUNT_BLOCKED, denial.get());
+                        return;
+                    }
+                    if (accountAccessGuard.isRevoked(user.userId(), jwtTokenProvider.issuedAt(token))) {
+                        reject(response, AccountAccessGuard.SESSION_REVOKED, "You were signed out of all devices. Please sign in again.");
+                        return;
+                    }
                 }
                 if (user != null) {
                     var authorities = List.of(new SimpleGrantedAuthority(user.role().authority()));
@@ -67,6 +68,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         } finally {
             CurrentUserContext.clear();
         }
+    }
+
+    private static void reject(HttpServletResponse response, String errorCode, String message) throws IOException {
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        response.getWriter().write("{\"success\":false,\"errorCode\":\"" + errorCode
+                + "\",\"message\":\"" + message.replace("\\", "\\\\").replace("\"", "\\\"") + "\"}");
     }
 
     private String extractToken(HttpServletRequest request) {

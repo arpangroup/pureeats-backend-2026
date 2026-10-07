@@ -124,6 +124,9 @@ public class AdminDeliveryGuyService {
             user.setDeliveryGuyDetailId(null);
             user.setUpdatedAt(LocalDateTime.now());
             userRepository.save(user);
+            riderService.evictProfileCache(user.getId());
+            // Their partner account is gone - sign them out of the rider app.
+            accountAccessGuard.signOutEverywhere(user.getId());
         });
         deliveryGuyDetailRepository.delete(detail);
         log.info("Deleted delivery partner {}", id);

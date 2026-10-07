@@ -195,6 +195,39 @@ public class AdminUserService {
         return toResponse(user, roleService.resolveRole(id));
     }
 
+    /**
+     * Admin "Delete user" from the Users screens. A soft delete, like a user deleting their own account:
+     * the data stays, the account status becomes DELETED - they can't sign in, and every open app is
+     * signed out on its next request. Admins can't delete themselves or a super admin.
+     */
+    @Transactional
+    public void deleteUser(Long id, Long adminUserId) {
+        if (id.equals(adminUserId)) {
+            throw new BadRequestException("You can't delete your own account from here.");
+        }
+        User user = adminUserRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("User not found."));
+        if (roleService.resolveRole(id) == Role.SUPER_ADMIN) {
+            throw new BadRequestException("A super admin account can't be deleted.");
+        }
+        user.setAccountStatus(AccountStatus.DELETED);
+        user.setUpdatedAt(LocalDateTime.now());
+        adminUserRepository.save(user);
+        if (user.getDeliveryGuyDetailId() != null) {
+            // A deleted partner stops receiving orders straight away.
+            deliveryGuyDetailRepository.findById(user.getDeliveryGuyDetailId().longValue()).ifPresent(detail -> {
+                if (Boolean.TRUE.equals(detail.getIsOnline())) {
+                    detail.setIsOnline(false);
+                    detail.setOfflineReason(com.pureeats.domain.entity.DeliveryGuyDetail.OFFLINE_REASON_ADMIN);
+                    detail.setStatusChangedAt(LocalDateTime.now());
+                    deliveryGuyDetailRepository.save(detail);
+                }
+            });
+        }
+        riderService.evictProfileCache(id);
+        accountAccessGuard.onAccountChanged(id);
+        log.info("Admin {} deleted user {}", adminUserId, id);
+    }
+
     private AdminUserResponse toResponse(User u, Role role) {
         return toResponse(u, role, u.getPhoto());
     }

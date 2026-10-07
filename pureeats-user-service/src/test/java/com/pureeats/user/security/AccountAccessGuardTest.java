@@ -34,7 +34,7 @@ class AccountAccessGuardTest {
         user.setId(7L);
         user.setIsActive(User.STATUS_ACTIVE);
         user.setAccountStatus(AccountStatus.ACTIVE);
-        when(userRepository.findById(7L)).thenReturn(Optional.of(user));
+        lenient().when(userRepository.findById(7L)).thenReturn(Optional.of(user));
     }
 
     @Test
@@ -79,5 +79,37 @@ class AccountAccessGuardTest {
     void unblocking_doesNotRevokeSessions() {
         guard.onAccountChanged(7L);
         verify(sessionService, never()).revokeAllForUser(any());
+    }
+
+    @Test
+    void deletedAccount_isDenied_withADeletedMessage() {
+        user.setAccountStatus(AccountStatus.DELETED);
+        assertEquals("This account has been deleted.", guard.denialFor(7L).orElseThrow());
+    }
+
+    @Test
+    void deleting_revokesEverySession() {
+        user.setAccountStatus(AccountStatus.DELETED);
+        guard.onAccountChanged(7L);
+        verify(sessionService).revokeAllForUser(7L);
+    }
+
+    @Test
+    void signOutEverywhere_revokesSessionsEvenForAnActiveAccount() {
+        guard.signOutEverywhere(7L);
+        verify(sessionService).revokeAllForUser(7L);
+    }
+
+    @Test
+    void logOutOfAllDevices_rejectsTokensIssuedBefore_butNotNewOnes() {
+        java.time.Instant before = java.time.Instant.now().minusSeconds(60);
+        assertFalse(guard.isRevoked(7L, before));
+
+        guard.signOutEverywhere(7L);
+
+        assertTrue(guard.isRevoked(7L, before), "a token from before the sign-out is rejected");
+        assertTrue(guard.isRevoked(7L, java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS)), "same second counts as before");
+        assertFalse(guard.isRevoked(7L, java.time.Instant.now().plusSeconds(5)), "a fresh sign-in works");
+        assertFalse(guard.isRevoked(8L, before), "other users are unaffected");
     }
 }
