@@ -61,6 +61,7 @@ public class RiderEarningsService {
     private final DeliveryCollectionLogRepository deliveryCollectionLogRepository;
     private final WalletService walletService;
     private final OrderStatusService orderStatusService;
+    private final OrderPricingService orderPricingService;
 
     @Value("${pureeats.commission.basis:FULL_ORDER}")
     private CommissionBasis commissionBasis;
@@ -424,7 +425,7 @@ public class RiderEarningsService {
         BigDecimal base = match(META_BASE, meta).map(BigDecimal::new).orElse(null);
         boolean rateIsCurrent = rate == null;
         if (rateIsCurrent) {
-            rate = rider.getCommissionRate();
+            rate = orderPricingService.riderCommissionRate(rider);
             basis = commissionBasis.name();
             if (order != null) {
                 base = commissionBasis == CommissionBasis.DELIVERY_CHARGE_ONLY ? order.getDeliveryCharge() : order.getTotal();

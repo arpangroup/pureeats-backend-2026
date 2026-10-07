@@ -79,6 +79,18 @@ public class OrderPricingService {
         return nonNegative(settingValueService.getString(SettingSchemaService.DEFAULT_COMMISSION_RATE, null), BigDecimal.valueOf(15));
     }
 
+    /** The partner's own commission rate, or Settings -> Delivery Application -> Earnings -> Default delivery partner commission (%) when they have none. */
+    public BigDecimal riderCommissionRate(com.pureeats.domain.entity.DeliveryGuyDetail rider) {
+        if (riderHasOwnRate(rider)) {
+            return rider.getCommissionRate();
+        }
+        return nonNegative(settingValueService.getString(SettingSchemaService.DEFAULT_RIDER_COMMISSION_RATE, null), BigDecimal.TEN);
+    }
+
+    public boolean riderHasOwnRate(com.pureeats.domain.entity.DeliveryGuyDetail rider) {
+        return rider != null && rider.getCommissionRate() != null && rider.getCommissionRate().signum() > 0;
+    }
+
     /** Commission on the item total (before any coupon - discounts are platform-funded, so the restaurant's base isn't reduced by them). */
     public BigDecimal commission(BigDecimal itemTotal, BigDecimal commissionPercentage) {
         return percentOf(itemTotal, commissionPercentage);

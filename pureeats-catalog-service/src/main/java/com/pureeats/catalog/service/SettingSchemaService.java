@@ -49,6 +49,8 @@ public class SettingSchemaService {
     public static final String DRIVER_INACTIVITY_TIMEOUT_MINUTES = "driver_inactivity_timeout_minutes";
     /** Show per-order payout (commission + tip) to delivery partners in the rider app. */
     public static final String DRIVER_SHOW_PAYOUT = "driver_show_payout";
+    /** Delivery partners' default commission (%) - used for every partner without a rate of their own. */
+    public static final String DEFAULT_RIDER_COMMISSION_RATE = "default_rider_commission_rate";
     /** Profile fields a delivery partner may edit in the rider app (all view-only by default). Read by RiderService / ProfileContactChangeService too. */
     public static final String DRIVER_EDIT_NAME = "driver_edit_name";
     public static final String DRIVER_EDIT_VEHICLE_NUMBER = "driver_edit_vehicle_number";
@@ -376,6 +378,10 @@ public class SettingSchemaService {
                 group("Earnings", "Wallet", List.of(
                         field("enable_delivery_earnings", "Enable delivery guy's earnings", "boolean", "true")
                                 .info("Shows an earnings summary inside the delivery partner app."),
+                        field(DEFAULT_RIDER_COMMISSION_RATE, "Default delivery partner commission (%)", "number", "10")
+                                .info("What a delivery partner earns per delivered order, as a percentage of the order total (plus the customer's tip, paid in full). "
+                                        + "Used for every partner who has no commission rate of their own - a partner's own rate (Delivery partners -> open the partner -> Commission rate) wins; set it to 0 to follow this default. "
+                                        + "Example: order total ₹500 at 10% -> ₹50 per delivery. Recorded on each order when it's delivered, so changing it doesn't alter past earnings."),
                         field("delivery_earning_from", "Delivery guy's earning from", "dropdown", "delivery_charge")
                                 .options(
                                         option("Delivery charge", "delivery_charge"),

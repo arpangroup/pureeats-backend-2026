@@ -89,6 +89,10 @@ public class AdminOrderController {
                                                     @Valid @RequestBody UpdateOrderStatusRequest request) {
         OrderStatusCode toStatus = OrderStatusCode.fromValue(request.toStatus());
         log.info("Admin {} overriding status of order {} to {}", principal.userId(), id, toStatus);
+        if (toStatus == OrderStatusCode.DELIVERED) {
+            // Record and credit the earnings like a PIN-verified delivery, not just the status.
+            return ApiResponse.success("Order status updated", deliveryOrderService.adminMarkDelivered(principal.userId(), id));
+        }
         return ApiResponse.success("Order status updated", orderService.adminUpdateStatus(principal.userId(), id, toStatus));
     }
 

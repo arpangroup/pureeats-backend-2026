@@ -64,6 +64,10 @@ class OrderEarningsServiceTest {
         lenient().when(orderService.restaurantPayoutFor(order)).thenReturn(new BigDecimal("445.00"));
         lenient().when(orderStatusService.codeFor(5)).thenReturn(OrderStatusCode.PICKED_UP);
         when(tripDetailRepository.findByOrderId(1)).thenReturn(Optional.empty());
+        lenient().when(orderPricingService.riderCommissionRate(any())).thenAnswer(inv -> {
+            DeliveryGuyDetail d = inv.getArgument(0);
+            return d != null && d.getCommissionRate() != null ? d.getCommissionRate() : BigDecimal.TEN;
+        });
     }
 
     @Test
@@ -114,7 +118,7 @@ class OrderEarningsServiceTest {
         trip.setRiderEarning(new BigDecimal("70"));
         when(tripDetailRepository.findByOrderId(1)).thenReturn(Optional.of(trip));
         when(orderPricingService.restaurantPayout(new BigDecimal("500"), new BigDecimal("75.00"), new BigDecimal("20"))).thenReturn(new BigDecimal("445.00"));
-        when(orderStatusService.codeFor(5)).thenReturn(OrderStatusCode.DELIVERED);
+        lenient().when(orderStatusService.codeFor(5)).thenReturn(OrderStatusCode.DELIVERED);
         AcceptDelivery accept = new AcceptDelivery();
         accept.setUserId(9);
         when(acceptDeliveryRepository.findByOrderId(1)).thenReturn(Optional.of(accept));
