@@ -13,6 +13,23 @@ public record RiderProfileRequest(
         @NotBlank String vehicleNumber,
         String age,
         String gender,
-        String description
+        String description,
+        // Sign-up details (required when applying; editable again only while pending/rejected).
+        String licenseNumber,
+        /** AADHAAR or PAN. */
+        String idProofType,
+        String idProofNumber,
+        /** BIKE, CYCLE or EV. */
+        String vehicleType,
+        /** BANK or UPI. */
+        String payoutMethod,
+        String bankAccountHolder,
+        String bankAccountNumber,
+        String bankIfsc,
+        String upiId
 ) {
+    /** Older app versions send only the basic profile fields. */
+    public boolean hasKyc() {
+        return licenseNumber != null || idProofNumber != null || vehicleType != null || payoutMethod != null;
+    }
 }

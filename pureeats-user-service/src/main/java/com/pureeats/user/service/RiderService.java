@@ -1,5 +1,6 @@
 package com.pureeats.user.service;
 
+import com.pureeats.domain.common.exception.BadRequestException;
 import com.pureeats.domain.common.exception.ConflictException;
 import com.pureeats.domain.common.exception.ResourceNotFoundException;
 import com.pureeats.domain.entity.DeliveryGuyDetail;
@@ -41,6 +42,8 @@ public class RiderService {
     private final MediaAssetService mediaAssetService;
 
     private static final String OWNER_TYPE_DELIVERY_GUY = "DELIVERY_GUY";
+    /** Driving licence photo, owned by the DeliveryGuyDetail id - media_assets, no extra table. */
+    public static final String OWNER_TYPE_LICENSE = "DELIVERY_GUY_LICENSE";
 
     /** Cache name for rider/driver-detail lookups - see {@code CacheConfig} in pureeats-app for the swappable (in-memory now, Redis-ready later) {@code CacheManager}. Public: AdminUserService and AdminDeliveryGuyService call {@link #evictProfileCache} after their own writes to the same underlying data (they can't declare their own @CacheEvict on this cache name since Spring resolves the SpEL #userId key against their own method's parameters, which are deliveryGuyDetailId-shaped, not userId-shaped). */
     public static final String RIDER_PROFILES_CACHE = "riderProfiles";
@@ -55,7 +58,18 @@ public class RiderService {
             throw new ConflictException("A rider profile already exists for this account");
         }
 
+        if (!user.isPhoneVerified()) {
+            throw new BadRequestException("Verify your mobile number before applying.");
+        }
+        RiderKyc.validate(request);
+
         DeliveryGuyDetail detail = new DeliveryGuyDetail();
+        RiderKyc.apply(detail, request);
+        // New applications wait for an admin (Delivery partners -> Approvals) before they can take orders.
+        detail.setApprovalStatus(DeliveryGuyDetail.APPROVAL_PENDING);
+        detail.setApprovalUpdatedAt(LocalDateTime.now());
+        detail.setIsActive(true);
+        detail.setIsOnline(false);
         detail.setName(request.name() != null && !request.name().isBlank() ? request.name() : user.getName());
         detail.setAge(request.age());
         detail.setGender(request.gender());
@@ -95,6 +109,20 @@ public class RiderService {
         User user = userService.findUserOrThrow(userId);
         DeliveryGuyDetail detail = resolveOwnDetail(user);
         // Settings -> Delivery Application -> Profile editing: locked fields may be resent unchanged, never changed.
+        if (request.hasKyc() && !detail.isApproved()) {
+            // Pending or rejected: the applicant can correct their details; a rejected application goes back for review.
+            RiderKyc.validate(request);
+            RiderKyc.apply(detail, request);
+            if (request.name() != null && !request.name().isBlank()) detail.setName(request.name());
+            detail.setApprovalStatus(DeliveryGuyDetail.APPROVAL_PENDING);
+            detail.setRejectionReason(null);
+            detail.setApprovalUpdatedAt(LocalDateTime.now());
+            detail.setUpdatedAt(LocalDateTime.now());
+            detail.setUpdatedBy(userId);
+            deliveryGuyDetailRepository.save(detail);
+            log.info("Rider {} (re)submitted their application", userId);
+            return toResponse(user, detail);
+        }
         profileEditPolicy.assertCanChange(RiderProfileEditPolicy.NAME, "Name", detail.getName(), blankToNull(request.name()));
         profileEditPolicy.assertCanChange(RiderProfileEditPolicy.VEHICLE_NUMBER, "Vehicle number", detail.getVehicleNumber(), blankToNull(request.vehicleNumber()));
         profileEditPolicy.assertCanChange(RiderProfileEditPolicy.AGE, "Age", detail.getAge(), request.age());
@@ -110,6 +138,28 @@ public class RiderService {
         deliveryGuyDetailRepository.save(detail);
         log.info("Rider {} updated their own profile", userId);
         return toResponse(user, detail);
+    }
+
+    /** Driving licence photo (the latest upload counts). Allowed while the application isn't approved yet. */
+    @Transactional
+    @CacheEvict(cacheNames = RIDER_PROFILES_CACHE, key = "#userId")
+    public RiderProfileResponse uploadLicensePhoto(Long userId, MultipartFile file) {
+        User user = userService.findUserOrThrow(userId);
+        DeliveryGuyDetail detail = resolveOwnDetail(user);
+        if (detail.isApproved() && detail.getApprovalStatus() != null) {
+            throw new BadRequestException("Your licence is already verified - contact support to change it.");
+        }
+        mediaAssetService.upload(file, OWNER_TYPE_LICENSE, detail.getId(), userId);
+        log.info("Rider {} uploaded a driving licence photo", userId);
+        return toResponse(user, detail);
+    }
+
+    /** Latest licence photo URL for a partner, or null. */
+    public String licensePhotoUrl(Long deliveryGuyDetailId) {
+        return mediaAssetService.listForOwner(OWNER_TYPE_LICENSE, deliveryGuyDetailId).stream()
+                .max(java.util.Comparator.comparing(a -> a.getCreatedAt()))
+                .map(a -> mediaUrlResolver.resolve(a.getStorageKey()))
+                .orElse(null);
     }
 
     private static String blankToNull(String s) {
@@ -174,6 +224,10 @@ public class RiderService {
                 mediaUrlResolver.resolve(photoKey), detail.getVehicleNumber(), detail.getAge(), detail.getGender(),
                 detail.getDescription(), detail.getCommissionRate(), detail.getMaxAcceptDeliveryLimit(), detail.getRating(),
                 Boolean.TRUE.equals(detail.getIsNotifiable()), Boolean.TRUE.equals(detail.getIsOnline()),
-                Boolean.TRUE.equals(detail.getIsActive()));
+                Boolean.TRUE.equals(detail.getIsActive()),
+                detail.getApprovalStatus() != null ? detail.getApprovalStatus() : DeliveryGuyDetail.APPROVAL_APPROVED,
+                detail.getRejectionReason(), detail.getLicenseNumber(), licensePhotoUrl(detail.getId()), detail.getIdProofType(),
+                RiderKyc.mask(detail.getIdProofNumber()), detail.getVehicleType(), detail.getPayoutMethod(), detail.getBankAccountHolder(),
+                RiderKyc.mask(detail.getBankAccountNumber()), detail.getBankIfsc(), detail.getUpiId());
     }
 }

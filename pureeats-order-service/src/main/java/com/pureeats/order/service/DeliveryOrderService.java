@@ -63,8 +63,15 @@ public class DeliveryOrderService {
             OrderStatusCode.DELIVERED, OrderStatusCode.SELF_PICKUP_COMPLETED, OrderStatusCode.CANCELLED,
             OrderStatusCode.REJECTED, OrderStatusCode.RETURNED, OrderStatusCode.AUTO_CANCELLED);
 
-    @Value("${pureeats.commission.basis:FULL_ORDER}")
+    /** Fallback only (tests / settings unavailable) - the live basis comes from Settings, see {@link #basis()}. */
+    @Value("${pureeats.commission.basis:DELIVERY_CHARGE_ONLY}")
     private CommissionBasis commissionBasis;
+
+    /** Settings -> Delivery Application -> Earnings -> Delivery partner earns from. */
+    private CommissionBasis basis() {
+        CommissionBasis fromSettings = orderPricingService.riderCommissionBasis();
+        return fromSettings != null ? fromSettings : commissionBasis;
+    }
 
     /** An order still sitting unassigned in RESTAURANT_ACCEPTED/READY_FOR_PICKUP past this age is
      * treated as stale (abandoned, or demo/seed data) rather than genuinely available - see
@@ -82,6 +89,9 @@ public class DeliveryOrderService {
     @Transactional
     public List<DeliveryAvailableOrderResponse> availableOrders(Long riderUserId) {
         DeliveryGuyDetail rider = riderProfile(riderUserId);
+        if (!rider.isApproved()) {
+            return List.of(); // not approved yet - no orders offered
+        }
         List<Integer> statusIds = List.of(
                 orderStatusService.idFor(OrderStatusCode.RESTAURANT_ACCEPTED),
                 orderStatusService.idFor(OrderStatusCode.READY_FOR_PICKUP));
@@ -110,8 +120,8 @@ public class DeliveryOrderService {
                 ? orderPricingService.distanceKm(restaurant, customerLat, customerLng)
                 : BigDecimal.ZERO;
 
-        BigDecimal commissionBase = commissionBasis == CommissionBasis.DELIVERY_CHARGE_ONLY
-                ? order.getDeliveryCharge() : order.getTotal();
+        BigDecimal commissionBase = basis() == CommissionBasis.DELIVERY_CHARGE_ONLY
+                ? java.util.Objects.requireNonNullElse(order.getDeliveryCharge(), BigDecimal.ZERO) : order.getTotal();
         BigDecimal payoutEstimate = commissionBase.multiply(orderPricingService.riderCommissionRate(rider))
                 .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
 
@@ -153,6 +163,7 @@ public class DeliveryOrderService {
     public OrderResponse acceptToDeliver(Long riderUserId, Long orderId) {
         log.info("Rider {} accepting order {} for delivery", riderUserId, orderId);
         DeliveryGuyDetail rider = riderProfile(riderUserId);
+        requireApproved(rider);
         Order order = orderService.findOrThrow(orderId);
         if (acceptDeliveryRepository.findByOrderId(order.getId().intValue()).isPresent()) {
             log.warn("Rejected delivery acceptance for order {}: already assigned to a rider", orderId);
@@ -187,6 +198,7 @@ public class DeliveryOrderService {
     public OrderResponse assignDriverAsAdmin(Long adminUserId, Long orderId, Long riderUserId) {
         log.info("Admin {} assigning rider {} to order {}", adminUserId, riderUserId, orderId);
         DeliveryGuyDetail rider = riderProfile(riderUserId);
+        requireApproved(rider);
         Order order = orderService.findOrThrow(orderId);
         if (acceptDeliveryRepository.findByOrderId(order.getId().intValue()).isPresent()) {
             log.warn("Rejected admin driver assignment for order {}: already assigned to a rider", orderId);
@@ -500,8 +512,8 @@ public class DeliveryOrderService {
             return;
         }
         DeliveryGuyDetail rider = riderProfile(riderUserId);
-        BigDecimal commissionBase = commissionBasis == CommissionBasis.DELIVERY_CHARGE_ONLY
-                ? order.getDeliveryCharge() : order.getTotal();
+        BigDecimal commissionBase = basis() == CommissionBasis.DELIVERY_CHARGE_ONLY
+                ? java.util.Objects.requireNonNullElse(order.getDeliveryCharge(), BigDecimal.ZERO) : order.getTotal();
         BigDecimal riderRate = orderPricingService.riderCommissionRate(rider);
         BigDecimal riderEarning = commissionBase.multiply(riderRate)
                 .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
@@ -542,7 +554,7 @@ public class DeliveryOrderService {
         // Snapshot of how the earning was computed, so the rider's earning breakdown stays correct
         // even if their commission rate (or the platform-wide basis) changes later.
         trip.setMeta("{\"commissionRate\":" + riderRate.toPlainString()
-                + ",\"commissionBasis\":\"" + commissionBasis.name() + "\""
+                + ",\"commissionBasis\":\"" + basis().name() + "\""
                 + ",\"commissionBase\":" + commissionBase.toPlainString()
                 + ",\"tip\":" + tip.toPlainString() + "}");
         trip.setIsSettlementDone(0);
@@ -600,6 +612,7 @@ public class DeliveryOrderService {
     @Transactional
     public void setOnlineStatus(Long riderUserId, boolean isOnline) {
         DeliveryGuyDetail rider = riderProfile(riderUserId);
+        if (isOnline) requireApproved(rider);
         LocalDateTime now = LocalDateTime.now();
         boolean changed = !Boolean.valueOf(isOnline).equals(rider.getIsOnline());
         if (changed) {
@@ -818,7 +831,7 @@ public class DeliveryOrderService {
             log.warn("Could not parse stored location JSON for order {}: {}", order.getId(), e.getMessage());
         }
         BigDecimal distanceKm = restaurant != null ? orderPricingService.distanceKm(restaurant, customerLat, customerLng) : BigDecimal.ZERO;
-        BigDecimal commissionBase = commissionBasis == CommissionBasis.DELIVERY_CHARGE_ONLY ? order.getDeliveryCharge() : order.getTotal();
+        BigDecimal commissionBase = basis() == CommissionBasis.DELIVERY_CHARGE_ONLY ? java.util.Objects.requireNonNullElse(order.getDeliveryCharge(), BigDecimal.ZERO) : order.getTotal();
         BigDecimal payoutEstimate = commissionBase != null
                 ? commissionBase.multiply(orderPricingService.riderCommissionRate(rider)).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
@@ -920,6 +933,15 @@ public class DeliveryOrderService {
         if (rider.getRating() != null) data.put("riderRating", rider.getRating());
         userRepository.findById(riderUserId).map(User::getPhone).ifPresent(phone -> data.put("riderPhone", phone));
         return data;
+    }
+
+    /** Pending or rejected applicants can't go online or take orders. */
+    private static void requireApproved(DeliveryGuyDetail rider) {
+        if (rider.isApproved()) return;
+        if (DeliveryGuyDetail.APPROVAL_REJECTED.equals(rider.getApprovalStatus())) {
+            throw new ForbiddenException("PARTNER_REJECTED", "Your application was not approved" + (rider.getRejectionReason() != null ? ": " + rider.getRejectionReason() : "."));
+        }
+        throw new ForbiddenException("PARTNER_PENDING", "Your application is under review. You can take orders once it's approved.");
     }
 
     private DeliveryGuyDetail riderProfile(Long riderUserId) {

@@ -76,6 +76,7 @@ public class AuthenticationService {
     private final SecurityEventPublisher securityEventPublisher;
     private final JwtTokenProvider jwtTokenProvider;
     private final com.pureeats.user.security.AccountAccessGuard accountAccessGuard;
+    private final com.pureeats.user.security.AccountMessages accountMessages;
 
     @Transactional
     public LoginChallengeResponse signup(SignupRequest request, RequestMetadata metadata) {
@@ -351,14 +352,14 @@ public class AuthenticationService {
 
     private void assertAccountUsable(User user) {
         if (User.STATUS_INACTIVE.equalsIgnoreCase(user.getIsActive())) {
-            throw new ForbiddenException("ACCOUNT_DEACTIVATED", "User has been blocked");
+            throw new ForbiddenException("ACCOUNT_DEACTIVATED", accountMessages.blocked());
         }
         AccountStatus status = user.getAccountStatus() != null ? user.getAccountStatus() : AccountStatus.ACTIVE;
         switch (status) {
             case BLOCKED -> {
                 log.warn("Account usability check failed for user {} - account BLOCKED", user.getId());
                 throw new ForbiddenException("ACCOUNT_BLOCKED",
-                        user.getLockReason() != null ? user.getLockReason() : "User has been blocked");
+                        user.getLockReason() != null ? user.getLockReason() : accountMessages.blocked());
             }
             case DISABLED -> {
                 log.warn("Account usability check failed for user {} - account DISABLED", user.getId());
@@ -366,7 +367,7 @@ public class AuthenticationService {
             }
             case DELETED -> {
                 log.warn("Account usability check failed for user {} - account DELETED", user.getId());
-                throw new ForbiddenException("ACCOUNT_DELETED", "This account has been deleted. Create a new account to continue.");
+                throw new ForbiddenException("ACCOUNT_DELETED", accountMessages.deleted());
             }
             case TEMPORARILY_LOCKED -> {
                 if (user.getLockedUntil() != null && user.getLockedUntil().isAfter(LocalDateTime.now())) {

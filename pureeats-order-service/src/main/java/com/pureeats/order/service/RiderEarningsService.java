@@ -33,11 +33,12 @@ import java.util.regex.Pattern;
  * out, COD cash they're holding), settlements an admin records, and day/week/month analytics.
  * <p>
  * Settlement model: on delivery the rider's commission is credited to their wallet and any COD
- * cash they collected is added to their DeliveryCollection. Both stay "pending" until an admin
- * settles: {@link #settle} nets pending earnings against the cash held, records a
- * {@link RiderSettlement}, marks every covered trip settled, debits the paid-out earnings from the
- * wallet (so the wallet balance is always "earned, not yet paid") and clears the settled cash from
- * the DeliveryCollection.
+ * cash they collected is added to their DeliveryCollection (and held on the trip, {@code cashOnHold}).
+ * The two are settled SEPARATELY and never netted: the rider hands over the full COD cash, and the
+ * platform pays the full earnings. {@link #settle} can do either or both: collecting COD zeroes each
+ * trip's cash on hold and clears it from the DeliveryCollection; paying earnings marks the trips
+ * settled and debits the paid-out amount from the wallet (so the wallet balance is always "earned,
+ * not yet paid"). Each settlement is recorded as a {@link RiderSettlement}.
  */
 @Slf4j
 @Service
@@ -63,8 +64,15 @@ public class RiderEarningsService {
     private final OrderStatusService orderStatusService;
     private final OrderPricingService orderPricingService;
 
-    @Value("${pureeats.commission.basis:FULL_ORDER}")
+    /** Fallback only (tests / settings unavailable) - the live basis comes from Settings, see {@link #basis()}. */
+    @Value("${pureeats.commission.basis:DELIVERY_CHARGE_ONLY}")
     private CommissionBasis commissionBasis;
+
+    /** Settings -> Delivery Application -> Earnings -> Delivery partner earns from. */
+    private CommissionBasis basis() {
+        CommissionBasis fromSettings = orderPricingService.riderCommissionBasis();
+        return fromSettings != null ? fromSettings : commissionBasis;
+    }
 
     // ---- summary / earnings / settlements -----------------------------------------------------
 
@@ -73,13 +81,17 @@ public class RiderEarningsService {
         List<TripDetail> trips = trips(riderUserId);
         List<TripDetail> pending = trips.stream().filter(t -> !isSettled(t)).toList();
         BigDecimal pendingEarnings = sum(pending, TripDetail::getRiderEarning);
-        BigDecimal cashInHand = codCashInHand(pending);
+        List<TripDetail> cashTrips = codTripsHoldingCash(trips);
+        BigDecimal cashInHand = sum(cashTrips, TripDetail::getCashOnHold);
         BigDecimal net = pendingEarnings.subtract(cashInHand);
         BigDecimal lifetime = sum(trips, TripDetail::getRiderEarning);
         RiderSettlementResponse last = riderSettlementRepository.findByRiderUserIdOrderByCreatedAtDesc(riderUserId).stream()
                 .findFirst().map(this::toSettlementResponse).orElse(null);
+        Set<TripDetail> open = new java.util.LinkedHashSet<>(pending);
+        open.addAll(cashTrips);
         return new RiderEarningsSummaryResponse(lifetime, trips.size(), pendingEarnings, cashInHand, net, direction(net),
-                pending.size(), lifetime.subtract(pendingEarnings), last);
+                pending.size(), lifetime.subtract(pendingEarnings), last, open.size(), orderValue(open), cashTrips.size(),
+                (int) pending.stream().filter(this::recordedOnOtherBasis).count());
     }
 
     /** Every delivered trip, newest first. {@code onlyPending} limits it to trips not yet settled. */
@@ -119,22 +131,31 @@ public class RiderEarningsService {
     @Transactional
     public RiderSettlementResponse settle(Long adminUserId, Long riderUserId, SettleRiderRequest request) {
         riderProfile(riderUserId);
-        List<TripDetail> pending = trips(riderUserId).stream().filter(t -> !isSettled(t)).toList();
-        if (pending.isEmpty()) {
-            throw new BadRequestException("This delivery partner has nothing pending to settle");
+        boolean collectCod = request == null || request.collectsCod();
+        boolean payEarnings = request == null || request.paysEarnings();
+        List<TripDetail> all = trips(riderUserId);
+        List<TripDetail> pending = payEarnings ? all.stream().filter(t -> !isSettled(t)).toList() : List.of();
+        List<TripDetail> cashTrips = collectCod ? codTripsHoldingCash(all) : List.of();
+        if (pending.isEmpty() && cashTrips.isEmpty()) {
+            throw new BadRequestException(!collectCod ? "No earnings are pending for this delivery partner"
+                    : !payEarnings ? "This delivery partner holds no COD cash" : "This delivery partner has nothing pending to settle");
         }
+        // Never netted: the full COD cash is collected and the full earnings are paid.
         BigDecimal earnings = sum(pending, TripDetail::getRiderEarning);
-        BigDecimal cod = codCashInHand(pending);
+        BigDecimal cod = sum(cashTrips, TripDetail::getCashOnHold);
         BigDecimal net = earnings.subtract(cod);
         LocalDateTime now = LocalDateTime.now();
+        Set<TripDetail> touched = new java.util.LinkedHashSet<>(pending);
+        touched.addAll(cashTrips);
 
         RiderSettlement settlement = new RiderSettlement();
         settlement.setRiderUserId(riderUserId);
         settlement.setEarningsAmount(earnings);
         settlement.setCodAmount(cod);
         settlement.setNetAmount(net);
-        settlement.setDirection(direction(net));
-        settlement.setTripCount(pending.size());
+        settlement.setDirection(cod.signum() > 0 && earnings.signum() > 0 ? DIRECTION_BOTH
+                : cod.signum() > 0 ? RiderSettlement.DIRECTION_COLLECTED_FROM_RIDER : RiderSettlement.DIRECTION_PAID_TO_RIDER);
+        settlement.setTripCount(touched.size());
         settlement.setTransactionMode(blankToNull(request != null ? request.transactionMode() : null));
         settlement.setTransactionReference(blankToNull(request != null ? request.transactionReference() : null));
         settlement.setNote(blankToNull(request != null ? request.note() : null));
@@ -146,10 +167,13 @@ public class RiderEarningsService {
             trip.setIsSettlementDone(1);
             trip.setSettlementId(settlement.getId());
             trip.setSettledAt(now);
+            trip.setUpdatedAt(now);
+        }
+        for (TripDetail trip : cashTrips) {
             trip.setCashOnHold(BigDecimal.ZERO);
             trip.setUpdatedAt(now);
         }
-        tripDetailRepository.saveAll(pending);
+        tripDetailRepository.saveAll(touched);
 
         if (earnings.signum() > 0) {
             walletService.debit(riderUserId, earnings, "Settlement #" + settlement.getId() + " - earnings paid out for " + pending.size() + " trip(s)");
@@ -361,9 +385,69 @@ public class RiderEarningsService {
      * COD cash the rider is holding: only trips whose order is a COD order that is actually DELIVERED. Trips
      * whose order was later returned/cancelled, or that have no real order behind them, don't count.
      */
-    private BigDecimal codCashInHand(List<TripDetail> pending) {
-        List<Long> orderIds = pending.stream().map(TripDetail::getOrderId).filter(Objects::nonNull).map(Integer::longValue).distinct().toList();
-        if (orderIds.isEmpty()) return BigDecimal.ZERO;
+    /** Result of {@link #recalculatePendingEarnings}. */
+    public record RecalculationResult(int trips, BigDecimal before, BigDecimal after) {
+    }
+
+    /**
+     * Re-records the earning of every UNPAID trip that was recorded on a different basis than today's setting -
+     * e.g. delivered while the commission applied to the order total (100% of a ₹930 order) and now it applies to the
+     * delivery charge (100% of ₹40). Uses the rate snapshotted on each trip, keeps the tip, and adjusts the wallet by
+     * the difference with a note per order. Paid (settled) trips are never touched.
+     */
+    @Transactional
+    public RecalculationResult recalculatePendingEarnings(Long adminUserId, Long riderUserId) {
+        DeliveryGuyDetail rider = riderProfile(riderUserId);
+        CommissionBasis target = basis();
+        List<TripDetail> trips = trips(riderUserId).stream().filter(t -> !isSettled(t)).filter(this::recordedOnOtherBasis).toList();
+        BigDecimal before = BigDecimal.ZERO;
+        BigDecimal after = BigDecimal.ZERO;
+        for (TripDetail trip : trips) {
+            Order order = orderRepository.findById(trip.getOrderId().longValue()).orElse(null);
+            if (order == null) continue;
+            String meta = trip.getMeta() != null ? trip.getMeta() : "";
+            BigDecimal rate = match(META_RATE, meta).map(BigDecimal::new).orElseGet(() -> orderPricingService.riderCommissionRate(rider));
+            BigDecimal tip = match(META_TIP, meta).map(BigDecimal::new).orElse(BigDecimal.ZERO);
+            BigDecimal base = target == CommissionBasis.DELIVERY_CHARGE_ONLY
+                    ? Objects.requireNonNullElse(order.getDeliveryCharge(), BigDecimal.ZERO) : Objects.requireNonNullElse(order.getTotal(), BigDecimal.ZERO);
+            BigDecimal commission = base.multiply(rate).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+            BigDecimal oldEarning = Objects.requireNonNullElse(trip.getRiderEarning(), BigDecimal.ZERO);
+            BigDecimal newEarning = commission.add(tip);
+            BigDecimal diff = newEarning.subtract(oldEarning);
+            String note = "Earning corrected for order #" + order.getUniqueOrderId() + " (" + label(target) + " basis): "
+                    + oldEarning.setScale(2, RoundingMode.HALF_UP) + " -> " + newEarning.setScale(2, RoundingMode.HALF_UP);
+            if (diff.signum() > 0) walletService.credit(riderUserId, diff, note);
+            if (diff.signum() < 0) walletService.debit(riderUserId, diff.negate(), note);
+            trip.setRiderEarning(newEarning);
+            trip.setMeta("{\"commissionRate\":" + rate.toPlainString() + ",\"commissionBasis\":\"" + target.name() + "\""
+                    + ",\"commissionBase\":" + base.toPlainString() + ",\"tip\":" + tip.toPlainString() + "}");
+            trip.setUpdatedAt(LocalDateTime.now());
+            tripDetailRepository.save(trip);
+            before = before.add(oldEarning);
+            after = after.add(newEarning);
+        }
+        log.info("Admin {} recalculated {} unpaid earning(s) for rider {}: {} -> {}", adminUserId, trips.size(), riderUserId, before, after);
+        return new RecalculationResult(trips.size(), before.setScale(2, RoundingMode.HALF_UP), after.setScale(2, RoundingMode.HALF_UP));
+    }
+
+    /** True when the trip's snapshot names a basis other than today's (trips with no snapshot are left alone). */
+    private boolean recordedOnOtherBasis(TripDetail trip) {
+        String recorded = match(META_BASIS, trip.getMeta() != null ? trip.getMeta() : "").orElse(null);
+        return recorded != null && !recorded.equals(basis().name());
+    }
+
+    private static String label(CommissionBasis basis) {
+        return basis == CommissionBasis.DELIVERY_CHARGE_ONLY ? "delivery charge" : "order total";
+    }
+
+    /** "Collected COD cash and paid earnings" in one settlement. */
+    public static final String DIRECTION_BOTH = "BOTH";
+
+    /** Trips of delivered COD orders whose cash the rider still holds. */
+    private List<TripDetail> codTripsHoldingCash(List<TripDetail> trips) {
+        List<TripDetail> holding = trips.stream().filter(t -> t.getCashOnHold() != null && t.getCashOnHold().signum() > 0).toList();
+        List<Long> orderIds = holding.stream().map(TripDetail::getOrderId).filter(Objects::nonNull).map(Integer::longValue).distinct().toList();
+        if (orderIds.isEmpty()) return List.of();
         Integer deliveredId = orderStatusService.idFor(com.pureeats.domain.enums.OrderStatusCode.DELIVERED);
         Set<Integer> deliveredCod = new HashSet<>();
         for (Order o : orderRepository.findAllById(orderIds)) {
@@ -371,8 +455,18 @@ public class RiderEarningsService {
                 deliveredCod.add(o.getId().intValue());
             }
         }
-        return sum(pending.stream().filter(t -> t.getOrderId() != null && deliveredCod.contains(t.getOrderId())).toList(),
-                TripDetail::getCashCollectedFromCustomer);
+        return holding.stream().filter(t -> t.getOrderId() != null && deliveredCod.contains(t.getOrderId())).toList();
+    }
+
+    /** What the customers paid for these trips' orders. */
+    private BigDecimal orderValue(java.util.Collection<TripDetail> trips) {
+        List<Long> orderIds = trips.stream().map(TripDetail::getOrderId).filter(Objects::nonNull).map(Integer::longValue).distinct().toList();
+        if (orderIds.isEmpty()) return BigDecimal.ZERO;
+        BigDecimal total = BigDecimal.ZERO;
+        for (Order o : orderRepository.findAllById(orderIds)) {
+            if (o.getPayable() != null) total = total.add(o.getPayable());
+        }
+        return total.setScale(2, RoundingMode.HALF_UP);
     }
 
     private List<TripDetail> trips(Long riderUserId) {
@@ -426,9 +520,9 @@ public class RiderEarningsService {
         boolean rateIsCurrent = rate == null;
         if (rateIsCurrent) {
             rate = orderPricingService.riderCommissionRate(rider);
-            basis = commissionBasis.name();
+            basis = basis().name();
             if (order != null) {
-                base = commissionBasis == CommissionBasis.DELIVERY_CHARGE_ONLY ? order.getDeliveryCharge() : order.getTotal();
+                base = basis() == CommissionBasis.DELIVERY_CHARGE_ONLY ? order.getDeliveryCharge() : order.getTotal();
             }
         }
 

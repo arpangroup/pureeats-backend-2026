@@ -84,7 +84,18 @@ public class OrderPricingService {
         if (riderHasOwnRate(rider)) {
             return rider.getCommissionRate();
         }
-        return nonNegative(settingValueService.getString(SettingSchemaService.DEFAULT_RIDER_COMMISSION_RATE, null), BigDecimal.TEN);
+        return nonNegative(settingValueService.getString(SettingSchemaService.DEFAULT_RIDER_COMMISSION_RATE, null), BigDecimal.valueOf(100));
+    }
+
+    /**
+     * What the partner's commission % is applied to - Settings -> Delivery Application -> Earnings -> Delivery partner
+     * earns from. Delivery charge unless the admin chose the order total.
+     */
+    public com.pureeats.domain.enums.CommissionBasis riderCommissionBasis() {
+        String value = settingValueService.getString(SettingSchemaService.DELIVERY_EARNING_FROM, null);
+        return "percentage_of_order".equalsIgnoreCase(value != null ? value.trim() : null)
+                ? com.pureeats.domain.enums.CommissionBasis.FULL_ORDER
+                : com.pureeats.domain.enums.CommissionBasis.DELIVERY_CHARGE_ONLY;
     }
 
     public boolean riderHasOwnRate(com.pureeats.domain.entity.DeliveryGuyDetail rider) {

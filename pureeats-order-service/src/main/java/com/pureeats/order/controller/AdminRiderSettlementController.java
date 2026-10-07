@@ -26,7 +26,7 @@ public class AdminRiderSettlementController {
     private final RiderEarningsService riderEarningsService;
 
     @GetMapping("/api/v1/admin/delivery-guys/{riderUserId}/settlement-summary")
-    @Operation(summary = "What a rider has pending: unpaid earnings, COD cash held, net amount and direction")
+    @Operation(summary = "What a rider has pending: COD cash to collect and earnings to pay, separately")
     public ApiResponse<RiderEarningsSummaryResponse> summary(@PathVariable Long riderUserId) {
         return ApiResponse.success(riderEarningsService.summary(riderUserId));
     }
@@ -44,10 +44,17 @@ public class AdminRiderSettlementController {
     }
 
     @PostMapping("/api/v1/admin/delivery-guys/{riderUserId}/settlements")
-    @Operation(summary = "Settle everything the rider has pending (nets earnings against COD cash held)")
+    @Operation(summary = "Settle: collect the full COD cash the rider holds and/or pay out their full pending earnings - never netted")
     public ApiResponse<RiderSettlementResponse> settle(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long riderUserId,
                                                        @Valid @RequestBody(required = false) SettleRiderRequest request) {
         log.info("Admin {} settling rider {}", principal.userId(), riderUserId);
         return ApiResponse.success("Settlement recorded", riderEarningsService.settle(principal.userId(), riderUserId, request));
+    }
+
+    @PostMapping("/api/v1/admin/delivery-guys/{riderUserId}/earnings/recalculate")
+    @Operation(summary = "Re-record unpaid earnings that were recorded on a different basis than today's setting (adjusts the wallet)")
+    public ApiResponse<RiderEarningsService.RecalculationResult> recalculate(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long riderUserId) {
+        log.info("Admin {} recalculating unpaid earnings for rider {}", principal.userId(), riderUserId);
+        return ApiResponse.success("Earnings recalculated", riderEarningsService.recalculatePendingEarnings(principal.userId(), riderUserId));
     }
 }

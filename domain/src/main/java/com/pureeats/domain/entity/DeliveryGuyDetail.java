@@ -91,6 +91,61 @@ public class DeliveryGuyDetail {
     public static final String OFFLINE_REASON_INACTIVITY = "INACTIVITY";
     public static final String OFFLINE_REASON_ADMIN = "ADMIN";
 
+    // --- Sign-up details (KYC) and admin approval. Plain strings, not enum columns (stale CHECK constraints). ---
+
+    /** PENDING / APPROVED / REJECTED. Null = created before approvals existed (or by an admin) - treated as approved. */
+    @Column(name = "approval_status", length = 16)
+    private String approvalStatus;
+
+    /** Shown to the partner when an admin rejects the application. */
+    @Column(name = "rejection_reason", length = 500)
+    private String rejectionReason;
+
+    @Column(name = "approval_updated_at")
+    private LocalDateTime approvalUpdatedAt;
+
+    @Column(name = "approval_updated_by")
+    private Long approvalUpdatedBy;
+
+    @Column(name = "license_number", length = 32)
+    private String licenseNumber;
+
+    /** AADHAAR or PAN. */
+    @Column(name = "id_proof_type", length = 16)
+    private String idProofType;
+
+    @Column(name = "id_proof_number", length = 32)
+    private String idProofNumber;
+
+    /** BIKE, CYCLE or EV. */
+    @Column(name = "vehicle_type", length = 16)
+    private String vehicleType;
+
+    /** BANK or UPI - where earnings are paid out. */
+    @Column(name = "payout_method", length = 8)
+    private String payoutMethod;
+
+    @Column(name = "bank_account_holder", length = 128)
+    private String bankAccountHolder;
+
+    @Column(name = "bank_account_number", length = 32)
+    private String bankAccountNumber;
+
+    @Column(name = "bank_ifsc", length = 16)
+    private String bankIfsc;
+
+    @Column(name = "upi_id", length = 64)
+    private String upiId;
+
+    public static final String APPROVAL_PENDING = "PENDING";
+    public static final String APPROVAL_APPROVED = "APPROVED";
+    public static final String APPROVAL_REJECTED = "REJECTED";
+
+    /** Only approved partners can go online, see or accept orders. Legacy/admin-created rows (null) count as approved. */
+    public boolean isApproved() {
+        return approvalStatus == null || APPROVAL_APPROVED.equals(approvalStatus);
+    }
+
     @Column(name = "created_by")
     private Long createdBy;
 
