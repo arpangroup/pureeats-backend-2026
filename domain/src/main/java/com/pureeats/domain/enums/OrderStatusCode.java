@@ -17,6 +17,8 @@ public enum OrderStatusCode {
     RIDER_ASSIGNED("Rider Assigned"),
     PICKED_UP("Picked Up"),
     ON_THE_WAY("On the way"),
+    /** The delivery partner has reached the customer's location (set from the rider app) - the customer is notified. */
+    ARRIVED("Arrived"),
     DELIVERED("Delivered"),
     /** Distinct from {@link #DELIVERED} only in label - same terminal meaning, reached by a self-pickup order instead of a rider-delivered one. */
     SELF_PICKUP_COMPLETED("Delivered (Self-Pickup)"),

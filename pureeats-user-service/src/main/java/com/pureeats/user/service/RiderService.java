@@ -31,6 +31,7 @@ public class RiderService {
     private static final BigDecimal DEFAULT_COMMISSION_RATE = BigDecimal.TEN;
     private static final int DEFAULT_MAX_ACCEPT_LIMIT = 3;
 
+    private final RiderProfileEditPolicy profileEditPolicy;
     private final UserService userService;
     private final UserRepository userRepository;
     private final DeliveryGuyDetailRepository deliveryGuyDetailRepository;
@@ -92,6 +93,12 @@ public class RiderService {
     public RiderProfileResponse updateProfile(Long userId, RiderProfileRequest request) {
         User user = userService.findUserOrThrow(userId);
         DeliveryGuyDetail detail = resolveOwnDetail(user);
+        // Settings -> Delivery Application -> Profile editing: locked fields may be resent unchanged, never changed.
+        profileEditPolicy.assertCanChange(RiderProfileEditPolicy.NAME, "Name", detail.getName(), blankToNull(request.name()));
+        profileEditPolicy.assertCanChange(RiderProfileEditPolicy.VEHICLE_NUMBER, "Vehicle number", detail.getVehicleNumber(), blankToNull(request.vehicleNumber()));
+        profileEditPolicy.assertCanChange(RiderProfileEditPolicy.AGE, "Age", detail.getAge(), request.age());
+        profileEditPolicy.assertCanChange(RiderProfileEditPolicy.GENDER, "Gender", detail.getGender(), request.gender());
+        profileEditPolicy.assertCanChange(RiderProfileEditPolicy.ABOUT, "About you", detail.getDescription(), request.description());
         if (request.name() != null && !request.name().isBlank()) detail.setName(request.name());
         if (request.vehicleNumber() != null && !request.vehicleNumber().isBlank()) detail.setVehicleNumber(request.vehicleNumber());
         if (request.age() != null) detail.setAge(request.age());
@@ -102,6 +109,10 @@ public class RiderService {
         deliveryGuyDetailRepository.save(detail);
         log.info("Rider {} updated their own profile", userId);
         return toResponse(user, detail);
+    }
+
+    private static String blankToNull(String s) {
+        return s == null || s.isBlank() ? null : s;
     }
 
     /** Mirrors {@code AdminUserService#uploadPhoto}'s pattern - a photo is a file, handled as its own multipart action, entirely separate from the JSON profile-fields update above. Writes BOTH DeliveryGuyDetail.photo (what this app and order-tracking's riderAssignedData read) AND User.photo (what the admin panel's generic "Edit user" page reads) - these are two independent columns for historical reasons (see #toResponse's own fallback comment), and a rider uploading their own photo here should not leave the admin's view of them stale. */

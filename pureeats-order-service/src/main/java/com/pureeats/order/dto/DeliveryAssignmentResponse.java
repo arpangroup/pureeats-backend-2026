@@ -38,6 +38,12 @@ public record DeliveryAssignmentResponse(
         BigDecimal distanceKm,
         /** Customer's tip - paid to the rider in full on delivery. */
         BigDecimal tipAmount,
+        /** True once the store/admin marked the food ready - pickup is blocked until then. */
+        boolean foodReady,
+        /** When the food should be ready (acceptance + prep time) - drives the pickup countdown. */
+        LocalDateTime pickupDueAt,
+        /** Pickup photos taken so far (at least 1, at most 3, before pickup). */
+        int pickupPhotoCount,
         LocalDateTime createdAt,
         LocalDateTime acceptedAt,
         LocalDateTime pickedUpAt,

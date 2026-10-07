@@ -60,6 +60,7 @@ public class RiderEarningsService {
     private final DeliveryCollectionRepository deliveryCollectionRepository;
     private final DeliveryCollectionLogRepository deliveryCollectionLogRepository;
     private final WalletService walletService;
+    private final OrderStatusService orderStatusService;
 
     @Value("${pureeats.commission.basis:FULL_ORDER}")
     private CommissionBasis commissionBasis;
@@ -71,7 +72,7 @@ public class RiderEarningsService {
         List<TripDetail> trips = trips(riderUserId);
         List<TripDetail> pending = trips.stream().filter(t -> !isSettled(t)).toList();
         BigDecimal pendingEarnings = sum(pending, TripDetail::getRiderEarning);
-        BigDecimal cashInHand = sum(pending, TripDetail::getCashCollectedFromCustomer);
+        BigDecimal cashInHand = codCashInHand(pending);
         BigDecimal net = pendingEarnings.subtract(cashInHand);
         BigDecimal lifetime = sum(trips, TripDetail::getRiderEarning);
         RiderSettlementResponse last = riderSettlementRepository.findByRiderUserIdOrderByCreatedAtDesc(riderUserId).stream()
@@ -122,7 +123,7 @@ public class RiderEarningsService {
             throw new BadRequestException("This delivery partner has nothing pending to settle");
         }
         BigDecimal earnings = sum(pending, TripDetail::getRiderEarning);
-        BigDecimal cod = sum(pending, TripDetail::getCashCollectedFromCustomer);
+        BigDecimal cod = codCashInHand(pending);
         BigDecimal net = earnings.subtract(cod);
         LocalDateTime now = LocalDateTime.now();
 
@@ -353,6 +354,24 @@ public class RiderEarningsService {
         int activeDays = (int) trips.stream().map(t -> t.getCreatedAt().toLocalDate()).distinct().count();
         return new RiderEarningsAnalyticsResponse.Totals(earnings, trips.size(), avg, distance, avgDistance,
                 sum(trips, TripDetail::getCashCollectedFromCustomer), activeDays);
+    }
+
+    /**
+     * COD cash the rider is holding: only trips whose order is a COD order that is actually DELIVERED. Trips
+     * whose order was later returned/cancelled, or that have no real order behind them, don't count.
+     */
+    private BigDecimal codCashInHand(List<TripDetail> pending) {
+        List<Long> orderIds = pending.stream().map(TripDetail::getOrderId).filter(Objects::nonNull).map(Integer::longValue).distinct().toList();
+        if (orderIds.isEmpty()) return BigDecimal.ZERO;
+        Integer deliveredId = orderStatusService.idFor(com.pureeats.domain.enums.OrderStatusCode.DELIVERED);
+        Set<Integer> deliveredCod = new HashSet<>();
+        for (Order o : orderRepository.findAllById(orderIds)) {
+            if ("COD".equals(o.getPaymentMode()) && Objects.equals(o.getOrderstatusId(), deliveredId)) {
+                deliveredCod.add(o.getId().intValue());
+            }
+        }
+        return sum(pending.stream().filter(t -> t.getOrderId() != null && deliveredCod.contains(t.getOrderId())).toList(),
+                TripDetail::getCashCollectedFromCustomer);
     }
 
     private List<TripDetail> trips(Long riderUserId) {

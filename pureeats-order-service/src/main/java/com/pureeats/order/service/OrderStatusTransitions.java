@@ -24,15 +24,19 @@ public final class OrderStatusTransitions {
         GRAPH.put(OrderStatusCode.PLACED, EnumSet.of(
                 OrderStatusCode.RESTAURANT_ACCEPTED, OrderStatusCode.CANCELLED,
                 OrderStatusCode.REJECTED, OrderStatusCode.AUTO_CANCELLED));
-        GRAPH.put(OrderStatusCode.RESTAURANT_ACCEPTED, EnumSet.of(OrderStatusCode.PREPARING, OrderStatusCode.CANCELLED));
+        // READY_FOR_PICKUP directly from RESTAURANT_ACCEPTED too - the store's "Mark ready" skips PREPARING.
+        GRAPH.put(OrderStatusCode.RESTAURANT_ACCEPTED, EnumSet.of(OrderStatusCode.PREPARING, OrderStatusCode.READY_FOR_PICKUP, OrderStatusCode.CANCELLED));
         GRAPH.put(OrderStatusCode.PREPARING, EnumSet.of(OrderStatusCode.READY_FOR_PICKUP, OrderStatusCode.CANCELLED));
+        // PICKED_UP straight from READY_FOR_PICKUP: a rider assigned while the food was still being prepared
+        // keeps the kitchen status (see DeliveryOrderService#assign), so the order goes ready -> picked up.
         GRAPH.put(OrderStatusCode.READY_FOR_PICKUP, EnumSet.of(
-                OrderStatusCode.RIDER_ASSIGNED, OrderStatusCode.SELF_PICKUP_COMPLETED,
+                OrderStatusCode.RIDER_ASSIGNED, OrderStatusCode.PICKED_UP, OrderStatusCode.SELF_PICKUP_COMPLETED,
                 OrderStatusCode.CANCELLED, OrderStatusCode.AUTO_CANCELLED));
         GRAPH.put(OrderStatusCode.RIDER_ASSIGNED, EnumSet.of(
                 OrderStatusCode.PICKED_UP, OrderStatusCode.CANCELLED, OrderStatusCode.AUTO_CANCELLED));
-        GRAPH.put(OrderStatusCode.PICKED_UP, EnumSet.of(OrderStatusCode.ON_THE_WAY, OrderStatusCode.RETURNED));
-        GRAPH.put(OrderStatusCode.ON_THE_WAY, EnumSet.of(OrderStatusCode.DELIVERED, OrderStatusCode.RETURNED));
+        GRAPH.put(OrderStatusCode.PICKED_UP, EnumSet.of(OrderStatusCode.ON_THE_WAY, OrderStatusCode.ARRIVED, OrderStatusCode.DELIVERED, OrderStatusCode.RETURNED));
+        GRAPH.put(OrderStatusCode.ON_THE_WAY, EnumSet.of(OrderStatusCode.ARRIVED, OrderStatusCode.DELIVERED, OrderStatusCode.RETURNED));
+        GRAPH.put(OrderStatusCode.ARRIVED, EnumSet.of(OrderStatusCode.DELIVERED, OrderStatusCode.RETURNED));
         GRAPH.put(OrderStatusCode.DELIVERED, EnumSet.noneOf(OrderStatusCode.class));
         GRAPH.put(OrderStatusCode.SELF_PICKUP_COMPLETED, EnumSet.noneOf(OrderStatusCode.class));
         GRAPH.put(OrderStatusCode.CANCELLED, EnumSet.noneOf(OrderStatusCode.class));

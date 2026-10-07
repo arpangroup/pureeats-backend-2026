@@ -71,6 +71,12 @@ public class AdminOrderController {
         return ApiResponse.success(orderEarningsService.split(id));
     }
 
+    @GetMapping("/api/v1/admin/orders/{id}/pickup-photos")
+    @Operation(summary = "Photos of the packed order the delivery partner took at pickup")
+    public ApiResponse<List<com.pureeats.order.dto.PickupPhotoResponse>> pickupPhotos(@PathVariable Long id) {
+        return ApiResponse.success(deliveryOrderService.pickupPhotos(id));
+    }
+
     @GetMapping("/api/v1/admin/order-statuses")
     @Operation(summary = "List every order status lookup row (id + name), for filter dropdowns")
     public ApiResponse<List<OrderStatusResponse>> listStatuses() {

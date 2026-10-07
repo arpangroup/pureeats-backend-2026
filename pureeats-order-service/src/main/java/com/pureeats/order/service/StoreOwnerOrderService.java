@@ -2,6 +2,7 @@ package com.pureeats.order.service;
 
 import com.pureeats.catalog.service.RestaurantService;
 import com.pureeats.domain.common.exception.BadRequestException;
+import com.pureeats.domain.entity.AcceptDelivery;
 import com.pureeats.domain.entity.Order;
 import com.pureeats.domain.entity.Restaurant;
 import com.pureeats.domain.enums.OrderStatusCode;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Optional;
 import java.util.List;
 import java.util.Map;
 
@@ -34,6 +36,7 @@ public class StoreOwnerOrderService {
     private final WalletService walletService;
     private final OrderNotificationService orderNotificationService;
     private final OrderStatusLogService orderStatusLogService;
+    private final com.pureeats.order.repository.AcceptDeliveryRepository acceptDeliveryRepository;
 
     @Transactional(readOnly = true)
     public List<OrderSummaryResponse> newOrders(Long ownerUserId, Long restaurantId) {
@@ -86,13 +89,22 @@ public class StoreOwnerOrderService {
     public OrderResponse markReady(Long ownerUserId, Long orderId) {
         log.info("Store owner {} marking order {} ready for pickup", ownerUserId, orderId);
         Order order = ownedOrder(ownerUserId, orderId);
-        requireStatus(order, OrderStatusCode.RESTAURANT_ACCEPTED);
+        OrderStatusCode from = orderStatusService.codeFor(order.getOrderstatusId());
+        if (from != OrderStatusCode.PREPARING) {
+            requireStatus(order, OrderStatusCode.RESTAURANT_ACCEPTED);
+        }
 
-        order.setOrderstatusId(orderStatusService.idFor(OrderStatusCode.READY_FOR_PICKUP));
+        // A partner who accepted while the food was being prepared is already on it: go straight to RIDER_ASSIGNED.
+        Optional<AcceptDelivery> assignment = acceptDeliveryRepository.findByOrderId(order.getId().intValue());
+        OrderStatusCode to = assignment.isPresent() ? OrderStatusCode.RIDER_ASSIGNED : OrderStatusCode.READY_FOR_PICKUP;
+        order.setOrderstatusId(orderStatusService.idFor(to));
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
-        orderStatusLogService.record(order.getId(), OrderStatusCode.RESTAURANT_ACCEPTED, OrderStatusCode.READY_FOR_PICKUP, "STORE_OWNER", ownerUserId, null);
-        log.info("Order {} transitioned RESTAURANT_ACCEPTED -> READY_FOR_PICKUP by store owner {}", orderId, ownerUserId);
+        orderStatusLogService.record(order.getId(), from, to, "STORE_OWNER", ownerUserId, assignment.isPresent() ? "Food ready for pickup" : null);
+        log.info("Order {} transitioned {} -> {} by store owner {}", orderId, from, to, ownerUserId);
+        assignment.ifPresent(a -> orderNotificationService.notify(NotificationRecipientRole.DELIVERY_PARTNER, a.getUserId().longValue(),
+                "Order ready for pickup", "Order #" + order.getUniqueOrderId() + " is packed and ready - head to the counter.",
+                Map.of("orderId", order.getId(), "status", OrderStatusCode.READY_FOR_PICKUP.name())));
         return orderService.toResponse(order);
     }
 
