@@ -46,6 +46,8 @@ public record DeliveryAssignmentResponse(
         int pickupPhotoCount,
         /** Handover photos taken so far (at least 1 needed, after Arrived, before delivery). */
         int deliveryPhotoCount,
+        /** The customer's note for the order (e.g. "leave at the door"), or null. */
+        String orderComment,
         LocalDateTime createdAt,
         LocalDateTime acceptedAt,
         LocalDateTime pickedUpAt,

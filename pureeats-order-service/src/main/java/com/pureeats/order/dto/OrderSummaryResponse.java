@@ -13,6 +13,8 @@ public record OrderSummaryResponse(
         BigDecimal total,
         LocalDateTime createdAt,
         /** Null until a rider has been assigned. */
-        String deliveryGuyName
+        String deliveryGuyName,
+        /** The customer's note for the order (e.g. "no onions", "ring the bell"), or null. */
+        String orderComment
 ) {
 }

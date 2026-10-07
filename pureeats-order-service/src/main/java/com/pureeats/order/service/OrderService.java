@@ -496,7 +496,7 @@ public class OrderService {
                 .orElse(null);
         return new OrderSummaryResponse(order.getId(), order.getUniqueOrderId(), status != null ? status.label() : "UNKNOWN",
                 order.getRestaurantId().longValue(), restaurant != null ? restaurant.getName() : "Unknown", restaurantImage,
-                order.getPayable(), order.getCreatedAt(), deliveryGuyName);
+                order.getPayable(), order.getCreatedAt(), deliveryGuyName, order.getOrderComment());
     }
 
     /** Same fixed, always-PUSH+IN_APP alert as {@code OrderNotificationService#notifyAdminsOfNewOrder} (see that method's doc for why this bypasses the configurable per-role routing) - one per owner of this restaurant, since a new order is that owner's own restaurant's business, not a platform-wide broadcast. */

@@ -75,6 +75,7 @@ public class AuthenticationService {
     private final LoginHistoryRecorder loginHistoryRecorder;
     private final SecurityEventPublisher securityEventPublisher;
     private final JwtTokenProvider jwtTokenProvider;
+    private final com.pureeats.user.security.AccountAccessGuard accountAccessGuard;
 
     @Transactional
     public LoginChallengeResponse signup(SignupRequest request, RequestMetadata metadata) {
@@ -380,6 +381,11 @@ public class AuthenticationService {
             }
             case ACTIVE -> { /* nothing to do */ }
         }
+        // A delivery partner deactivated under Delivery partners can't sign in (or refresh) either.
+        accountAccessGuard.riderDenial(user).ifPresent(message -> {
+            log.warn("Account usability check failed for user {} - delivery partner deactivated", user.getId());
+            throw new ForbiddenException(com.pureeats.user.security.AccountAccessGuard.ACCOUNT_BLOCKED, message);
+        });
     }
 
     private String generateAccessToken(User user, Role role) {

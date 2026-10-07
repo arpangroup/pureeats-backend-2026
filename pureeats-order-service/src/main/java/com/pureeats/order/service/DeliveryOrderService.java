@@ -861,6 +861,7 @@ public class DeliveryOrderService {
                 status != null && (FOOD_READY.contains(status) || OUT_FOR_DELIVERY.contains(status)),
                 pickupDueAt(order), (int) mediaAssetService.countForOwner(PICKUP_PHOTO_OWNER, order.getId()),
                 (int) mediaAssetService.countForOwner(DELIVERY_PHOTO_OWNER, order.getId()),
+                order.getOrderComment(),
                 order.getCreatedAt(), acceptedAt, pickedUpAt, deliveredAt);
     }
 

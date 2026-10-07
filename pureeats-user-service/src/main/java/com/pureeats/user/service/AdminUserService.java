@@ -43,6 +43,7 @@ public class AdminUserService {
     private final MediaAssetService mediaAssetService;
     private final DeliveryGuyDetailRepository deliveryGuyDetailRepository;
     private final RiderService riderService;
+    private final com.pureeats.user.security.AccountAccessGuard accountAccessGuard;
 
     /**
      * {@code accountStatusFilter} is a plain string so the frontend can pass either a concrete
@@ -175,13 +176,21 @@ public class AdminUserService {
         if (request.name() != null) user.setName(request.name());
         if (request.email() != null) user.setEmail(request.email());
         if (request.phone() != null) user.setPhone(request.phone());
-        if (request.isActive() != null) user.setIsActive(request.isActive() ? User.STATUS_ACTIVE : User.STATUS_INACTIVE);
+        if (request.isActive() != null) {
+            user.setIsActive(request.isActive() ? User.STATUS_ACTIVE : User.STATUS_INACTIVE);
+            // Keep the account status in step so the Users list's "Blocked" filter finds them.
+            AccountStatus current = user.getAccountStatus() != null ? user.getAccountStatus() : AccountStatus.ACTIVE;
+            if (!request.isActive() && current == AccountStatus.ACTIVE) user.setAccountStatus(AccountStatus.BLOCKED);
+            if (request.isActive() && current == AccountStatus.BLOCKED) user.setAccountStatus(AccountStatus.ACTIVE);
+        }
         user.setUpdatedAt(LocalDateTime.now());
         adminUserRepository.save(user);
         if (request.role() != null) {
             roleService.assignRole(id, request.role());
         }
         riderService.evictProfileCache(id);
+        // Blocking takes effect immediately: open apps are signed out on their next request.
+        accountAccessGuard.onAccountChanged(id);
         log.info("Admin {} updated user {}", updatedBy, id);
         return toResponse(user, roleService.resolveRole(id));
     }

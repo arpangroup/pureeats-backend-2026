@@ -42,6 +42,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtTokenProvider jwtTokenProvider;
+    private final com.pureeats.user.security.AccountAccessGuard accountAccessGuard;
     private final ObjectMapper objectMapper;
 
     @Bean
@@ -109,7 +110,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/delivery/**").hasRole("DELIVERY")
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider), UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider, accountAccessGuard), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

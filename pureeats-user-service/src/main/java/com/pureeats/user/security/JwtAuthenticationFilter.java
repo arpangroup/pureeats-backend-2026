@@ -30,6 +30,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtTokenProvider jwtTokenProvider;
+    /** Rejects blocked/deactivated users even while their token is still valid (null = no check, e.g. tests). */
+    private final AccountAccessGuard accountAccessGuard;
+
+    public JwtAuthenticationFilter(JwtTokenProvider jwtTokenProvider) {
+        this(jwtTokenProvider, null);
+    }
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
@@ -39,6 +45,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String token = extractToken(request);
             if (token != null) {
                 AuthenticatedUser user = jwtTokenProvider.parseToken(token);
+                java.util.Optional<String> denial = user != null && accountAccessGuard != null
+                        ? accountAccessGuard.denialFor(user.userId()) : java.util.Optional.empty();
+                if (denial.isPresent()) {
+                    // 401 + ACCOUNT_BLOCKED: every app signs out on this (their token refresh fails too - sessions are revoked).
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setContentType("application/json");
+                    response.setCharacterEncoding("UTF-8");
+                    response.getWriter().write("{\"success\":false,\"errorCode\":\"" + AccountAccessGuard.ACCOUNT_BLOCKED
+                            + "\",\"message\":\"" + denial.get().replace("\\", "\\\\").replace("\"", "\\\"") + "\"}");
+                    return;
+                }
                 if (user != null) {
                     var authorities = List.of(new SimpleGrantedAuthority(user.role().authority()));
                     var authentication = new UsernamePasswordAuthenticationToken(user, null, authorities);
