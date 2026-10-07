@@ -65,7 +65,7 @@ public class OrderEarningsService {
                 && trip.getRestaurantEarning().compareTo(formulaPayout) != 0;
         var restaurantShare = new OrderEarningsSplitResponse.RestaurantShare(order.getRestaurantId().longValue(),
                 restaurant != null ? restaurant.getName() : "Restaurant", itemTotal, commissionPct, commission, storeOwnRate,
-                packaging, restaurantAmount, isCompleted(order), recordedUnderEarlierRule);
+                packaging, restaurantAmount, trip != null || isSelfPickupCompleted(order), recordedUnderEarlierRule);
 
         OrderEarningsSplitResponse.RiderShare riderShare = riderShare(order, trip, tip, deliveryCharge);
         BigDecimal riderCommission = riderShare.commissionAmount();
@@ -84,14 +84,15 @@ public class OrderEarningsService {
     private OrderEarningsSplitResponse.RiderShare riderShare(Order order, TripDetail trip, BigDecimal tip, BigDecimal deliveryCharge) {
         AcceptDelivery assignment = acceptDeliveryRepository.findByOrderId(order.getId().intValue()).orElse(null);
         if (assignment == null) {
-            return new OrderEarningsSplitResponse.RiderShare(false, null, null, null, commissionBasis.name(), null,
-                    BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, false);
+            return new OrderEarningsSplitResponse.RiderShare(false, null, null, null, false, commissionBasis.name(), null,
+                    BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, false, false);
         }
         Long riderUserId = assignment.getUserId().longValue();
         User user = userRepository.findById(riderUserId).orElse(null);
         DeliveryGuyDetail detail = user != null && user.getDeliveryGuyDetailId() != null
                 ? deliveryGuyDetailRepository.findById(user.getDeliveryGuyDetailId().longValue()).orElse(null) : null;
-        BigDecimal rate = detail != null && detail.getCommissionRate() != null ? detail.getCommissionRate() : BigDecimal.ZERO;
+        BigDecimal rate = orderPricingService.riderCommissionRate(detail);
+        boolean ownRate = orderPricingService.riderHasOwnRate(detail);
         BigDecimal base = commissionBasis == CommissionBasis.DELIVERY_CHARGE_ONLY ? deliveryCharge : nz(order.getTotal());
         BigDecimal commission = base.multiply(rate).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
         BigDecimal paidTip = tip;
@@ -100,16 +101,27 @@ public class OrderEarningsService {
             // Delivered: the recorded earning (commission + tip at delivery time) is the source of truth.
             amount = trip.getRiderEarning();
             commission = amount.subtract(paidTip).max(BigDecimal.ZERO);
+            rate = recordedRate(trip, rate);
         }
+        // Delivered, but nothing was recorded at delivery (older admin status override) - the partner was never credited.
+        boolean notRecorded = trip == null && orderStatusService.codeFor(order.getOrderstatusId()) == com.pureeats.domain.enums.OrderStatusCode.DELIVERED;
         String name = detail != null && detail.getName() != null ? detail.getName() : user != null ? user.getName() : "Delivery partner";
-        return new OrderEarningsSplitResponse.RiderShare(true, riderUserId, name, rate, commissionBasis.name(), base, commission, paidTip,
-                amount.setScale(2, RoundingMode.HALF_UP), trip != null);
+        return new OrderEarningsSplitResponse.RiderShare(true, riderUserId, name, rate, ownRate, commissionBasis.name(), base, commission, paidTip,
+                amount.setScale(2, RoundingMode.HALF_UP), trip != null, notRecorded);
+    }
+
+    private static final java.util.regex.Pattern META_RATE = java.util.regex.Pattern.compile("\"commissionRate\":([0-9.]+)");
+
+    /** The rate snapshotted on the trip at delivery (trip_details.meta), falling back to the current one for older trips. */
+    private static BigDecimal recordedRate(TripDetail trip, BigDecimal current) {
+        if (trip.getMeta() == null) return current;
+        java.util.regex.Matcher m = META_RATE.matcher(trip.getMeta());
+        return m.find() ? new BigDecimal(m.group(1)) : current;
     }
 
     /** The restaurant's earning is recorded when the order completes - delivered by a rider or picked up by the customer. */
-    private boolean isCompleted(Order order) {
-        var status = orderStatusService.codeFor(order.getOrderstatusId());
-        return status == com.pureeats.domain.enums.OrderStatusCode.DELIVERED || status == com.pureeats.domain.enums.OrderStatusCode.SELF_PICKUP_COMPLETED;
+    private boolean isSelfPickupCompleted(Order order) {
+        return orderStatusService.codeFor(order.getOrderstatusId()) == com.pureeats.domain.enums.OrderStatusCode.SELF_PICKUP_COMPLETED;
     }
 
     private static BigDecimal nz(BigDecimal v) {

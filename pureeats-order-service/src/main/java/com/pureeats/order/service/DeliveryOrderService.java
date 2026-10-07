@@ -112,7 +112,7 @@ public class DeliveryOrderService {
 
         BigDecimal commissionBase = commissionBasis == CommissionBasis.DELIVERY_CHARGE_ONLY
                 ? order.getDeliveryCharge() : order.getTotal();
-        BigDecimal payoutEstimate = commissionBase.multiply(rider.getCommissionRate())
+        BigDecimal payoutEstimate = commissionBase.multiply(orderPricingService.riderCommissionRate(rider))
                 .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
 
         int itemsCount = orderItemRepository.findByOrderId(order.getId().intValue()).size();
@@ -377,6 +377,21 @@ public class DeliveryOrderService {
      * Shared by both delivery-confirmation paths - whoever confirms it, the assigned rider (if
      * any) is who actually gets credited/logged in the trip, not necessarily the caller.
      */
+    /**
+     * Admin marks an order Delivered (status override). Runs the same completion as the PIN flow - so the
+     * partner's earning and the restaurant's payout are recorded (trip_details) and credited - instead of
+     * only flipping the status, which used to leave the order's earnings unrecorded ("Projected").
+     */
+    @Transactional
+    public OrderResponse adminMarkDelivered(Long adminUserId, Long orderId) {
+        Order order = orderService.findOrThrow(orderId);
+        OrderStatusCode from = orderStatusService.codeFor(order.getOrderstatusId());
+        if (!OrderStatusTransitions.isLegal(from, OrderStatusCode.DELIVERED)) {
+            throw new BadRequestException("Cannot change order status from " + (from != null ? from.name() : "UNKNOWN") + " to DELIVERED");
+        }
+        return finishDelivery(order, "ADMIN", adminUserId, "Marked delivered by admin");
+    }
+
     private OrderResponse completeDelivery(Order order, String deliveryPin, String actorType, Long actorUserId, String note) {
         OrderStatusCode current = orderStatusService.codeFor(order.getOrderstatusId());
         if (!OUT_FOR_DELIVERY.contains(current)) {
@@ -387,6 +402,10 @@ public class DeliveryOrderService {
             log.warn("Rejected delivery completion for order {} by {} {}: incorrect delivery PIN", order.getId(), actorType, actorUserId);
             throw new BadRequestException("Incorrect delivery PIN");
         }
+        return finishDelivery(order, actorType, actorUserId, note);
+    }
+
+    private OrderResponse finishDelivery(Order order, String actorType, Long actorUserId, String note) {
 
         OrderStatusCode from = orderStatusService.codeFor(order.getOrderstatusId());
         order.setOrderstatusId(orderStatusService.idFor(OrderStatusCode.DELIVERED));
@@ -414,7 +433,8 @@ public class DeliveryOrderService {
         DeliveryGuyDetail rider = riderProfile(riderUserId);
         BigDecimal commissionBase = commissionBasis == CommissionBasis.DELIVERY_CHARGE_ONLY
                 ? order.getDeliveryCharge() : order.getTotal();
-        BigDecimal riderEarning = commissionBase.multiply(rider.getCommissionRate())
+        BigDecimal riderRate = orderPricingService.riderCommissionRate(rider);
+        BigDecimal riderEarning = commissionBase.multiply(riderRate)
                 .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
         walletService.credit(riderUserId, riderEarning, "Delivery earning for order #" + order.getUniqueOrderId());
         log.debug("Credited rider {} earning {} for order {}", riderUserId, riderEarning, order.getId());
@@ -452,7 +472,7 @@ public class DeliveryOrderService {
         trip.setCashOnHold(cashCollected);
         // Snapshot of how the earning was computed, so the rider's earning breakdown stays correct
         // even if their commission rate (or the platform-wide basis) changes later.
-        trip.setMeta("{\"commissionRate\":" + rider.getCommissionRate().toPlainString()
+        trip.setMeta("{\"commissionRate\":" + riderRate.toPlainString()
                 + ",\"commissionBasis\":\"" + commissionBasis.name() + "\""
                 + ",\"commissionBase\":" + commissionBase.toPlainString()
                 + ",\"tip\":" + tip.toPlainString() + "}");
@@ -729,8 +749,8 @@ public class DeliveryOrderService {
         }
         BigDecimal distanceKm = restaurant != null ? orderPricingService.distanceKm(restaurant, customerLat, customerLng) : BigDecimal.ZERO;
         BigDecimal commissionBase = commissionBasis == CommissionBasis.DELIVERY_CHARGE_ONLY ? order.getDeliveryCharge() : order.getTotal();
-        BigDecimal payoutEstimate = commissionBase != null && rider.getCommissionRate() != null
-                ? commissionBase.multiply(rider.getCommissionRate()).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP)
+        BigDecimal payoutEstimate = commissionBase != null
+                ? commissionBase.multiply(orderPricingService.riderCommissionRate(rider)).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
 
         User customer = userRepository.findById(order.getUserId().longValue()).orElse(null);

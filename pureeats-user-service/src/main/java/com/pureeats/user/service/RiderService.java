@@ -28,7 +28,8 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class RiderService {
 
-    private static final BigDecimal DEFAULT_COMMISSION_RATE = BigDecimal.TEN;
+    /** 0 = no rate of their own: the partner earns Settings -> Delivery Application -> Earnings -> Default delivery partner commission. */
+    private static final BigDecimal DEFAULT_COMMISSION_RATE = BigDecimal.ZERO;
     private static final int DEFAULT_MAX_ACCEPT_LIMIT = 3;
 
     private final RiderProfileEditPolicy profileEditPolicy;

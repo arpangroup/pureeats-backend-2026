@@ -51,6 +51,7 @@ class RiderEarningsServiceTest {
     @Mock private DeliveryCollectionLogRepository deliveryCollectionLogRepository;
     @Mock private WalletService walletService;
     @Mock private OrderStatusService orderStatusService;
+    @Mock private OrderPricingService orderPricingService;
 
     private RiderEarningsService service;
     private final List<TripDetail> trips = new ArrayList<>();
@@ -60,10 +61,14 @@ class RiderEarningsServiceTest {
     @BeforeEach
     void setUp() {
         service = new RiderEarningsService(tripDetailRepository, riderSettlementRepository, orderRepository, restaurantRepository,
-                userRepository, deliveryGuyDetailRepository, deliveryCollectionRepository, deliveryCollectionLogRepository, walletService, orderStatusService);
+                userRepository, deliveryGuyDetailRepository, deliveryCollectionRepository, deliveryCollectionLogRepository, walletService, orderStatusService, orderPricingService);
         ReflectionTestUtils.setField(service, "commissionBasis", CommissionBasis.FULL_ORDER);
         lenient().when(tripDetailRepository.findByRiderId((int) RIDER)).thenReturn(trips);
         lenient().when(riderSettlementRepository.findByRiderUserIdOrderByCreatedAtDesc(RIDER)).thenReturn(List.of());
+        lenient().when(orderPricingService.riderCommissionRate(any())).thenAnswer(inv -> {
+            DeliveryGuyDetail d = inv.getArgument(0);
+            return d != null && d.getCommissionRate() != null ? d.getCommissionRate() : BigDecimal.TEN;
+        });
         lenient().when(orderStatusService.idFor(com.pureeats.domain.enums.OrderStatusCode.DELIVERED)).thenReturn(9);
         // Each trip's order: COD when cash was collected, DELIVERED unless listed in notDelivered.
         lenient().when(orderRepository.findAllById(any())).thenAnswer(inv -> trips.stream().map(t -> {

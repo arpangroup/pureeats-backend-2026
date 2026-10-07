@@ -65,6 +65,10 @@ class DeliveryTrackingTest {
     @BeforeEach
     void setUp() {
         org.springframework.test.util.ReflectionTestUtils.setField(service, "commissionBasis", com.pureeats.domain.enums.CommissionBasis.FULL_ORDER);
+        org.mockito.Mockito.lenient().when(orderPricingService.riderCommissionRate(org.mockito.ArgumentMatchers.any())).thenAnswer(inv -> {
+            com.pureeats.domain.entity.DeliveryGuyDetail d = inv.getArgument(0);
+            return d != null && d.getCommissionRate() != null ? d.getCommissionRate() : java.math.BigDecimal.TEN;
+        });
         User riderUser = new User();
         riderUser.setId(RIDER);
         riderUser.setDeliveryGuyDetailId(4);

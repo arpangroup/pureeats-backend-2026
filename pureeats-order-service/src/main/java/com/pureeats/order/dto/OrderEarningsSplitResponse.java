@@ -36,10 +36,14 @@ public record OrderEarningsSplitResponse(
 
     public record RiderShare(boolean assigned, Long riderUserId, String riderName,
                              BigDecimal commissionRate,
+                             /** True: the partner's own rate; false: Settings -> Delivery Application -> Earnings default. */
+                             boolean ownRate,
                              /** FULL_ORDER or DELIVERY_CHARGE_ONLY. */
                              String commissionBasis,
                              BigDecimal commissionBase, BigDecimal commissionAmount, BigDecimal tip,
-                             BigDecimal amount, boolean finalized) {
+                             BigDecimal amount, boolean finalized,
+                             /** Delivered but no earning was recorded at delivery (legacy admin status override) - never credited. */
+                             boolean notRecorded) {
     }
 
     /** {@code commission} = what the platform kept from the restaurant side (item total + packaging − restaurant share). */
