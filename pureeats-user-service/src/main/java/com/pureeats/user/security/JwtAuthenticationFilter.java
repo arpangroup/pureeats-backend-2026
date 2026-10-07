@@ -30,6 +30,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtTokenProvider jwtTokenProvider;
+    /** Rejects blocked/deactivated users even while their token is still valid (null = no check, e.g. tests). */
+    private final AccountAccessGuard accountAccessGuard;
+
+    public JwtAuthenticationFilter(JwtTokenProvider jwtTokenProvider) {
+        this(jwtTokenProvider, null);
+    }
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
@@ -39,6 +45,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String token = extractToken(request);
             if (token != null) {
                 AuthenticatedUser user = jwtTokenProvider.parseToken(token);
+                if (user != null && accountAccessGuard != null) {
+                    java.util.Optional<String> denial = accountAccessGuard.denialFor(user.userId());
+                    // 401 + these codes: every app signs out (their token refresh fails too - sessions are revoked).
+                    if (denial.isPresent()) {
+                        reject(response, AccountAccessGuard.ACCOUNT_BLOCKED, denial.get());
+                        return;
+                    }
+                    if (accountAccessGuard.isRevoked(user.userId(), jwtTokenProvider.issuedAt(token))) {
+                        reject(response, AccountAccessGuard.SESSION_REVOKED, "You were signed out of all devices. Please sign in again.");
+                        return;
+                    }
+                }
                 if (user != null) {
                     var authorities = List.of(new SimpleGrantedAuthority(user.role().authority()));
                     var authentication = new UsernamePasswordAuthenticationToken(user, null, authorities);
@@ -50,6 +68,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         } finally {
             CurrentUserContext.clear();
         }
+    }
+
+    private static void reject(HttpServletResponse response, String errorCode, String message) throws IOException {
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        response.getWriter().write("{\"success\":false,\"errorCode\":\"" + errorCode
+                + "\",\"message\":\"" + message.replace("\\", "\\\\").replace("\"", "\\\"") + "\"}");
     }
 
     private String extractToken(HttpServletRequest request) {

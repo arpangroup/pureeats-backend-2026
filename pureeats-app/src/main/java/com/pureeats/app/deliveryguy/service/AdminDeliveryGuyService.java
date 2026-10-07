@@ -47,6 +47,7 @@ public class AdminDeliveryGuyService {
     private final TripDetailRepository tripDetailRepository;
     private final RiderService riderService;
     private final com.pureeats.user.service.RiderStatusLogService riderStatusLogService;
+    private final com.pureeats.user.security.AccountAccessGuard accountAccessGuard;
 
     @Transactional(readOnly = true)
     public PageResponse<AdminDeliveryGuyResponse> listPaged(String search, Pageable pageable) {
@@ -106,7 +107,11 @@ public class AdminDeliveryGuyService {
         // DeliveryGuyDetail id - without this, a rating/vehicle/notifiable change made here (e.g.
         // the admin panel's delivery-guy detail page) stays invisible through that endpoint until
         // the cache's 30-minute TTL expires.
-        findLinkedUser(id).ifPresent(user -> riderService.evictProfileCache(user.getId()));
+        findLinkedUser(id).ifPresent(user -> {
+            riderService.evictProfileCache(user.getId());
+            // Deactivating a partner signs them out of the rider app on its next request.
+            accountAccessGuard.onAccountChanged(user.getId());
+        });
         log.info("Updated delivery partner {}", id);
         return toResponse(detail);
     }
@@ -119,6 +124,9 @@ public class AdminDeliveryGuyService {
             user.setDeliveryGuyDetailId(null);
             user.setUpdatedAt(LocalDateTime.now());
             userRepository.save(user);
+            riderService.evictProfileCache(user.getId());
+            // Their partner account is gone - sign them out of the rider app.
+            accountAccessGuard.signOutEverywhere(user.getId());
         });
         deliveryGuyDetailRepository.delete(detail);
         log.info("Deleted delivery partner {}", id);
@@ -163,7 +171,15 @@ public class AdminDeliveryGuyService {
         detail.setCommissionRate(request.commissionRate() != null ? request.commissionRate() : orDefault(detail.getCommissionRate(), BigDecimal.ZERO));
         detail.setMaxAcceptDeliveryLimit(request.maxAcceptDeliveryLimit() != null ? request.maxAcceptDeliveryLimit() : orDefault(detail.getMaxAcceptDeliveryLimit(), 1));
         if (request.isNotifiable() != null) detail.setIsNotifiable(request.isNotifiable());
-        if (request.isActive() != null) detail.setIsActive(request.isActive());
+        if (request.isActive() != null) {
+            detail.setIsActive(request.isActive());
+            if (!request.isActive() && Boolean.TRUE.equals(detail.getIsOnline())) {
+                // A deactivated partner stops receiving orders straight away.
+                detail.setIsOnline(false);
+                detail.setStatusChangedAt(LocalDateTime.now());
+                detail.setOfflineReason(DeliveryGuyDetail.OFFLINE_REASON_ADMIN);
+            }
+        }
         if (request.isOnline() != null && !request.isOnline().equals(detail.getIsOnline())) {
             detail.setIsOnline(request.isOnline());
             detail.setStatusChangedAt(LocalDateTime.now());

@@ -27,6 +27,7 @@ public class UserService {
     private final RoleService roleService;
     private final MediaAssetService mediaAssetService;
     private final MediaUrlResolver mediaUrlResolver;
+    private final com.pureeats.user.security.AccountAccessGuard accountAccessGuard;
 
     @Transactional(readOnly = true)
     public UserResponse getProfile(Long userId) {
@@ -81,6 +82,8 @@ public class UserService {
         user.setAccountStatus(AccountStatus.DELETED);
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
+        // Signs out every other device too, not just the one that deleted the account.
+        accountAccessGuard.onAccountChanged(userId);
         log.info("User {} deleted their own account", userId);
     }
 

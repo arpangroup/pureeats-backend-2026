@@ -89,6 +89,14 @@ public class AdminUserController {
         return ApiResponse.success("User updated", adminUserService.updateUser(id, request, principal.userId()));
     }
 
+    @org.springframework.web.bind.annotation.DeleteMapping("/{id}")
+    @Operation(summary = "Delete a user (soft delete - account status DELETED; signs them out of every app)")
+    public ApiResponse<Void> deleteUser(@PathVariable Long id, @AuthenticationPrincipal AuthenticatedUser principal) {
+        log.info("Admin {} deleting user {}", principal.userId(), id);
+        adminUserService.deleteUser(id, principal.userId());
+        return ApiResponse.success("User deleted", null);
+    }
+
     @PostMapping("/{id}/photo")
     @Operation(summary = "Upload/replace a user's photo, as an admin")
     public ApiResponse<AdminUserResponse> uploadPhoto(@PathVariable Long id, @RequestParam("file") MultipartFile file,

@@ -75,6 +75,7 @@ public class AuthenticationService {
     private final LoginHistoryRecorder loginHistoryRecorder;
     private final SecurityEventPublisher securityEventPublisher;
     private final JwtTokenProvider jwtTokenProvider;
+    private final com.pureeats.user.security.AccountAccessGuard accountAccessGuard;
 
     @Transactional
     public LoginChallengeResponse signup(SignupRequest request, RequestMetadata metadata) {
@@ -208,7 +209,8 @@ public class AuthenticationService {
     @Transactional
     public void logoutAll(Long userId, RequestMetadata metadata) {
         log.info("Logging out all sessions for user {}", userId);
-        sessionService.revokeAllForUser(userId);
+        // Revokes refresh sessions AND rejects every access token issued so far - other devices sign out on their next request.
+        accountAccessGuard.signOutEverywhere(userId);
         securityEventPublisher.publish(baseEvent(SecurityEventType.LOGOUT_ALL, userId, metadata).build());
     }
 
@@ -380,6 +382,11 @@ public class AuthenticationService {
             }
             case ACTIVE -> { /* nothing to do */ }
         }
+        // A delivery partner deactivated under Delivery partners can't sign in (or refresh) either.
+        accountAccessGuard.riderDenial(user).ifPresent(message -> {
+            log.warn("Account usability check failed for user {} - delivery partner deactivated", user.getId());
+            throw new ForbiddenException(com.pureeats.user.security.AccountAccessGuard.ACCOUNT_BLOCKED, message);
+        });
     }
 
     private String generateAccessToken(User user, Role role) {
