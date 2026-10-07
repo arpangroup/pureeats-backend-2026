@@ -228,12 +228,18 @@ public class AdminUserService {
         log.info("Admin {} deleted user {}", adminUserId, id);
     }
 
+    /** Blocked through the old switch (is_active only) still reads as BLOCKED, not ACTIVE. */
+    public static AccountStatus effectiveStatus(User u) {
+        AccountStatus status = u.getAccountStatus() != null ? u.getAccountStatus() : AccountStatus.ACTIVE;
+        return status == AccountStatus.ACTIVE && User.STATUS_INACTIVE.equalsIgnoreCase(u.getIsActive()) ? AccountStatus.BLOCKED : status;
+    }
+
     private AdminUserResponse toResponse(User u, Role role) {
         return toResponse(u, role, u.getPhoto());
     }
 
     private AdminUserResponse toResponse(User u, Role role, String photo) {
-        AccountStatus status = u.getAccountStatus() != null ? u.getAccountStatus() : AccountStatus.ACTIVE;
+        AccountStatus status = effectiveStatus(u);
         return new AdminUserResponse(u.getId(), u.getName(), u.getEmail(), u.getPhone(), mediaUrlResolver.resolve(photo), role,
                 User.STATUS_ACTIVE.equals(u.getIsActive()), status.name(), u.getDefaultAddressId(), u.getDeliveryGuyDetailId(),
                 u.getDeliveryPin(), u.getCreatedAt(), u.getUpdatedAt());
