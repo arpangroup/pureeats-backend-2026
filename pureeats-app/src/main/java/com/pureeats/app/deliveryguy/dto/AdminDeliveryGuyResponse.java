@@ -48,6 +48,8 @@ public record AdminDeliveryGuyResponse(
         String upiId,
         boolean phoneVerified,
         /** The partner's profile photo as a viewable URL ({@code photo} stays the stored key the edit form writes back). */
-        String photoUrl
+        String photoUrl,
+        /** The partner's login account: ACTIVE, BLOCKED, DELETED, DISABLED or TEMPORARILY_LOCKED. */
+        String accountStatus
 ) {
 }

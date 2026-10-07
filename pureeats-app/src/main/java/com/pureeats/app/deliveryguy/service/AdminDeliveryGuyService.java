@@ -298,7 +298,8 @@ public class AdminDeliveryGuyService {
                 d.getApprovalUpdatedAt(), d.getLicenseNumber(), riderService.licensePhotoUrl(d.getId()), d.getIdProofType(),
                 d.getIdProofNumber(), d.getVehicleType(), d.getPayoutMethod(), d.getBankAccountHolder(), d.getBankAccountNumber(),
                 d.getBankIfsc(), d.getUpiId(), user != null && user.isPhoneVerified(),
-                mediaUrlResolver.resolve(d.getPhoto() != null ? d.getPhoto() : user != null ? user.getPhoto() : null));
+                mediaUrlResolver.resolve(d.getPhoto() != null ? d.getPhoto() : user != null ? user.getPhoto() : null),
+                user != null ? com.pureeats.user.service.AdminUserService.effectiveStatus(user).name() : null);
     }
 
     private TripDetailResponse toTripResponse(TripDetail t) {
