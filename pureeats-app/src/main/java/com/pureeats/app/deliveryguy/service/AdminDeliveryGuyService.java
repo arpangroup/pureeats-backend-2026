@@ -46,6 +46,7 @@ public class AdminDeliveryGuyService {
     private final RoleService roleService;
     private final TripDetailRepository tripDetailRepository;
     private final RiderService riderService;
+    private final com.pureeats.media.storage.MediaUrlResolver mediaUrlResolver;
     private final com.pureeats.user.service.RiderStatusLogService riderStatusLogService;
     private final com.pureeats.user.security.AccountAccessGuard accountAccessGuard;
     private final com.pureeats.order.service.OrderNotificationService orderNotificationService;
@@ -296,7 +297,8 @@ public class AdminDeliveryGuyService {
                 d.getApprovalStatus() != null ? d.getApprovalStatus() : DeliveryGuyDetail.APPROVAL_APPROVED, d.getRejectionReason(),
                 d.getApprovalUpdatedAt(), d.getLicenseNumber(), riderService.licensePhotoUrl(d.getId()), d.getIdProofType(),
                 d.getIdProofNumber(), d.getVehicleType(), d.getPayoutMethod(), d.getBankAccountHolder(), d.getBankAccountNumber(),
-                d.getBankIfsc(), d.getUpiId(), user != null && user.isPhoneVerified());
+                d.getBankIfsc(), d.getUpiId(), user != null && user.isPhoneVerified(),
+                mediaUrlResolver.resolve(d.getPhoto() != null ? d.getPhoto() : user != null ? user.getPhoto() : null));
     }
 
     private TripDetailResponse toTripResponse(TripDetail t) {
