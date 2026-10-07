@@ -25,6 +25,14 @@ public record RiderEarningsSummaryResponse(
         /** COD orders whose cash is still with the rider. */
         int codOrders,
         /** Unpaid trips whose earning was recorded on a different basis than today's setting (e.g. on the order total). */
-        int earningsOnOldBasis
+        int earningsOnOldBasis,
+        /** Earnings in the wallet (credited at delivery, not yet paid out) - pendingEarnings carries the same value. */
+        BigDecimal walletBalance,
+        /** Withdrawal requests waiting for the admin - reserved from the balance. */
+        BigDecimal pendingWithdrawals,
+        /** What can be withdrawn or paid out now: walletBalance - pendingWithdrawals. */
+        BigDecimal availableToWithdraw,
+        /** Where earnings are paid (e.g. "UPI ravi@okhdfcbank"), null when the partner hasn't added one. */
+        String payoutTo
 ) {
 }

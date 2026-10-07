@@ -68,4 +68,11 @@ public class DeliveryEarningsController {
     public ApiResponse<List<RiderWalletTransactionResponse>> walletTransactions(@AuthenticationPrincipal AuthenticatedUser principal) {
         return ApiResponse.success(riderEarningsService.walletTransactions(principal.userId()));
     }
+
+    @PostMapping("/wallet/withdrawals")
+    @Operation(summary = "Request a withdrawal from the wallet to the bank account / UPI ID on file")
+    public ApiResponse<RiderSettlementResponse> requestWithdrawal(@AuthenticationPrincipal AuthenticatedUser principal,
+                                                                  @RequestBody java.util.Map<String, java.math.BigDecimal> body) {
+        return ApiResponse.success("Withdrawal requested", riderEarningsService.requestWithdrawal(principal.userId(), body.get("amount")));
+    }
 }

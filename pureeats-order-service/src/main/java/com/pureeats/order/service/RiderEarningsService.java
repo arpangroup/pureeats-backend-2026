@@ -80,7 +80,11 @@ public class RiderEarningsService {
     public RiderEarningsSummaryResponse summary(Long riderUserId) {
         List<TripDetail> trips = trips(riderUserId);
         List<TripDetail> pending = trips.stream().filter(t -> !isSettled(t)).toList();
-        BigDecimal pendingEarnings = sum(pending, TripDetail::getRiderEarning);
+        // Earnings live in the wallet: credited at delivery, leaving it only through a withdrawal or an admin payout.
+        BigDecimal walletBalance = walletBalance(riderUserId);
+        BigDecimal pendingWithdrawals = pendingWithdrawals(riderUserId);
+        BigDecimal available = walletBalance.subtract(pendingWithdrawals).max(BigDecimal.ZERO);
+        BigDecimal pendingEarnings = walletBalance;
         List<TripDetail> cashTrips = codTripsHoldingCash(trips);
         BigDecimal cashInHand = sum(cashTrips, TripDetail::getCashOnHold);
         BigDecimal net = pendingEarnings.subtract(cashInHand);
@@ -90,8 +94,9 @@ public class RiderEarningsService {
         Set<TripDetail> open = new java.util.LinkedHashSet<>(pending);
         open.addAll(cashTrips);
         return new RiderEarningsSummaryResponse(lifetime, trips.size(), pendingEarnings, cashInHand, net, direction(net),
-                pending.size(), lifetime.subtract(pendingEarnings), last, open.size(), orderValue(open), cashTrips.size(),
-                (int) pending.stream().filter(this::recordedOnOtherBasis).count());
+                pending.size(), lifetime.subtract(pendingEarnings).max(BigDecimal.ZERO), last, open.size(), orderValue(open), cashTrips.size(),
+                (int) pending.stream().filter(this::recordedOnOtherBasis).count(), walletBalance, pendingWithdrawals, available,
+                payoutTo(riderProfile(riderUserId)));
     }
 
     /** Every delivered trip, newest first. {@code onlyPending} limits it to trips not yet settled. */
@@ -134,14 +139,16 @@ public class RiderEarningsService {
         boolean collectCod = request == null || request.collectsCod();
         boolean payEarnings = request == null || request.paysEarnings();
         List<TripDetail> all = trips(riderUserId);
-        List<TripDetail> pending = payEarnings ? all.stream().filter(t -> !isSettled(t)).toList() : List.of();
+        // Paying out = transferring what's in the wallet (minus withdrawal requests still waiting - those are paid via the queue).
+        BigDecimal payout = payEarnings ? walletBalance(riderUserId).subtract(pendingWithdrawals(riderUserId)).max(BigDecimal.ZERO) : BigDecimal.ZERO;
+        List<TripDetail> pending = payout.signum() > 0 ? all.stream().filter(t -> !isSettled(t)).toList() : List.of();
         List<TripDetail> cashTrips = collectCod ? codTripsHoldingCash(all) : List.of();
-        if (pending.isEmpty() && cashTrips.isEmpty()) {
+        if (payout.signum() == 0 && cashTrips.isEmpty()) {
             throw new BadRequestException(!collectCod ? "No earnings are pending for this delivery partner"
                     : !payEarnings ? "This delivery partner holds no COD cash" : "This delivery partner has nothing pending to settle");
         }
-        // Never netted: the full COD cash is collected and the full earnings are paid.
-        BigDecimal earnings = sum(pending, TripDetail::getRiderEarning);
+        // Never netted: the full COD cash is collected and the wallet earnings are paid out in full.
+        BigDecimal earnings = payout.setScale(2, RoundingMode.HALF_UP);
         BigDecimal cod = sum(cashTrips, TripDetail::getCashOnHold);
         BigDecimal net = earnings.subtract(cod);
         LocalDateTime now = LocalDateTime.now();
@@ -161,14 +168,11 @@ public class RiderEarningsService {
         settlement.setNote(blankToNull(request != null ? request.note() : null));
         settlement.setSettledBy(adminUserId);
         settlement.setCreatedAt(now);
+        settlement.setStatus(RiderSettlement.STATUS_PAID);
+        settlement.setPaidAt(now);
         settlement = riderSettlementRepository.save(settlement);
 
-        for (TripDetail trip : pending) {
-            trip.setIsSettlementDone(1);
-            trip.setSettlementId(settlement.getId());
-            trip.setSettledAt(now);
-            trip.setUpdatedAt(now);
-        }
+        markTripsPaid(pending, earnings, settlement.getId(), now);
         for (TripDetail trip : cashTrips) {
             trip.setCashOnHold(BigDecimal.ZERO);
             trip.setUpdatedAt(now);
@@ -440,6 +444,119 @@ public class RiderEarningsService {
         return basis == CommissionBasis.DELIVERY_CHARGE_ONLY ? "delivery charge" : "order total";
     }
 
+    // ---- wallet withdrawals ---------------------------------------------------------------------
+
+    /** The partner asks to withdraw from their wallet; the admin pays it (bank/UPI on file) and marks it paid. */
+    @Transactional
+    public RiderSettlementResponse requestWithdrawal(Long riderUserId, BigDecimal amount) {
+        DeliveryGuyDetail rider = riderProfile(riderUserId);
+        if (amount == null || amount.signum() <= 0) throw new BadRequestException("Enter an amount to withdraw.");
+        amount = amount.setScale(2, RoundingMode.HALF_UP);
+        if (payoutTo(rider) == null) throw new BadRequestException("Add your bank account or UPI ID before withdrawing.");
+        BigDecimal available = walletBalance(riderUserId).subtract(pendingWithdrawals(riderUserId));
+        if (amount.compareTo(available) > 0) {
+            throw new BadRequestException("You can withdraw up to " + available.max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP).toPlainString() + ".");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        RiderSettlement request = new RiderSettlement();
+        request.setRiderUserId(riderUserId);
+        request.setEarningsAmount(amount);
+        request.setCodAmount(BigDecimal.ZERO);
+        request.setNetAmount(amount);
+        request.setDirection(RiderSettlement.DIRECTION_PAID_TO_RIDER);
+        request.setTripCount(0);
+        request.setTransactionMode(rider.getPayoutMethod() != null && rider.getPayoutMethod().equals("BANK") ? "BANK_TRANSFER" : "UPI");
+        request.setNote("Withdrawal request");
+        request.setStatus(RiderSettlement.STATUS_REQUESTED);
+        request.setRequestedAt(now);
+        request.setCreatedAt(now);
+        log.info("Rider {} requested a withdrawal of {}", riderUserId, amount);
+        return toSettlementResponse(riderSettlementRepository.save(request));
+    }
+
+    /** Admin queue: withdrawal requests waiting to be paid, oldest first. */
+    @Transactional(readOnly = true)
+    public List<RiderSettlementResponse> withdrawalRequests(String status) {
+        return riderSettlementRepository.findByStatusOrderByCreatedAtAsc(status != null ? status : RiderSettlement.STATUS_REQUESTED).stream()
+                .map(this::toSettlementResponse).toList();
+    }
+
+    /** Admin paid the request (bank/UPI transfer): the wallet is debited and the oldest unpaid trips are marked paid. */
+    @Transactional
+    public RiderSettlementResponse payWithdrawal(Long adminUserId, Long requestId, String transactionMode, String transactionReference) {
+        RiderSettlement request = riderSettlementRepository.findById(requestId).orElseThrow(() -> new ResourceNotFoundException("Withdrawal request not found"));
+        if (!RiderSettlement.STATUS_REQUESTED.equals(request.getStatus())) throw new BadRequestException("This request was already " + request.getStatus().toLowerCase() + ".");
+        BigDecimal balance = walletBalance(request.getRiderUserId());
+        if (request.getEarningsAmount().compareTo(balance) > 0) {
+            throw new BadRequestException("The wallet only holds " + balance.setScale(2, RoundingMode.HALF_UP).toPlainString() + " now - reject this request instead.");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        request.setStatus(RiderSettlement.STATUS_PAID);
+        request.setPaidAt(now);
+        request.setSettledBy(adminUserId);
+        if (transactionMode != null && !transactionMode.isBlank()) request.setTransactionMode(transactionMode.trim());
+        request.setTransactionReference(blankToNull(transactionReference));
+        riderSettlementRepository.save(request);
+        walletService.debit(request.getRiderUserId(), request.getEarningsAmount(), "Settlement #" + request.getId() + " - withdrawal paid out");
+        List<TripDetail> unpaid = trips(request.getRiderUserId()).stream().filter(t -> !isSettled(t)).toList();
+        int marked = markTripsPaid(unpaid, request.getEarningsAmount(), request.getId(), now);
+        request.setTripCount(marked);
+        riderSettlementRepository.save(request);
+        log.info("Admin {} paid withdrawal #{} of {} to rider {}", adminUserId, requestId, request.getEarningsAmount(), request.getRiderUserId());
+        return toSettlementResponse(request);
+    }
+
+    @Transactional
+    public RiderSettlementResponse rejectWithdrawal(Long adminUserId, Long requestId, String reason) {
+        RiderSettlement request = riderSettlementRepository.findById(requestId).orElseThrow(() -> new ResourceNotFoundException("Withdrawal request not found"));
+        if (!RiderSettlement.STATUS_REQUESTED.equals(request.getStatus())) throw new BadRequestException("This request was already " + request.getStatus().toLowerCase() + ".");
+        request.setStatus(RiderSettlement.STATUS_REJECTED);
+        request.setSettledBy(adminUserId);
+        request.setNote(blankToNull(reason) != null ? "Rejected: " + reason.trim() : "Rejected");
+        log.info("Admin {} rejected withdrawal #{} for rider {}", adminUserId, requestId, request.getRiderUserId());
+        return toSettlementResponse(riderSettlementRepository.save(request));
+    }
+
+    private BigDecimal walletBalance(Long riderUserId) {
+        BigDecimal b = walletService.getBalance(riderUserId).balance();
+        return b != null ? b.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2);
+    }
+
+    private BigDecimal pendingWithdrawals(Long riderUserId) {
+        return riderSettlementRepository.findByRiderUserIdAndStatus(riderUserId, RiderSettlement.STATUS_REQUESTED).stream()
+                .map(RiderSettlement::getEarningsAmount).filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /** Oldest unpaid trips covered by a payout of {@code amount} are marked paid (so the earnings list shows Paid / Pending). */
+    private int markTripsPaid(List<TripDetail> unpaid, BigDecimal amount, Long settlementId, LocalDateTime now) {
+        List<TripDetail> oldestFirst = unpaid.stream()
+                .sorted(Comparator.comparing(TripDetail::getCreatedAt, Comparator.nullsFirst(Comparator.naturalOrder()))).toList();
+        BigDecimal left = amount;
+        int marked = 0;
+        for (TripDetail trip : oldestFirst) {
+            BigDecimal earning = Objects.requireNonNullElse(trip.getRiderEarning(), BigDecimal.ZERO);
+            if (earning.compareTo(left) > 0) break;
+            left = left.subtract(earning);
+            trip.setIsSettlementDone(1);
+            trip.setSettlementId(settlementId);
+            trip.setSettledAt(now);
+            trip.setUpdatedAt(now);
+            tripDetailRepository.save(trip);
+            marked++;
+        }
+        return marked;
+    }
+
+    private static String payoutTo(DeliveryGuyDetail d) {
+        if ("UPI".equals(d.getPayoutMethod()) && d.getUpiId() != null) return "UPI " + d.getUpiId();
+        if ("BANK".equals(d.getPayoutMethod()) && d.getBankAccountNumber() != null) {
+            return (d.getBankAccountHolder() != null ? d.getBankAccountHolder() + " · " : "") + "A/c " + d.getBankAccountNumber()
+                    + (d.getBankIfsc() != null ? " · " + d.getBankIfsc() : "");
+        }
+        return null;
+    }
+
     /** "Collected COD cash and paid earnings" in one settlement. */
     public static final String DIRECTION_BOTH = "BOTH";
 
@@ -546,9 +663,17 @@ public class RiderEarningsService {
     }
 
     private RiderSettlementResponse toSettlementResponse(RiderSettlement s) {
+        DeliveryGuyDetail rider = null;
+        try {
+            rider = riderProfile(s.getRiderUserId());
+        } catch (RuntimeException ignored) {
+            // partner profile removed - the record still shows
+        }
         return new RiderSettlementResponse(s.getId(), s.getRiderUserId(), s.getEarningsAmount(), s.getCodAmount(), s.getNetAmount(),
                 s.getDirection(), s.getTripCount() != null ? s.getTripCount() : 0, s.getTransactionMode(), s.getTransactionReference(),
-                s.getNote(), s.getSettledBy(), s.getCreatedAt());
+                s.getNote(), s.getSettledBy(), s.getCreatedAt(), s.getStatus() != null ? s.getStatus() : RiderSettlement.STATUS_PAID,
+                s.getRequestedAt(), s.getPaidAt() != null ? s.getPaidAt() : (s.isPaid() ? s.getCreatedAt() : null),
+                rider != null ? rider.getName() : null, rider != null ? payoutTo(rider) : null);
     }
 
     private DeliveryGuyDetail riderProfile(Long riderUserId) {
