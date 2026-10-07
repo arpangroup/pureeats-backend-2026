@@ -49,6 +49,7 @@ public class AdminDeliveryGuyService {
     private final com.pureeats.user.service.RiderStatusLogService riderStatusLogService;
     private final com.pureeats.user.security.AccountAccessGuard accountAccessGuard;
     private final com.pureeats.order.service.OrderNotificationService orderNotificationService;
+    private final com.pureeats.media.service.MediaAssetService mediaAssetService;
 
     @Transactional(readOnly = true)
     public PageResponse<AdminDeliveryGuyResponse> listPaged(String search, String approvalStatus, Pageable pageable) {
@@ -57,6 +58,16 @@ public class AdminDeliveryGuyService {
                 : deliveryGuyDetailRepository.findPage(search, pageable);
         return PageResponse.of(page.getContent().stream().map(this::toResponse).toList(),
                 page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
+    }
+
+    /** Admin uploads/replaces a partner's driving licence photo. */
+    @Transactional
+    public AdminDeliveryGuyResponse uploadLicensePhoto(Long id, org.springframework.web.multipart.MultipartFile file, Long adminUserId) {
+        DeliveryGuyDetail detail = findOrThrow(id);
+        mediaAssetService.upload(file, com.pureeats.user.service.RiderService.OWNER_TYPE_LICENSE, detail.getId(), adminUserId);
+        findLinkedUser(id).ifPresent(user -> riderService.evictProfileCache(user.getId()));
+        log.info("Admin {} uploaded a licence photo for delivery partner {}", adminUserId, id);
+        return toResponse(detail);
     }
 
     /** Applications waiting for review - for the Approvals badge. */
@@ -227,6 +238,23 @@ public class AdminDeliveryGuyService {
         }
         detail.setRating(request.rating() != null ? request.rating() : orDefault(detail.getRating(), BigDecimal.ZERO));
         if (request.photo() != null) detail.setPhoto(request.photo());
+        // Admin corrections to the partner's documents and payout details (any approval status).
+        if (request.licenseNumber() != null && !request.licenseNumber().isBlank()) {
+            com.pureeats.user.service.RiderKyc.validateLicense(request.licenseNumber());
+            com.pureeats.user.service.RiderKyc.applyLicense(detail, request.licenseNumber());
+        }
+        if (request.idProofNumber() != null && !request.idProofNumber().isBlank()) {
+            com.pureeats.user.service.RiderKyc.validateIdProof(request.idProofType(), request.idProofNumber());
+            com.pureeats.user.service.RiderKyc.applyIdProof(detail, request.idProofType(), request.idProofNumber());
+        }
+        if (request.vehicleType() != null && !request.vehicleType().isBlank()) {
+            com.pureeats.user.service.RiderKyc.validateVehicle(request.vehicleType(), request.vehicleNumber() != null ? request.vehicleNumber() : detail.getVehicleNumber());
+            com.pureeats.user.service.RiderKyc.applyVehicle(detail, request.vehicleType(), request.vehicleNumber());
+        }
+        if (request.payoutMethod() != null && !request.payoutMethod().isBlank()) {
+            com.pureeats.user.service.RiderKyc.validatePayout(request.payoutMethod(), request.bankAccountHolder(), request.bankAccountNumber(), request.bankIfsc(), request.upiId());
+            com.pureeats.user.service.RiderKyc.applyPayout(detail, request.payoutMethod(), request.bankAccountHolder(), request.bankAccountNumber(), request.bankIfsc(), request.upiId());
+        }
         if (detail.getIsActive() == null) detail.setIsActive(true);
         if (detail.getIsOnline() == null) detail.setIsOnline(false);
         if (detail.getIsNotifiable() == null) detail.setIsNotifiable(true);

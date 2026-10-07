@@ -64,6 +64,10 @@ public class SettingSchemaService {
     public static final String DRIVER_EDIT_ABOUT = "driver_edit_about";
     public static final String DRIVER_EDIT_PHONE = "driver_edit_phone";
     public static final String DRIVER_EDIT_EMAIL = "driver_edit_email";
+    public static final String DRIVER_EDIT_LICENSE = "driver_edit_license";
+    public static final String DRIVER_EDIT_ID_PROOF = "driver_edit_id_proof";
+    public static final String DRIVER_EDIT_VEHICLE_TYPE = "driver_edit_vehicle_type";
+    public static final String DRIVER_EDIT_PAYOUT = "driver_edit_payout";
 
     public static final String DEFAULT_MAX_ACTIVE_ORDERS_MESSAGE =
             "You already have {count} orders in progress - please wait for one to be delivered before placing another.";
@@ -421,7 +425,13 @@ public class SettingSchemaService {
                         field(DRIVER_EDIT_GENDER, "Gender", "boolean", "false"),
                         field(DRIVER_EDIT_ABOUT, "About you", "boolean", "false").info("The short description customers can see."),
                         field(DRIVER_EDIT_PHONE, "Mobile number", "boolean", "false").info("On: partners can change their number through an OTP check on the new number. Off: shown read-only."),
-                        field(DRIVER_EDIT_EMAIL, "Email", "boolean", "false").info("On: partners can change their email through an OTP check. Off: shown read-only.")
+                        field(DRIVER_EDIT_EMAIL, "Email", "boolean", "false").info("On: partners can change their email through an OTP check. Off: shown read-only."),
+                        field(DRIVER_EDIT_LICENSE, "Driving licence (number + photo)", "boolean", "false")
+                                .info("Off: an approved partner can't change their licence - only an admin can (Delivery partners -> partner -> Partner application -> Edit). Applicants can always correct it until approved."),
+                        field(DRIVER_EDIT_ID_PROOF, "Aadhaar / PAN", "boolean", "false").info("Off: the ID proof on file can only be changed by an admin."),
+                        field(DRIVER_EDIT_VEHICLE_TYPE, "Vehicle type", "boolean", "false").info("Bike / Cycle / EV. Off: only an admin can change it."),
+                        field(DRIVER_EDIT_PAYOUT, "Bank account / UPI", "boolean", "false")
+                                .info("Where earnings are paid. Off (recommended): only an admin can change it, so a stolen login can't redirect payouts.")
                 )),
                 group("Inactivity auto-offline", "Bike", List.of(
                         field(DRIVER_AUTO_OFFLINE_ENABLED, "Auto-offline inactive drivers", "boolean", "true")

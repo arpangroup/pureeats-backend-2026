@@ -58,6 +58,13 @@ public class AdminDeliveryGuyController {
         return ApiResponse.success(deliveryGuyService.pendingCount());
     }
 
+    @PostMapping(value = "/api/v1/admin/delivery-guys/{id}/license-photo", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @io.swagger.v3.oas.annotations.Operation(summary = "Upload or replace a delivery partner's driving licence photo")
+    public ApiResponse<AdminDeliveryGuyResponse> uploadLicensePhoto(@PathVariable Long id, @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+                                                                    @org.springframework.security.core.annotation.AuthenticationPrincipal com.pureeats.user.security.AuthenticatedUser principal) {
+        return ApiResponse.success("Licence photo saved", deliveryGuyService.uploadLicensePhoto(id, file, principal.userId()));
+    }
+
     @PostMapping("/api/v1/admin/delivery-guys/{id}/approve")
     @io.swagger.v3.oas.annotations.Operation(summary = "Approve a delivery partner's application - they can go online and take orders")
     public ApiResponse<AdminDeliveryGuyResponse> approve(@PathVariable Long id,

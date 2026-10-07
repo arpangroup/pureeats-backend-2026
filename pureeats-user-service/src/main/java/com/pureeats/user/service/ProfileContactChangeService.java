@@ -56,11 +56,15 @@ public class ProfileContactChangeService {
     private final com.pureeats.media.storage.MediaUrlResolver mediaUrlResolver;
     private final RiderService riderService;
     private final RiderProfileEditPolicy riderProfileEditPolicy;
+    private final com.pureeats.user.repository.DeliveryGuyDetailRepository deliveryGuyDetailRepository;
 
     /** Delivery partners can only change their mobile/email when Settings -> Delivery Application -> Profile editing allows it; customers are unaffected. */
     private void assertRiderMayChange(Long userId, String policyKey, String label) {
         userRepository.findById(userId)
                 .filter(u -> u.getDeliveryGuyDetailId() != null)
+                // Only an approved partner's contact details are locked - an applicant can always fix their own.
+                .filter(u -> deliveryGuyDetailRepository.findById(u.getDeliveryGuyDetailId().longValue())
+                        .map(com.pureeats.domain.entity.DeliveryGuyDetail::isApproved).orElse(false))
                 .filter(u -> !riderProfileEditPolicy.isEditable(policyKey))
                 .ifPresent(u -> {
                     throw new com.pureeats.domain.common.exception.BadRequestException(label + " can't be changed from the app - please contact support to update it.");
@@ -70,7 +74,9 @@ public class ProfileContactChangeService {
     @Transactional
     public LoginChallengeResponse requestPhoneChange(Long userId, String newPhone, RequestMetadata metadata) {
         assertRiderMayChange(userId, RiderProfileEditPolicy.PHONE, "Mobile number");
-        if (userRepository.existsByPhone(newPhone)) {
+        // Re-verifying your own number is fine; only another account's number is taken.
+        boolean ownNumber = userRepository.findById(userId).map(u -> newPhone.equals(u.getPhone())).orElse(false);
+        if (!ownNumber && userRepository.existsByPhone(newPhone)) {
             throw new ConflictException("PHONE_ALREADY_IN_USE", "This phone number is already linked to another account.");
         }
         return issueChallenge(AuthenticationMethod.PHONE, newPhone, NotificationType.PHONE_VERIFICATION, userId, metadata);

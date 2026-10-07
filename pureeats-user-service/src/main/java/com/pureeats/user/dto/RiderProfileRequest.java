@@ -1,6 +1,5 @@
 package com.pureeats.user.dto;
 
-import jakarta.validation.constraints.NotBlank;
 
 /**
  * Plain JSON body - used for both onboarding (POST) and editing (PUT) a rider's own profile.
@@ -10,7 +9,8 @@ import jakarta.validation.constraints.NotBlank;
  */
 public record RiderProfileRequest(
         String name,
-        @NotBlank String vehicleNumber,
+        /** Required for motor vehicles - checked by RiderKyc (a cycle has none). */
+        String vehicleNumber,
         String age,
         String gender,
         String description,

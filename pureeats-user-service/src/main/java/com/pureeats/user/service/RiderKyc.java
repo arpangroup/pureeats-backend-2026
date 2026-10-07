@@ -5,11 +5,16 @@ import com.pureeats.domain.entity.DeliveryGuyDetail;
 import com.pureeats.user.dto.RiderProfileRequest;
 
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-/** Validation and normalisation of a delivery partner's sign-up details (licence, ID proof, vehicle, payout). */
-final class RiderKyc {
+/**
+ * Validation and normalisation of a delivery partner's sign-up details, in four groups that can also be
+ * changed one at a time later (by the partner when Settings -> Profile editing allows it, or by an admin):
+ * driving licence, ID proof (Aadhaar/PAN), vehicle, and payout (bank or UPI).
+ */
+public final class RiderKyc {
 
     private static final Set<String> VEHICLE_TYPES = Set.of("BIKE", "CYCLE", "EV");
     private static final Pattern AADHAAR = Pattern.compile("\\d{12}");
@@ -23,13 +28,31 @@ final class RiderKyc {
     private RiderKyc() {
     }
 
+    /** A full application: every group is required. */
     static void validate(RiderProfileRequest r) {
-        String license = compact(r.licenseNumber());
+        validateLicense(r.licenseNumber());
+        validateIdProof(r.idProofType(), r.idProofNumber());
+        validateVehicle(r.vehicleType(), r.vehicleNumber());
+        validatePayout(r.payoutMethod(), r.bankAccountHolder(), r.bankAccountNumber(), r.bankIfsc(), r.upiId());
+    }
+
+    static void apply(DeliveryGuyDetail d, RiderProfileRequest r) {
+        applyLicense(d, r.licenseNumber());
+        applyIdProof(d, r.idProofType(), r.idProofNumber());
+        applyVehicle(d, r.vehicleType(), r.vehicleNumber());
+        applyPayout(d, r.payoutMethod(), r.bankAccountHolder(), r.bankAccountNumber(), r.bankIfsc(), r.upiId());
+    }
+
+    public static void validateLicense(String licenseNumber) {
+        String license = compact(licenseNumber);
         if (license == null || !LICENSE.matcher(license).matches()) {
             throw new BadRequestException("Enter a valid driving licence number (e.g. KA0520190001234).");
         }
-        String idType = upper(r.idProofType());
-        String idNumber = compact(r.idProofNumber());
+    }
+
+    public static void validateIdProof(String idProofType, String idProofNumber) {
+        String idType = upper(idProofType);
+        String idNumber = compact(idProofNumber);
         if ("AADHAAR".equals(idType)) {
             if (idNumber == null || !AADHAAR.matcher(idNumber).matches()) throw new BadRequestException("Aadhaar number must be 12 digits.");
         } else if ("PAN".equals(idType)) {
@@ -37,54 +60,91 @@ final class RiderKyc {
         } else {
             throw new BadRequestException("Choose Aadhaar or PAN as your ID proof.");
         }
-        if (!VEHICLE_TYPES.contains(upper(r.vehicleType()))) {
+    }
+
+    public static void validateVehicle(String vehicleType, String vehicleNumber) {
+        if (!VEHICLE_TYPES.contains(upper(vehicleType))) {
             throw new BadRequestException("Choose your vehicle type: Bike, Cycle or EV.");
         }
         // A cycle has no registration number; motor vehicles must have one.
-        if (!"CYCLE".equals(upper(r.vehicleType())) && (r.vehicleNumber() == null || r.vehicleNumber().isBlank())) {
+        if (!"CYCLE".equals(upper(vehicleType)) && (vehicleNumber == null || vehicleNumber.isBlank())) {
             throw new BadRequestException("Enter your vehicle number.");
         }
-        String method = upper(r.payoutMethod());
+    }
+
+    public static void validatePayout(String payoutMethod, String holder, String accountNumber, String ifsc, String upiId) {
+        String method = upper(payoutMethod);
         if ("BANK".equals(method)) {
-            if (r.bankAccountHolder() == null || r.bankAccountHolder().isBlank()) throw new BadRequestException("Enter the bank account holder's name.");
-            String account = compact(r.bankAccountNumber());
+            if (holder == null || holder.isBlank()) throw new BadRequestException("Enter the bank account holder's name.");
+            String account = compact(accountNumber);
             if (account == null || !ACCOUNT.matcher(account).matches()) throw new BadRequestException("Enter a valid bank account number.");
-            String ifsc = compact(r.bankIfsc());
-            if (ifsc == null || !IFSC.matcher(ifsc).matches()) throw new BadRequestException("Enter a valid IFSC (e.g. HDFC0001234).");
+            String code = compact(ifsc);
+            if (code == null || !IFSC.matcher(code).matches()) throw new BadRequestException("Enter a valid IFSC (e.g. HDFC0001234).");
         } else if ("UPI".equals(method)) {
-            if (r.upiId() == null || !UPI.matcher(r.upiId().trim()).matches()) throw new BadRequestException("Enter a valid UPI ID (e.g. name@okhdfcbank).");
+            if (upiId == null || !UPI.matcher(upiId.trim()).matches()) throw new BadRequestException("Enter a valid UPI ID (e.g. name@okhdfcbank).");
         } else {
             throw new BadRequestException("Choose how you want to be paid: bank account or UPI.");
         }
     }
 
-    static void apply(DeliveryGuyDetail d, RiderProfileRequest r) {
-        d.setLicenseNumber(compact(r.licenseNumber()));
-        d.setIdProofType(upper(r.idProofType()));
-        d.setIdProofNumber(compact(r.idProofNumber()));
-        d.setVehicleType(upper(r.vehicleType()));
-        if (r.vehicleNumber() != null && !r.vehicleNumber().isBlank()) d.setVehicleNumber(r.vehicleNumber().trim().toUpperCase(Locale.ROOT));
-        String method = upper(r.payoutMethod());
+    public static void applyLicense(DeliveryGuyDetail d, String licenseNumber) {
+        d.setLicenseNumber(compact(licenseNumber));
+    }
+
+    public static void applyIdProof(DeliveryGuyDetail d, String idProofType, String idProofNumber) {
+        d.setIdProofType(upper(idProofType));
+        d.setIdProofNumber(compact(idProofNumber));
+    }
+
+    public static void applyVehicle(DeliveryGuyDetail d, String vehicleType, String vehicleNumber) {
+        d.setVehicleType(upper(vehicleType));
+        if (vehicleNumber != null && !vehicleNumber.isBlank()) d.setVehicleNumber(vehicleNumber.trim().toUpperCase(Locale.ROOT));
+    }
+
+    public static void applyPayout(DeliveryGuyDetail d, String payoutMethod, String holder, String accountNumber, String ifsc, String upiId) {
+        String method = upper(payoutMethod);
         d.setPayoutMethod(method);
         boolean bank = "BANK".equals(method);
-        d.setBankAccountHolder(bank ? r.bankAccountHolder().trim() : null);
-        d.setBankAccountNumber(bank ? compact(r.bankAccountNumber()) : null);
-        d.setBankIfsc(bank ? compact(r.bankIfsc()) : null);
-        d.setUpiId(bank ? null : r.upiId().trim());
+        d.setBankAccountHolder(bank ? holder.trim() : null);
+        d.setBankAccountNumber(bank ? compact(accountNumber) : null);
+        d.setBankIfsc(bank ? compact(ifsc) : null);
+        d.setUpiId(bank ? null : upiId.trim());
+    }
+
+    /** True when the requested licence differs from what's on file (null = not sent = unchanged). */
+    static boolean licenseChanged(DeliveryGuyDetail d, String licenseNumber) {
+        return licenseNumber != null && !Objects.equals(compact(licenseNumber), d.getLicenseNumber());
+    }
+
+    static boolean idProofChanged(DeliveryGuyDetail d, String type, String number) {
+        return number != null && (!Objects.equals(compact(number), d.getIdProofNumber()) || !Objects.equals(upper(type), d.getIdProofType()));
+    }
+
+    static boolean vehicleTypeChanged(DeliveryGuyDetail d, String type) {
+        return type != null && !Objects.equals(upper(type), d.getVehicleType());
+    }
+
+    static boolean payoutChanged(DeliveryGuyDetail d, String method, String accountNumber, String ifsc, String upiId, String holder) {
+        if (method == null) return false;
+        if (!Objects.equals(upper(method), d.getPayoutMethod())) return true;
+        if ("UPI".equals(upper(method))) return upiId != null && !Objects.equals(upiId.trim(), d.getUpiId());
+        return (accountNumber != null && !Objects.equals(compact(accountNumber), d.getBankAccountNumber()))
+                || (ifsc != null && !Objects.equals(compact(ifsc), d.getBankIfsc()))
+                || (holder != null && !Objects.equals(holder.trim(), d.getBankAccountHolder()));
     }
 
     /** Everything but the last 4 characters hidden: XXXXXXXX1234. */
-    static String mask(String value) {
+    public static String mask(String value) {
         if (value == null || value.isBlank()) return null;
         int keep = Math.min(4, value.length());
         return "X".repeat(value.length() - keep) + value.substring(value.length() - keep);
     }
 
-    private static String compact(String v) {
+    static String compact(String v) {
         return v == null ? null : v.replaceAll("[\\s-]", "").toUpperCase(Locale.ROOT);
     }
 
-    private static String upper(String v) {
+    static String upper(String v) {
         return v == null ? null : v.trim().toUpperCase(Locale.ROOT);
     }
 }

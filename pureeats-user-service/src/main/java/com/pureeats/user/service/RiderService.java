@@ -54,6 +54,12 @@ public class RiderService {
         log.info("Registering user {} as a delivery rider", userId);
         User user = userService.findUserOrThrow(userId);
         if (user.getDeliveryGuyDetailId() != null) {
+            DeliveryGuyDetail existing = deliveryGuyDetailRepository.findById(user.getDeliveryGuyDetailId().longValue()).orElse(null);
+            // Submitting again while the application is pending/rejected (e.g. the licence photo upload failed after
+            // the details were saved) updates it instead of failing with "already exists" forever.
+            if (existing != null && !existing.isApproved() && request.hasKyc()) {
+                return updateProfile(userId, request);
+            }
             log.warn("Rider registration rejected for user {} - profile already exists", userId);
             throw new ConflictException("A rider profile already exists for this account");
         }
@@ -74,7 +80,7 @@ public class RiderService {
         detail.setAge(request.age());
         detail.setGender(request.gender());
         detail.setDescription(request.description());
-        detail.setVehicleNumber(request.vehicleNumber());
+        // Vehicle number was already set (normalised) by RiderKyc.apply - none for a cycle.
         detail.setCommissionRate(DEFAULT_COMMISSION_RATE);
         detail.setMaxAcceptDeliveryLimit(DEFAULT_MAX_ACCEPT_LIMIT);
         detail.setRating(BigDecimal.ZERO);
@@ -123,6 +129,7 @@ public class RiderService {
             log.info("Rider {} (re)submitted their application", userId);
             return toResponse(user, detail);
         }
+        applyDocumentChanges(detail, request);
         profileEditPolicy.assertCanChange(RiderProfileEditPolicy.NAME, "Name", detail.getName(), blankToNull(request.name()));
         profileEditPolicy.assertCanChange(RiderProfileEditPolicy.VEHICLE_NUMBER, "Vehicle number", detail.getVehicleNumber(), blankToNull(request.vehicleNumber()));
         profileEditPolicy.assertCanChange(RiderProfileEditPolicy.AGE, "Age", detail.getAge(), request.age());
@@ -146,12 +153,39 @@ public class RiderService {
     public RiderProfileResponse uploadLicensePhoto(Long userId, MultipartFile file) {
         User user = userService.findUserOrThrow(userId);
         DeliveryGuyDetail detail = resolveOwnDetail(user);
-        if (detail.isApproved() && detail.getApprovalStatus() != null) {
-            throw new BadRequestException("Your licence is already verified - contact support to change it.");
+        if (detail.isApproved()) {
+            profileEditPolicy.assertEditable(RiderProfileEditPolicy.LICENSE, "Driving licence");
         }
         mediaAssetService.upload(file, OWNER_TYPE_LICENSE, detail.getId(), userId);
         log.info("Rider {} uploaded a driving licence photo", userId);
         return toResponse(user, detail);
+    }
+
+    /**
+     * An approved partner changing their documents/payout from the app: each group only when Settings ->
+     * Delivery Application -> Profile editing allows it (all off by default). Unchanged values are ignored.
+     */
+    private void applyDocumentChanges(DeliveryGuyDetail d, RiderProfileRequest r) {
+        if (RiderKyc.licenseChanged(d, r.licenseNumber())) {
+            profileEditPolicy.assertEditable(RiderProfileEditPolicy.LICENSE, "Driving licence");
+            RiderKyc.validateLicense(r.licenseNumber());
+            RiderKyc.applyLicense(d, r.licenseNumber());
+        }
+        if (RiderKyc.idProofChanged(d, r.idProofType(), r.idProofNumber())) {
+            profileEditPolicy.assertEditable(RiderProfileEditPolicy.ID_PROOF, "Aadhaar / PAN");
+            RiderKyc.validateIdProof(r.idProofType(), r.idProofNumber());
+            RiderKyc.applyIdProof(d, r.idProofType(), r.idProofNumber());
+        }
+        if (RiderKyc.vehicleTypeChanged(d, r.vehicleType())) {
+            profileEditPolicy.assertEditable(RiderProfileEditPolicy.VEHICLE_TYPE, "Vehicle type");
+            RiderKyc.validateVehicle(r.vehicleType(), r.vehicleNumber() != null ? r.vehicleNumber() : d.getVehicleNumber());
+            RiderKyc.applyVehicle(d, r.vehicleType(), r.vehicleNumber());
+        }
+        if (RiderKyc.payoutChanged(d, r.payoutMethod(), r.bankAccountNumber(), r.bankIfsc(), r.upiId(), r.bankAccountHolder())) {
+            profileEditPolicy.assertEditable(RiderProfileEditPolicy.PAYOUT, "Bank account / UPI");
+            RiderKyc.validatePayout(r.payoutMethod(), r.bankAccountHolder(), r.bankAccountNumber(), r.bankIfsc(), r.upiId());
+            RiderKyc.applyPayout(d, r.payoutMethod(), r.bankAccountHolder(), r.bankAccountNumber(), r.bankIfsc(), r.upiId());
+        }
     }
 
     /** Latest licence photo URL for a partner, or null. */
