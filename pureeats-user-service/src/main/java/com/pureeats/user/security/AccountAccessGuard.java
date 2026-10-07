@@ -31,13 +31,12 @@ public class AccountAccessGuard {
     public static final String ACCOUNT_BLOCKED = "ACCOUNT_BLOCKED";
     /** Error code for a token issued before the user signed out of all devices. */
     public static final String SESSION_REVOKED = "SESSION_REVOKED";
-    /** What a user blocked from the admin panel sees. */
-    public static final String BLOCKED_MESSAGE = "User has been blocked";
     private static final Duration CACHE_TTL = Duration.ofSeconds(30);
 
     private final UserRepository userRepository;
     private final DeliveryGuyDetailRepository deliveryGuyDetailRepository;
     private final SessionService sessionService;
+    private final AccountMessages accountMessages;
 
     private record Decision(Optional<String> denial, Instant expiresAt) {
     }
@@ -99,14 +98,14 @@ public class AccountAccessGuard {
         // Deleting an account is a soft delete (status DELETED, handled below); no row means nothing to decide here.
         if (user == null) return Optional.empty();
         if (user.getAccountStatus() != AccountStatus.DELETED && User.STATUS_INACTIVE.equalsIgnoreCase(user.getIsActive())) {
-            return Optional.of(BLOCKED_MESSAGE);
+            return Optional.of(accountMessages.blocked());
         }
         AccountStatus status = user.getAccountStatus() != null ? user.getAccountStatus() : AccountStatus.ACTIVE;
         if (status == AccountStatus.DELETED) {
-            return Optional.of("This account has been deleted.");
+            return Optional.of(accountMessages.deleted());
         }
         if (status == AccountStatus.BLOCKED || status == AccountStatus.DISABLED) {
-            return Optional.of(user.getLockReason() != null ? user.getLockReason() : BLOCKED_MESSAGE);
+            return Optional.of(user.getLockReason() != null ? user.getLockReason() : accountMessages.blocked());
         }
         return riderDenial(user);
     }

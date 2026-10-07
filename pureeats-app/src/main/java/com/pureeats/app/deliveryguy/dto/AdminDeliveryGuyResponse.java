@@ -30,6 +30,22 @@ public record AdminDeliveryGuyResponse(
         LocalDateTime updatedAt,
         String email,
         String phone,
-        boolean isUserActive
+        boolean isUserActive,
+        /** PENDING, APPROVED or REJECTED (legacy rows report APPROVED). */
+        String approvalStatus,
+        String rejectionReason,
+        LocalDateTime approvalUpdatedAt,
+        // Sign-up details for verification - shown in full to admins.
+        String licenseNumber,
+        String licensePhotoUrl,
+        String idProofType,
+        String idProofNumber,
+        String vehicleType,
+        String payoutMethod,
+        String bankAccountHolder,
+        String bankAccountNumber,
+        String bankIfsc,
+        String upiId,
+        boolean phoneVerified
 ) {
 }

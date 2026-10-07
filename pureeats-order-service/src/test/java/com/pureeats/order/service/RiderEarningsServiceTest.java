@@ -69,6 +69,11 @@ class RiderEarningsServiceTest {
             DeliveryGuyDetail d = inv.getArgument(0);
             return d != null && d.getCommissionRate() != null ? d.getCommissionRate() : BigDecimal.TEN;
         });
+        // The wallet holds the earnings of unpaid trips (credited at delivery).
+        lenient().when(walletService.getBalance(RIDER)).thenAnswer(inv -> new com.pureeats.order.dto.WalletBalanceResponse(
+                trips.stream().filter(t -> t.getIsSettlementDone() == null || t.getIsSettlementDone() == 0)
+                        .map(TripDetail::getRiderEarning).reduce(BigDecimal.ZERO, BigDecimal::add)));
+        lenient().when(riderSettlementRepository.findByRiderUserIdAndStatus(eq(RIDER), any())).thenReturn(List.of());
         lenient().when(orderStatusService.idFor(com.pureeats.domain.enums.OrderStatusCode.DELIVERED)).thenReturn(9);
         // Each trip's order: COD when cash was collected, DELIVERED unless listed in notDelivered.
         lenient().when(orderRepository.findAllById(any())).thenAnswer(inv -> trips.stream().map(t -> {
@@ -96,6 +101,8 @@ class RiderEarningsServiceTest {
         t.setRiderId((int) RIDER);
         t.setRiderEarning(new BigDecimal(earning));
         t.setCashCollectedFromCustomer(new BigDecimal(cod));
+        // As recorded at delivery: COD cash stays on hold until it's collected in a settlement.
+        t.setCashOnHold(settled ? BigDecimal.ZERO : new BigDecimal(cod));
         t.setDistanceTravelled(BigDecimal.valueOf(2));
         t.setIsSettlementDone(settled ? 1 : 0);
         t.setCreatedAt(at);
@@ -145,7 +152,7 @@ class RiderEarningsServiceTest {
         collection.setAmount(new BigDecimal("100"));
         when(deliveryCollectionRepository.findByUserId((int) RIDER)).thenReturn(Optional.of(collection));
 
-        RiderSettlementResponse result = service.settle(1L, RIDER, new SettleRiderRequest("UPI", "UTR123", null));
+        RiderSettlementResponse result = service.settle(1L, RIDER, new SettleRiderRequest("UPI", "UTR123", null, null, null));
 
         assertEquals(new BigDecimal("70.00"), result.earningsAmount());
         assertEquals(new BigDecimal("100.00"), result.codAmount());
@@ -206,5 +213,117 @@ class RiderEarningsServiceTest {
         RiderEarningsAnalyticsResponse r = service.analytics(RIDER, "WEEK", null, null);
         assertEquals(8, r.buckets().size());
         assertEquals(java.time.DayOfWeek.MONDAY, r.currentFrom().getDayOfWeek());
+    }
+
+    @Test
+    void summary_keepsCodCashAndEarningsSeparate_neverNetted() {
+        // The reported case: ₹930 earnings, ₹1,394 COD cash - the rider owes the full ₹1,394.
+        trip("930", "1394", LocalDateTime.now(), false);
+
+        RiderEarningsSummaryResponse s = service.summary(RIDER);
+
+        assertEquals(new BigDecimal("1394.00"), s.cashInHand(), "full COD cash to collect");
+        assertEquals(new BigDecimal("930.00"), s.pendingEarnings(), "earnings paid separately");
+        assertEquals(1, s.codOrders());
+        assertEquals(1, s.openOrders());
+    }
+
+    @Test
+    void settle_collectsTheFullCodCash_andPaysTheFullEarnings() {
+        trip("930", "1394", LocalDateTime.now(), false);
+        when(riderSettlementRepository.save(any(RiderSettlement.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        RiderSettlementResponse result = service.settle(1L, RIDER, new SettleRiderRequest("CASH", null, null, null, null));
+
+        assertEquals(new BigDecimal("1394.00"), result.codAmount(), "all of the COD cash, not 1394 - 930");
+        assertEquals(new BigDecimal("930.00"), result.earningsAmount());
+        verify(walletService).debit(eq(RIDER), eq(new BigDecimal("930.00")), anyString());
+    }
+
+    @Test
+    void settle_codOnly_leavesTheEarningsPending() {
+        TripDetail t = trip("930", "1394", LocalDateTime.now(), false);
+        when(riderSettlementRepository.save(any(RiderSettlement.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        RiderSettlementResponse result = service.settle(1L, RIDER, new SettleRiderRequest("CASH", null, null, true, false));
+
+        assertEquals(new BigDecimal("1394.00"), result.codAmount());
+        assertEquals(0, result.earningsAmount().signum());
+        assertEquals(0, t.getCashOnHold().signum(), "cash collected");
+        assertEquals(0, t.getIsSettlementDone(), "earning still to be paid");
+        verify(walletService, never()).debit(anyLong(), any(), anyString());
+    }
+
+    @Test
+    void recalculate_reRecordsAnOrderTotalEarning_onTheDeliveryCharge_andAdjustsTheWallet() {
+        // Order 132-style: 100% recorded on the ₹930 order total; today's basis is the delivery charge (₹40).
+        ReflectionTestUtils.setField(service, "commissionBasis", CommissionBasis.DELIVERY_CHARGE_ONLY);
+        TripDetail t = trip("930", "0", LocalDateTime.now(), false);
+        t.setMeta("{\"commissionRate\":100,\"commissionBasis\":\"FULL_ORDER\",\"commissionBase\":930,\"tip\":0}");
+        Order order = new Order();
+        order.setId(t.getOrderId().longValue());
+        order.setUniqueOrderId("PE-132");
+        order.setTotal(new BigDecimal("930"));
+        order.setDeliveryCharge(new BigDecimal("40"));
+        when(orderRepository.findById(t.getOrderId().longValue())).thenReturn(Optional.of(order));
+
+        var result = service.recalculatePendingEarnings(1L, RIDER);
+
+        assertEquals(1, result.trips());
+        assertEquals(new BigDecimal("40.00"), t.getRiderEarning());
+        verify(walletService).debit(eq(RIDER), eq(new BigDecimal("890.00")), contains("PE-132"));
+        assertTrue(t.getMeta().contains("DELIVERY_CHARGE_ONLY"));
+    }
+
+    @Test
+    void recalculate_neverTouchesPaidTrips() {
+        ReflectionTestUtils.setField(service, "commissionBasis", CommissionBasis.DELIVERY_CHARGE_ONLY);
+        TripDetail paid = trip("930", "0", LocalDateTime.now(), true);
+        paid.setMeta("{\"commissionRate\":100,\"commissionBasis\":\"FULL_ORDER\",\"commissionBase\":930,\"tip\":0}");
+
+        assertEquals(0, service.recalculatePendingEarnings(1L, RIDER).trips());
+        assertEquals(new BigDecimal("930"), paid.getRiderEarning());
+    }
+
+    @Test
+    void withdrawal_upToTheAvailableBalance_isRequested_withoutTouchingTheWallet() {
+        trip("40", "0", LocalDateTime.now(), false);
+        DeliveryGuyDetail detail = deliveryGuyDetailRepository.findById(7L).orElseThrow();
+        detail.setPayoutMethod("UPI");
+        detail.setUpiId("ravi@okhdfcbank");
+        when(riderSettlementRepository.save(any(RiderSettlement.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        RiderSettlementResponse r = service.requestWithdrawal(RIDER, new BigDecimal("40"));
+
+        assertEquals(RiderSettlement.STATUS_REQUESTED, r.status());
+        verify(walletService, never()).debit(anyLong(), any(), anyString());
+        assertThrows(com.pureeats.domain.common.exception.BadRequestException.class,
+                () -> service.requestWithdrawal(RIDER, new BigDecimal("41")), "more than the wallet holds");
+    }
+
+    @Test
+    void withdrawal_needsPayoutDetails() {
+        trip("40", "0", LocalDateTime.now(), false);
+        assertThrows(com.pureeats.domain.common.exception.BadRequestException.class, () -> service.requestWithdrawal(RIDER, new BigDecimal("10")));
+    }
+
+    @Test
+    void payingAWithdrawal_debitsTheWallet_andMarksTheOldestTripsPaid() {
+        TripDetail older = trip("30", "0", LocalDateTime.now().minusDays(1), false);
+        TripDetail newer = trip("40", "0", LocalDateTime.now(), false);
+        RiderSettlement request = new RiderSettlement();
+        request.setId(9L);
+        request.setRiderUserId(RIDER);
+        request.setEarningsAmount(new BigDecimal("30.00"));
+        request.setStatus(RiderSettlement.STATUS_REQUESTED);
+        when(riderSettlementRepository.findById(9L)).thenReturn(Optional.of(request));
+        when(riderSettlementRepository.save(any(RiderSettlement.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        RiderSettlementResponse r = service.payWithdrawal(1L, 9L, "UPI", "UTR1");
+
+        assertEquals(RiderSettlement.STATUS_PAID, r.status());
+        verify(walletService).debit(eq(RIDER), eq(new BigDecimal("30.00")), contains("withdrawal"));
+        assertEquals(1, older.getIsSettlementDone());
+        assertEquals(0, newer.getIsSettlementDone(), "only what was paid is marked paid");
     }
 }

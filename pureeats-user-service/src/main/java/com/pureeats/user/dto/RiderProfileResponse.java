@@ -25,6 +25,21 @@ public record RiderProfileResponse(
         BigDecimal rating,
         boolean isNotifiable,
         boolean isOnline,
-        boolean isActive
+        boolean isActive,
+        /** PENDING, APPROVED or REJECTED - the app only unlocks orders once APPROVED. */
+        String approvalStatus,
+        String rejectionReason,
+        String licenseNumber,
+        String licensePhotoUrl,
+        String idProofType,
+        /** Masked except the last 4 characters. */
+        String idProofNumberMasked,
+        String vehicleType,
+        String payoutMethod,
+        String bankAccountHolder,
+        /** Masked except the last 4 digits. */
+        String bankAccountNumberMasked,
+        String bankIfsc,
+        String upiId
 ) {
 }

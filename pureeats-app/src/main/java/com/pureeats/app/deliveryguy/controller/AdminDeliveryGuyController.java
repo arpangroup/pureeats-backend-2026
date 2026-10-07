@@ -46,9 +46,30 @@ public class AdminDeliveryGuyController {
     @GetMapping("/api/v1/admin/delivery-guys")
     public ApiResponse<PageResponse<AdminDeliveryGuyResponse>> list(
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) String approvalStatus,
             @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
-        log.debug("Listing delivery partners, search={}, page={}", search, pageable);
-        return ApiResponse.success(deliveryGuyService.listPaged(search, pageable));
+        log.debug("Listing delivery partners, search={}, approvalStatus={}, page={}", search, approvalStatus, pageable);
+        return ApiResponse.success(deliveryGuyService.listPaged(search, approvalStatus, pageable));
+    }
+
+    @GetMapping("/api/v1/admin/delivery-guys/approvals/pending-count")
+    @io.swagger.v3.oas.annotations.Operation(summary = "How many partner applications are waiting for review")
+    public ApiResponse<Long> pendingApprovals() {
+        return ApiResponse.success(deliveryGuyService.pendingCount());
+    }
+
+    @PostMapping("/api/v1/admin/delivery-guys/{id}/approve")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Approve a delivery partner's application - they can go online and take orders")
+    public ApiResponse<AdminDeliveryGuyResponse> approve(@PathVariable Long id,
+                                                         @org.springframework.security.core.annotation.AuthenticationPrincipal com.pureeats.user.security.AuthenticatedUser principal) {
+        return ApiResponse.success("Delivery partner approved", deliveryGuyService.review(id, true, null, principal.userId()));
+    }
+
+    @PostMapping("/api/v1/admin/delivery-guys/{id}/reject")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Reject a delivery partner's application, with a reason shown to them")
+    public ApiResponse<AdminDeliveryGuyResponse> reject(@PathVariable Long id, @RequestBody java.util.Map<String, String> body,
+                                                        @org.springframework.security.core.annotation.AuthenticationPrincipal com.pureeats.user.security.AuthenticatedUser principal) {
+        return ApiResponse.success("Delivery partner rejected", deliveryGuyService.review(id, false, body.get("reason"), principal.userId()));
     }
 
     @GetMapping("/api/v1/admin/delivery-guys/{id}")

@@ -51,6 +51,11 @@ public class SettingSchemaService {
     public static final String DRIVER_SHOW_PAYOUT = "driver_show_payout";
     /** Delivery partners' default commission (%) - used for every partner without a rate of their own. */
     public static final String DEFAULT_RIDER_COMMISSION_RATE = "default_rider_commission_rate";
+    /** What the partner's commission % is applied to: delivery_charge (default) or percentage_of_order. */
+    public static final String DELIVERY_EARNING_FROM = "delivery_earning_from";
+    /** Shown when a blocked / deleted user opens any app or tries to sign in. */
+    public static final String ACCOUNT_BLOCKED_MESSAGE = "account_blocked_message";
+    public static final String ACCOUNT_DELETED_MESSAGE = "account_deleted_message";
     /** Profile fields a delivery partner may edit in the rider app (all view-only by default). Read by RiderService / ProfileContactChangeService too. */
     public static final String DRIVER_EDIT_NAME = "driver_edit_name";
     public static final String DRIVER_EDIT_VEHICLE_NUMBER = "driver_edit_vehicle_number";
@@ -127,6 +132,12 @@ public class SettingSchemaService {
                         field(PLATFORM_FEE_MAX_AMOUNT, "Maximum fee (₹)", "number", "0")
                                 .placeholder("e.g. 25")
                                 .info("Cap for a Percentage fee. Example: 2% capped at ₹25 → a ₹2,000 order pays ₹25, not ₹40. 0 = no cap. Ignored for Flat.")
+                )),
+                group("Account messages", "What a user sees when their account can't be used - in the customer, delivery partner and restaurant partner apps.", "ShieldAlert", List.of(
+                        field(ACCOUNT_BLOCKED_MESSAGE, "Blocked account message", "textarea", "User has been blocked. Please contact customer support.")
+                                .info("Shown when an admin blocks the account: the open app signs them out with this message, and signing in again shows it too."),
+                        field(ACCOUNT_DELETED_MESSAGE, "Deleted account message", "textarea", "This account has been deleted. Please contact customer support.")
+                                .info("Shown when the account was deleted (by an admin or by the user).")
                 )),
                 group("Platform", "Take the customer app offline for maintenance.", "Settings", List.of(
                         field("maintenance_mode", "Maintenance mode", "boolean", "false")
@@ -378,16 +389,17 @@ public class SettingSchemaService {
                 group("Earnings", "Wallet", List.of(
                         field("enable_delivery_earnings", "Enable delivery guy's earnings", "boolean", "true")
                                 .info("Shows an earnings summary inside the delivery partner app."),
-                        field(DEFAULT_RIDER_COMMISSION_RATE, "Default delivery partner commission (%)", "number", "10")
-                                .info("What a delivery partner earns per delivered order, as a percentage of the order total (plus the customer's tip, paid in full). "
+                        field(DEFAULT_RIDER_COMMISSION_RATE, "Default delivery partner commission (%)", "number", "100")
+                                .info("What a delivery partner earns per delivered order, as a percentage of what \"Delivery partner earns from\" below points at - the delivery charge by default (plus the customer's tip, paid in full). "
                                         + "Used for every partner who has no commission rate of their own - a partner's own rate (Delivery partners -> open the partner -> Commission rate) wins; set it to 0 to follow this default. "
-                                        + "Example: order total ₹500 at 10% -> ₹50 per delivery. Recorded on each order when it's delivered, so changing it doesn't alter past earnings."),
-                        field("delivery_earning_from", "Delivery guy's earning from", "dropdown", "delivery_charge")
+                                        + "Example: 100% of a ₹40 delivery charge -> ₹40 per delivery. Recorded on each order when it's delivered, so changing it doesn't alter past earnings."),
+                        field(DELIVERY_EARNING_FROM, "Delivery partner earns from", "dropdown", "delivery_charge")
                                 .options(
                                         option("Delivery charge", "delivery_charge"),
-                                        option("Fixed amount per order", "fixed_amount"),
-                                        option("Percentage of order total", "percentage_of_order"))
-                                .info("Determines how a delivery partner's per-order earning is calculated.")
+                                        option("Order total", "percentage_of_order"))
+                                .info("What the partner's commission % is applied to. Delivery charge (default): 100% of a ₹40 delivery charge = ₹40 per order. "
+                                        + "Order total: the % applies to the items' total - e.g. 10% of a ₹500 order = ₹50. "
+                                        + "The customer's tip is always paid on top in full. Recorded on each order when it's delivered, so a change applies to deliveries from then on.")
                 )),
                 group("Order list", "Bike", List.of(
                         field("show_full_address_order_list", "Show full address on order list", "boolean", "false")

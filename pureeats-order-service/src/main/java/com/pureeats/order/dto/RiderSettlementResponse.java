@@ -17,6 +17,14 @@ public record RiderSettlementResponse(
         String transactionReference,
         String note,
         Long settledBy,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        /** REQUESTED (withdrawal waiting for the admin), PAID or REJECTED. */
+        String status,
+        /** Set when the partner asked for it from the app (a withdrawal request). */
+        LocalDateTime requestedAt,
+        LocalDateTime paidAt,
+        /** For the admin queue: who and where to pay. */
+        String riderName,
+        String payoutTo
 ) {
 }

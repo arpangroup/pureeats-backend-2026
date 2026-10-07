@@ -48,12 +48,47 @@ public class AdminDeliveryGuyService {
     private final RiderService riderService;
     private final com.pureeats.user.service.RiderStatusLogService riderStatusLogService;
     private final com.pureeats.user.security.AccountAccessGuard accountAccessGuard;
+    private final com.pureeats.order.service.OrderNotificationService orderNotificationService;
 
     @Transactional(readOnly = true)
-    public PageResponse<AdminDeliveryGuyResponse> listPaged(String search, Pageable pageable) {
-        Page<DeliveryGuyDetail> page = deliveryGuyDetailRepository.findPage(search, pageable);
+    public PageResponse<AdminDeliveryGuyResponse> listPaged(String search, String approvalStatus, Pageable pageable) {
+        Page<DeliveryGuyDetail> page = approvalStatus != null && !approvalStatus.isBlank()
+                ? deliveryGuyDetailRepository.findPageByApproval(approvalStatus.trim().toUpperCase(), search, pageable)
+                : deliveryGuyDetailRepository.findPage(search, pageable);
         return PageResponse.of(page.getContent().stream().map(this::toResponse).toList(),
                 page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
+    }
+
+    /** Applications waiting for review - for the Approvals badge. */
+    @Transactional(readOnly = true)
+    public long pendingCount() {
+        return deliveryGuyDetailRepository.countByApprovalStatus(DeliveryGuyDetail.APPROVAL_PENDING);
+    }
+
+    /** Approve or reject a partner's application; they're notified either way. Rejection needs a reason the partner can act on. */
+    @Transactional
+    public AdminDeliveryGuyResponse review(Long id, boolean approve, String reason, Long adminUserId) {
+        DeliveryGuyDetail detail = findOrThrow(id);
+        if (!approve && (reason == null || reason.isBlank())) {
+            throw new BadRequestException("Give a reason so the partner knows what to fix.");
+        }
+        detail.setApprovalStatus(approve ? DeliveryGuyDetail.APPROVAL_APPROVED : DeliveryGuyDetail.APPROVAL_REJECTED);
+        detail.setRejectionReason(approve ? null : reason.trim());
+        detail.setApprovalUpdatedAt(LocalDateTime.now());
+        detail.setApprovalUpdatedBy(adminUserId);
+        if (!approve) detail.setIsOnline(false);
+        detail.setUpdatedAt(LocalDateTime.now());
+        deliveryGuyDetailRepository.save(detail);
+        findLinkedUser(id).ifPresent(user -> {
+            riderService.evictProfileCache(user.getId());
+            orderNotificationService.notify(com.pureeats.notification.enums.NotificationRecipientRole.DELIVERY_PARTNER, user.getId(),
+                    approve ? "You're approved!" : "Application not approved",
+                    approve ? "Welcome to PureEats - go online to start receiving orders."
+                            : "Reason: " + reason.trim() + ". Update your details in the app and resubmit.",
+                    java.util.Map.of("type", "PARTNER_APPROVAL", "status", detail.getApprovalStatus()));
+        });
+        log.info("Admin {} {} delivery partner {}", adminUserId, approve ? "approved" : "rejected", id);
+        return toResponse(detail);
     }
 
     @Transactional(readOnly = true)
@@ -229,7 +264,11 @@ public class AdminDeliveryGuyService {
                 Boolean.TRUE.equals(d.getIsActive()), Boolean.TRUE.equals(d.getIsOnline()), d.getLastLat(), d.getLastLng(),
                 d.getLastSeenAt(), d.getOfflineReason(), d.getStatusChangedAt(), d.getCreatedBy(), d.getUpdatedBy(), d.getCreatedAt(), d.getUpdatedAt(),
                 user != null ? user.getEmail() : null, user != null ? user.getPhone() : null,
-                user != null && User.STATUS_ACTIVE.equals(user.getIsActive()));
+                user != null && User.STATUS_ACTIVE.equals(user.getIsActive()),
+                d.getApprovalStatus() != null ? d.getApprovalStatus() : DeliveryGuyDetail.APPROVAL_APPROVED, d.getRejectionReason(),
+                d.getApprovalUpdatedAt(), d.getLicenseNumber(), riderService.licensePhotoUrl(d.getId()), d.getIdProofType(),
+                d.getIdProofNumber(), d.getVehicleType(), d.getPayoutMethod(), d.getBankAccountHolder(), d.getBankAccountNumber(),
+                d.getBankIfsc(), d.getUpiId(), user != null && user.isPhoneVerified());
     }
 
     private TripDetailResponse toTripResponse(TripDetail t) {

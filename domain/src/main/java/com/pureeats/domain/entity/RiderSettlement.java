@@ -66,4 +66,26 @@ public class RiderSettlement {
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
+
+    /**
+     * REQUESTED (a partner's withdrawal request, wallet not debited yet), PAID or REJECTED.
+     * Null = recorded before withdrawal requests existed - those were always paid.
+     */
+    @Column(name = "status", length = 16)
+    private String status;
+
+    /** Set when the partner raised it as a withdrawal request from the app. */
+    @Column(name = "requested_at")
+    private LocalDateTime requestedAt;
+
+    @Column(name = "paid_at")
+    private LocalDateTime paidAt;
+
+    public static final String STATUS_REQUESTED = "REQUESTED";
+    public static final String STATUS_PAID = "PAID";
+    public static final String STATUS_REJECTED = "REJECTED";
+
+    public boolean isPaid() {
+        return status == null || STATUS_PAID.equals(status);
+    }
 }

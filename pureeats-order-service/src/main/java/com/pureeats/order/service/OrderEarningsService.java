@@ -32,8 +32,15 @@ public class OrderEarningsService {
     private final OrderStatusService orderStatusService;
 
     /** Same setting DeliveryOrderService credits riders with. */
-    @Value("${pureeats.commission.basis:FULL_ORDER}")
+    /** Fallback only (tests / settings unavailable) - the live basis comes from Settings, see {@link #basis()}. */
+    @Value("${pureeats.commission.basis:DELIVERY_CHARGE_ONLY}")
     private CommissionBasis commissionBasis;
+
+    /** Settings -> Delivery Application -> Earnings -> Delivery partner earns from. */
+    private CommissionBasis basis() {
+        CommissionBasis fromSettings = orderPricingService.riderCommissionBasis();
+        return fromSettings != null ? fromSettings : commissionBasis;
+    }
 
     @Transactional(readOnly = true)
     public OrderEarningsSplitResponse split(Long orderId) {
@@ -84,7 +91,7 @@ public class OrderEarningsService {
     private OrderEarningsSplitResponse.RiderShare riderShare(Order order, TripDetail trip, BigDecimal tip, BigDecimal deliveryCharge) {
         AcceptDelivery assignment = acceptDeliveryRepository.findByOrderId(order.getId().intValue()).orElse(null);
         if (assignment == null) {
-            return new OrderEarningsSplitResponse.RiderShare(false, null, null, null, false, commissionBasis.name(), null,
+            return new OrderEarningsSplitResponse.RiderShare(false, null, null, null, false, basis().name(), null,
                     BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, false, false);
         }
         Long riderUserId = assignment.getUserId().longValue();
@@ -93,7 +100,7 @@ public class OrderEarningsService {
                 ? deliveryGuyDetailRepository.findById(user.getDeliveryGuyDetailId().longValue()).orElse(null) : null;
         BigDecimal rate = orderPricingService.riderCommissionRate(detail);
         boolean ownRate = orderPricingService.riderHasOwnRate(detail);
-        BigDecimal base = commissionBasis == CommissionBasis.DELIVERY_CHARGE_ONLY ? deliveryCharge : nz(order.getTotal());
+        BigDecimal base = basis() == CommissionBasis.DELIVERY_CHARGE_ONLY ? deliveryCharge : nz(order.getTotal());
         BigDecimal commission = base.multiply(rate).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
         BigDecimal paidTip = tip;
         BigDecimal amount = commission.add(paidTip);
@@ -106,7 +113,7 @@ public class OrderEarningsService {
         // Delivered, but nothing was recorded at delivery (older admin status override) - the partner was never credited.
         boolean notRecorded = trip == null && orderStatusService.codeFor(order.getOrderstatusId()) == com.pureeats.domain.enums.OrderStatusCode.DELIVERED;
         String name = detail != null && detail.getName() != null ? detail.getName() : user != null ? user.getName() : "Delivery partner";
-        return new OrderEarningsSplitResponse.RiderShare(true, riderUserId, name, rate, ownRate, commissionBasis.name(), base, commission, paidTip,
+        return new OrderEarningsSplitResponse.RiderShare(true, riderUserId, name, rate, ownRate, basis().name(), base, commission, paidTip,
                 amount.setScale(2, RoundingMode.HALF_UP), trip != null, notRecorded);
     }
 

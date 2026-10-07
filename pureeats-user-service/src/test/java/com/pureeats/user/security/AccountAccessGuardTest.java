@@ -24,6 +24,7 @@ class AccountAccessGuardTest {
     @Mock private UserRepository userRepository;
     @Mock private DeliveryGuyDetailRepository deliveryGuyDetailRepository;
     @Mock private SessionService sessionService;
+    @Mock private AccountMessages accountMessages;
     @InjectMocks private AccountAccessGuard guard;
 
     private User user;
@@ -35,6 +36,8 @@ class AccountAccessGuardTest {
         user.setIsActive(User.STATUS_ACTIVE);
         user.setAccountStatus(AccountStatus.ACTIVE);
         lenient().when(userRepository.findById(7L)).thenReturn(Optional.of(user));
+        lenient().when(accountMessages.blocked()).thenReturn(AccountMessages.DEFAULT_BLOCKED);
+        lenient().when(accountMessages.deleted()).thenReturn(AccountMessages.DEFAULT_DELETED);
     }
 
     @Test
@@ -43,9 +46,10 @@ class AccountAccessGuardTest {
     }
 
     @Test
-    void userBlockedFromTheAdminPanel_isDenied() {
+    void userBlockedFromTheAdminPanel_isDenied_withTheConfiguredMessage() {
         user.setIsActive(User.STATUS_INACTIVE);
-        assertTrue(guard.denialFor(7L).isPresent());
+        when(accountMessages.blocked()).thenReturn("Blocked - call 1800-PUREEATS");
+        assertEquals("Blocked - call 1800-PUREEATS", guard.denialFor(7L).orElseThrow());
     }
 
     @Test
@@ -84,7 +88,7 @@ class AccountAccessGuardTest {
     @Test
     void deletedAccount_isDenied_withADeletedMessage() {
         user.setAccountStatus(AccountStatus.DELETED);
-        assertEquals("This account has been deleted.", guard.denialFor(7L).orElseThrow());
+        assertEquals(AccountMessages.DEFAULT_DELETED, guard.denialFor(7L).orElseThrow());
     }
 
     @Test
