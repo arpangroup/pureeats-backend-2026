@@ -53,6 +53,10 @@ public class DeliveryOrderService {
     private final OrderPricingService orderPricingService;
     private final ObjectMapper objectMapper;
     private final OrderStatusLogRepository orderStatusLogRepository;
+    private final com.pureeats.user.service.RiderStatusLogService riderStatusLogService;
+    private final com.pureeats.media.service.MediaAssetService mediaAssetService;
+    private final com.pureeats.user.repository.LoginHistoryRepository loginHistoryRepository;
+    private final com.pureeats.media.storage.MediaUrlResolver mediaUrlResolver;
 
     /** Statuses after which an assignment is no longer "active" even if its AcceptDelivery row was never marked complete (e.g. the customer cancelled after a rider was assigned). */
     private static final java.util.Set<OrderStatusCode> TERMINAL_STATUSES = java.util.EnumSet.of(
@@ -127,7 +131,9 @@ public class DeliveryOrderService {
                 order.getAddress(),
                 parseCoordinate(customerLat), parseCoordinate(customerLng),
                 distanceKm, payoutEstimate, itemsCount, order.getCreatedAt(),
-                tipOf(order), pickupDistanceKm, distanceKm);
+                tipOf(order), pickupDistanceKm, distanceKm,
+                java.util.Optional.ofNullable(orderStatusService.codeFor(order.getOrderstatusId())).map(Enum::name).orElse("UNKNOWN"),
+                order.getPaymentMode(), pickupDueAt(order));
     }
 
     private static BigDecimal tipOf(Order order) {
@@ -167,12 +173,8 @@ public class DeliveryOrderService {
         accept.setIsComplete(false);
         acceptDeliveryRepository.save(accept);
 
-        OrderStatusCode from = orderStatusService.codeFor(order.getOrderstatusId());
-        order.setOrderstatusId(orderStatusService.idFor(OrderStatusCode.RIDER_ASSIGNED));
-        order.setUpdatedAt(LocalDateTime.now());
-        orderRepository.save(order);
-        orderStatusLogService.record(order.getId(), from, OrderStatusCode.RIDER_ASSIGNED, "DELIVERY", riderUserId, null);
-        log.info("Order {} transitioned {} -> RIDER_ASSIGNED (rider {} self-accepted)", orderId, from, riderUserId);
+        recordAssignment(order, "DELIVERY", riderUserId, null);
+        log.info("Rider {} self-accepted order {}", riderUserId, orderId);
 
         orderNotificationService.notify(NotificationRecipientRole.CUSTOMER, order.getUserId().longValue(), "Rider assigned",
                 "A delivery partner has been assigned to order #" + order.getUniqueOrderId(),
@@ -198,12 +200,8 @@ public class DeliveryOrderService {
         accept.setIsComplete(false);
         acceptDeliveryRepository.save(accept);
 
-        OrderStatusCode from = orderStatusService.codeFor(order.getOrderstatusId());
-        order.setOrderstatusId(orderStatusService.idFor(OrderStatusCode.RIDER_ASSIGNED));
-        order.setUpdatedAt(LocalDateTime.now());
-        orderRepository.save(order);
-        orderStatusLogService.record(order.getId(), from, OrderStatusCode.RIDER_ASSIGNED, "ADMIN", adminUserId, "Driver assigned by admin");
-        log.info("Order {} transitioned {} -> RIDER_ASSIGNED (rider {} assigned by admin {})", orderId, from, riderUserId, adminUserId);
+        recordAssignment(order, "ADMIN", adminUserId, "Driver assigned by admin");
+        log.info("Admin {} assigned rider {} to order {}", adminUserId, riderUserId, orderId);
 
         orderNotificationService.notify(NotificationRecipientRole.CUSTOMER, order.getUserId().longValue(), "Rider assigned",
                 "A delivery partner has been assigned to order #" + order.getUniqueOrderId(),
@@ -218,12 +216,142 @@ public class DeliveryOrderService {
         log.info("Rider {} marking order {} as picked up", riderUserId, orderId);
         Order order = ownedByRider(riderUserId, orderId);
         OrderStatusCode from = orderStatusService.codeFor(order.getOrderstatusId());
+        // A partner can't skip ahead: the store (or an admin) must have marked the food ready first.
+        if (!FOOD_READY.contains(from)) {
+            log.warn("Rejected pickup of order {} by rider {}: status is {}, not ready yet", orderId, riderUserId, from);
+            throw new BadRequestException("The restaurant hasn't marked this order ready yet - you can mark it picked up once it's ready.");
+        }
+        if (mediaAssetService.countForOwner(PICKUP_PHOTO_OWNER, order.getId()) == 0) {
+            throw new BadRequestException("Take at least one photo of the packed order before marking it picked up.");
+        }
         order.setOrderstatusId(orderStatusService.idFor(OrderStatusCode.PICKED_UP));
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
         orderStatusLogService.record(order.getId(), from, OrderStatusCode.PICKED_UP, "DELIVERY", riderUserId, null);
         log.info("Order {} transitioned {} -> PICKED_UP by rider {}", orderId, from, riderUserId);
         return orderService.toResponse(order);
+    }
+
+    /** Statuses in which the food is ready to be handed over (a rider assigned once it's ready moves it to RIDER_ASSIGNED). */
+    private static final java.util.Set<OrderStatusCode> FOOD_READY = java.util.EnumSet.of(
+            OrderStatusCode.READY_FOR_PICKUP, OrderStatusCode.RIDER_ASSIGNED);
+    /** Statuses after pickup in which the order can be completed. */
+    private static final java.util.Set<OrderStatusCode> OUT_FOR_DELIVERY = java.util.EnumSet.of(
+            OrderStatusCode.PICKED_UP, OrderStatusCode.ON_THE_WAY, OrderStatusCode.ARRIVED);
+
+    public static final String PICKUP_PHOTO_OWNER = "ORDER_PICKUP";
+    public static final int MAX_PICKUP_PHOTOS = 3;
+    private static final String ASSIGNED_WHILE_PREPARING = "Delivery partner assigned - waiting for the food to be ready";
+
+    /**
+     * Records a rider assignment. If the food is already READY_FOR_PICKUP the order moves to RIDER_ASSIGNED as
+     * before; otherwise it keeps its kitchen status (Accepted / Preparing) so the restaurant can still mark it
+     * ready and the partner sees the real preparation state - the AcceptDelivery row is what assigns the rider.
+     */
+    private void recordAssignment(Order order, String actorType, Long actorUserId, String note) {
+        OrderStatusCode from = orderStatusService.codeFor(order.getOrderstatusId());
+        order.setUpdatedAt(LocalDateTime.now());
+        if (from == OrderStatusCode.READY_FOR_PICKUP) {
+            order.setOrderstatusId(orderStatusService.idFor(OrderStatusCode.RIDER_ASSIGNED));
+            orderRepository.save(order);
+            orderStatusLogService.record(order.getId(), from, OrderStatusCode.RIDER_ASSIGNED, actorType, actorUserId, note);
+        } else {
+            orderRepository.save(order);
+            orderStatusLogService.record(order.getId(), from, from, actorType, actorUserId,
+                    note != null ? note + " - waiting for the food to be ready" : ASSIGNED_WHILE_PREPARING);
+        }
+    }
+
+    /** The partner has reached the customer's location - the customer is told they're at the door. */
+    @Transactional
+    public OrderResponse arrived(Long riderUserId, Long orderId) {
+        Order order = ownedByRider(riderUserId, orderId);
+        OrderStatusCode from = orderStatusService.codeFor(order.getOrderstatusId());
+        if (from != OrderStatusCode.PICKED_UP && from != OrderStatusCode.ON_THE_WAY) {
+            throw new BadRequestException("You can only mark arrival after picking up the order.");
+        }
+        order.setOrderstatusId(orderStatusService.idFor(OrderStatusCode.ARRIVED));
+        order.setUpdatedAt(LocalDateTime.now());
+        orderRepository.save(order);
+        orderStatusLogService.record(order.getId(), from, OrderStatusCode.ARRIVED, "DELIVERY", riderUserId, "Reached the customer's location");
+        orderNotificationService.notify(NotificationRecipientRole.CUSTOMER, order.getUserId().longValue(), "Your delivery partner has arrived",
+                "Your order #" + order.getUniqueOrderId() + " is at your location - please keep your delivery PIN ready.",
+                Map.of("orderId", order.getId(), "status", OrderStatusCode.ARRIVED.name()));
+        log.info("Order {} transitioned {} -> ARRIVED by rider {}", orderId, from, riderUserId);
+        return orderService.toResponse(order);
+    }
+
+    /** Uploads one photo of the packed order (max {@value #MAX_PICKUP_PHOTOS}), before pickup. Stored as media assets owned by the order - no extra table. */
+    @Transactional
+    public com.pureeats.media.dto.MediaUploadResponse uploadPickupPhoto(Long riderUserId, Long orderId, org.springframework.web.multipart.MultipartFile file) {
+        Order order = ownedByRider(riderUserId, orderId);
+        OrderStatusCode status = orderStatusService.codeFor(order.getOrderstatusId());
+        if (OUT_FOR_DELIVERY.contains(status) || TERMINAL_STATUSES.contains(status)) {
+            throw new BadRequestException("Pickup photos can only be added before the order is picked up.");
+        }
+        if (mediaAssetService.countForOwner(PICKUP_PHOTO_OWNER, order.getId()) >= MAX_PICKUP_PHOTOS) {
+            throw new BadRequestException("You can add up to " + MAX_PICKUP_PHOTOS + " photos - remove one to retake it.");
+        }
+        return mediaAssetService.upload(file, PICKUP_PHOTO_OWNER, order.getId(), riderUserId);
+    }
+
+    @Transactional
+    public void deletePickupPhoto(Long riderUserId, Long orderId, Long mediaId) {
+        Order order = ownedByRider(riderUserId, orderId);
+        if (OUT_FOR_DELIVERY.contains(orderStatusService.codeFor(order.getOrderstatusId()))) {
+            throw new BadRequestException("Photos can't be removed after pickup.");
+        }
+        mediaAssetService.delete(PICKUP_PHOTO_OWNER, order.getId(), mediaId);
+    }
+
+    /** Pickup photos for an order (rider: own orders only; admin: any). */
+    @Transactional(readOnly = true)
+    public List<PickupPhotoResponse> pickupPhotos(Long orderId) {
+        return mediaAssetService.listForOwner(PICKUP_PHOTO_OWNER, orderId).stream()
+                .map(a -> new PickupPhotoResponse(a.getId(), mediaUrlResolver.resolve(a.getStorageKey()), a.getCreatedAt()))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<PickupPhotoResponse> pickupPhotosForRider(Long riderUserId, Long orderId) {
+        ownedByRider(riderUserId, orderId);
+        return pickupPhotos(orderId);
+    }
+
+    /** Online/offline changes and sign-ins for the rider's Activity screen. */
+    @Transactional(readOnly = true)
+    public RiderActivityResponse activity(Long riderUserId) {
+        List<RiderActivityResponse.StatusChange> status = riderStatusLogService.recent(riderUserId, 50).stream()
+                .map(l -> new RiderActivityResponse.StatusChange(Boolean.TRUE.equals(l.getIsOnline()), l.getReason(),
+                        statusMessage(Boolean.TRUE.equals(l.getIsOnline()), l.getReason()), l.getCreatedAt()))
+                .toList();
+        List<RiderActivityResponse.Login> logins = loginHistoryRepository
+                .findByUserId(riderUserId, org.springframework.data.domain.PageRequest.of(0, 30,
+                        org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "occurredAt")))
+                .stream()
+                .map(h -> new RiderActivityResponse.Login(h.getOccurredAt(), h.getLoginMethod() != null ? h.getLoginMethod().name() : null,
+                        h.getStatus(), h.getUserAgent(), java.util.stream.Stream.of(h.getCity(), h.getRegion(), h.getCountry())
+                                .filter(v -> v != null && !v.isBlank()).collect(java.util.stream.Collectors.joining(", "))))
+                .toList();
+        return new RiderActivityResponse(status, logins);
+    }
+
+    private static String statusMessage(boolean online, String reason) {
+        if (online) return "You went online";
+        if (DeliveryGuyDetail.OFFLINE_REASON_INACTIVITY.equals(reason)) return "Set offline automatically - your app stopped sharing your location";
+        if (DeliveryGuyDetail.OFFLINE_REASON_ADMIN.equals(reason)) return "Set offline by the PureEats team";
+        return "You went offline";
+    }
+
+    /** When the food should be ready for collection: restaurant acceptance + the order's prep time (default 20 min). */
+    private LocalDateTime pickupDueAt(Order order) {
+        LocalDateTime accepted = orderStatusLogRepository.findByOrderIdOrderByCreatedAtAsc(order.getId()).stream()
+                .filter(e -> OrderStatusCode.RESTAURANT_ACCEPTED.name().equals(e.getToStatus()))
+                .map(com.pureeats.order.entity.OrderStatusLog::getCreatedAt)
+                .findFirst()
+                .orElse(order.getCreatedAt());
+        int prep = order.getPrepareTime() != null && order.getPrepareTime() > 0 ? order.getPrepareTime() : 20;
+        return accepted != null ? accepted.plusMinutes(prep) : null;
     }
 
     @Transactional
@@ -250,6 +378,11 @@ public class DeliveryOrderService {
      * any) is who actually gets credited/logged in the trip, not necessarily the caller.
      */
     private OrderResponse completeDelivery(Order order, String deliveryPin, String actorType, Long actorUserId, String note) {
+        OrderStatusCode current = orderStatusService.codeFor(order.getOrderstatusId());
+        if (!OUT_FOR_DELIVERY.contains(current)) {
+            log.warn("Rejected delivery completion for order {} by {} {}: status is {}", order.getId(), actorType, actorUserId, current);
+            throw new BadRequestException("This order hasn't been picked up yet, so it can't be marked delivered.");
+        }
         if (!order.getDeliveryPin().equalsIgnoreCase(deliveryPin)) {
             log.warn("Rejected delivery completion for order {} by {} {}: incorrect delivery PIN", order.getId(), actorType, actorUserId);
             throw new BadRequestException("Incorrect delivery PIN");
@@ -378,7 +511,8 @@ public class DeliveryOrderService {
     public void setOnlineStatus(Long riderUserId, boolean isOnline) {
         DeliveryGuyDetail rider = riderProfile(riderUserId);
         LocalDateTime now = LocalDateTime.now();
-        if (!Boolean.valueOf(isOnline).equals(rider.getIsOnline())) {
+        boolean changed = !Boolean.valueOf(isOnline).equals(rider.getIsOnline());
+        if (changed) {
             rider.setStatusChangedAt(now);
         }
         rider.setIsOnline(isOnline);
@@ -387,6 +521,7 @@ public class DeliveryOrderService {
         // swept straight back offline by RiderInactivityScheduler on the strength of an old lastSeenAt.
         if (isOnline) rider.setLastSeenAt(now);
         deliveryGuyDetailRepository.save(rider);
+        if (changed) riderStatusLogService.record(riderUserId, isOnline, isOnline ? null : DeliveryGuyDetail.OFFLINE_REASON_SELF);
         log.info("Rider {} is now {}", riderUserId, isOnline ? "ONLINE" : "OFFLINE");
     }
 
@@ -415,7 +550,8 @@ public class DeliveryOrderService {
 
     /** Statuses during which the rider is physically on the order - their pings become the order's tracking path. */
     private static final java.util.Set<OrderStatusCode> ON_THE_ROAD = java.util.EnumSet.of(
-            OrderStatusCode.RIDER_ASSIGNED, OrderStatusCode.PICKED_UP, OrderStatusCode.ON_THE_WAY);
+            OrderStatusCode.RESTAURANT_ACCEPTED, OrderStatusCode.PREPARING, OrderStatusCode.READY_FOR_PICKUP,
+            OrderStatusCode.RIDER_ASSIGNED, OrderStatusCode.PICKED_UP, OrderStatusCode.ON_THE_WAY, OrderStatusCode.ARRIVED);
 
     /** Below this movement (~15 m) a new ping just refreshes the last point's timestamp instead of adding a point. */
     private static final double MIN_BREADCRUMB_DEGREES = 0.00015;
@@ -607,7 +743,8 @@ public class DeliveryOrderService {
         LocalDateTime deliveredAt = null;
         String assignedBy = "DELIVERY";
         for (var entry : orderStatusLogRepository.findByOrderIdOrderByCreatedAtAsc(order.getId())) {
-            if (OrderStatusCode.RIDER_ASSIGNED.name().equals(entry.getToStatus())) {
+            if (OrderStatusCode.RIDER_ASSIGNED.name().equals(entry.getToStatus())
+                    || (entry.getNote() != null && entry.getNote().contains("waiting for the food to be ready"))) {
                 acceptedAt = entry.getCreatedAt();
                 assignedBy = entry.getActorType() != null ? entry.getActorType() : assignedBy;
             } else if (OrderStatusCode.PICKED_UP.name().equals(entry.getToStatus())) {
@@ -631,6 +768,8 @@ public class DeliveryOrderService {
                 parseCoordinate(customerLat), parseCoordinate(customerLng),
                 customer != null ? customer.getPhone() : null,
                 items, order.getPayable(), order.getPaymentMode(), payoutEstimate, distanceKm, tipOf(order),
+                status != null && (FOOD_READY.contains(status) || OUT_FOR_DELIVERY.contains(status)),
+                pickupDueAt(order), (int) mediaAssetService.countForOwner(PICKUP_PHOTO_OWNER, order.getId()),
                 order.getCreatedAt(), acceptedAt, pickedUpAt, deliveredAt);
     }
 

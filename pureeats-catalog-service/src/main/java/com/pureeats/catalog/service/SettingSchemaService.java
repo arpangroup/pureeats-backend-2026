@@ -47,6 +47,16 @@ public class SettingSchemaService {
     public static final String MAX_ACTIVE_ORDERS_MESSAGE = "max_active_orders_message";
     public static final String DRIVER_AUTO_OFFLINE_ENABLED = "driver_auto_offline_enabled";
     public static final String DRIVER_INACTIVITY_TIMEOUT_MINUTES = "driver_inactivity_timeout_minutes";
+    /** Show per-order payout (commission + tip) to delivery partners in the rider app. */
+    public static final String DRIVER_SHOW_PAYOUT = "driver_show_payout";
+    /** Profile fields a delivery partner may edit in the rider app (all view-only by default). Read by RiderService / ProfileContactChangeService too. */
+    public static final String DRIVER_EDIT_NAME = "driver_edit_name";
+    public static final String DRIVER_EDIT_VEHICLE_NUMBER = "driver_edit_vehicle_number";
+    public static final String DRIVER_EDIT_AGE = "driver_edit_age";
+    public static final String DRIVER_EDIT_GENDER = "driver_edit_gender";
+    public static final String DRIVER_EDIT_ABOUT = "driver_edit_about";
+    public static final String DRIVER_EDIT_PHONE = "driver_edit_phone";
+    public static final String DRIVER_EDIT_EMAIL = "driver_edit_email";
 
     public static final String DEFAULT_MAX_ACTIVE_ORDERS_MESSAGE =
             "You already have {count} orders in progress - please wait for one to be delivered before placing another.";
@@ -380,6 +390,20 @@ public class SettingSchemaService {
                 group("Location tracking", "MapPin", List.of(
                         field("driver_location_tracking_enabled", "Enable driver location tracking", "boolean", "true")
                                 .info("When off, every delivery partner's app stops sending GPS pings and shows a \"Maintenance mode\" banner instead of the online/offline toggle - use this to pause location tracking platform-wide (e.g. during a backend issue) without disabling the app itself.")
+                )),
+                group("Order screens", "Bike", List.of(
+                        field(DRIVER_SHOW_PAYOUT, "Show payout to delivery partners", "boolean", "false")
+                                .info("When on, the rider app shows what the partner will earn (commission + tip) on the new-order popup, the available orders list and the active delivery. "
+                                        + "Off (default): the amount is hidden from those screens - earnings are still credited and visible in Wallet & Earnings.")
+                )),
+                group("Profile editing", "Which profile fields a delivery partner can change in the rider app. Everything is view-only by default; switch a field on to let partners edit it. The server enforces this too.", "UserCheck", List.of(
+                        field(DRIVER_EDIT_NAME, "Name", "boolean", "false").info("Off: the name is shown but can only be changed from the admin panel."),
+                        field(DRIVER_EDIT_VEHICLE_NUMBER, "Vehicle number", "boolean", "false").info("Off: partners can't change the vehicle on record - e.g. to stop swapping to an unverified vehicle."),
+                        field(DRIVER_EDIT_AGE, "Age", "boolean", "false"),
+                        field(DRIVER_EDIT_GENDER, "Gender", "boolean", "false"),
+                        field(DRIVER_EDIT_ABOUT, "About you", "boolean", "false").info("The short description customers can see."),
+                        field(DRIVER_EDIT_PHONE, "Mobile number", "boolean", "false").info("On: partners can change their number through an OTP check on the new number. Off: shown read-only."),
+                        field(DRIVER_EDIT_EMAIL, "Email", "boolean", "false").info("On: partners can change their email through an OTP check. Off: shown read-only.")
                 )),
                 group("Inactivity auto-offline", "Bike", List.of(
                         field(DRIVER_AUTO_OFFLINE_ENABLED, "Auto-offline inactive drivers", "boolean", "true")

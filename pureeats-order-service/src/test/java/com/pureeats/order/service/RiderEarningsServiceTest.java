@@ -28,6 +28,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import com.pureeats.domain.entity.Order;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -49,17 +50,29 @@ class RiderEarningsServiceTest {
     @Mock private DeliveryCollectionRepository deliveryCollectionRepository;
     @Mock private DeliveryCollectionLogRepository deliveryCollectionLogRepository;
     @Mock private WalletService walletService;
+    @Mock private OrderStatusService orderStatusService;
 
     private RiderEarningsService service;
     private final List<TripDetail> trips = new ArrayList<>();
+    /** Order ids whose order is no longer DELIVERED (e.g. returned). */
+    private final java.util.Set<Integer> notDelivered = new java.util.HashSet<>();
 
     @BeforeEach
     void setUp() {
         service = new RiderEarningsService(tripDetailRepository, riderSettlementRepository, orderRepository, restaurantRepository,
-                userRepository, deliveryGuyDetailRepository, deliveryCollectionRepository, deliveryCollectionLogRepository, walletService);
+                userRepository, deliveryGuyDetailRepository, deliveryCollectionRepository, deliveryCollectionLogRepository, walletService, orderStatusService);
         ReflectionTestUtils.setField(service, "commissionBasis", CommissionBasis.FULL_ORDER);
         lenient().when(tripDetailRepository.findByRiderId((int) RIDER)).thenReturn(trips);
         lenient().when(riderSettlementRepository.findByRiderUserIdOrderByCreatedAtDesc(RIDER)).thenReturn(List.of());
+        lenient().when(orderStatusService.idFor(com.pureeats.domain.enums.OrderStatusCode.DELIVERED)).thenReturn(9);
+        // Each trip's order: COD when cash was collected, DELIVERED unless listed in notDelivered.
+        lenient().when(orderRepository.findAllById(any())).thenAnswer(inv -> trips.stream().map(t -> {
+            Order o = new Order();
+            o.setId(t.getOrderId().longValue());
+            o.setPaymentMode(t.getCashCollectedFromCustomer().signum() > 0 ? "COD" : "RAZORPAY");
+            o.setOrderstatusId(notDelivered.contains(t.getOrderId()) ? 11 : 9);
+            return o;
+        }).toList());
         User user = new User();
         user.setId(RIDER);
         user.setDeliveryGuyDetailId(7);
@@ -99,6 +112,17 @@ class RiderEarningsServiceTest {
         assertEquals(new BigDecimal("-180.00"), s.netPending());
         assertEquals(RiderSettlement.DIRECTION_COLLECTED_FROM_RIDER, s.netDirection());
         assertEquals(2, s.unsettledTrips());
+    }
+
+    @Test
+    void summary_cashInHandCountsOnlyDeliveredCodOrders() {
+        trip("30", "250", LocalDateTime.now(), false);
+        TripDetail returned = trip("20", "400", LocalDateTime.now(), false);
+        notDelivered.add(returned.getOrderId());
+
+        RiderEarningsSummaryResponse s = service.summary(RIDER);
+
+        assertEquals(new BigDecimal("250.00"), s.cashInHand(), "the returned COD order's cash isn't in hand");
     }
 
     @Test

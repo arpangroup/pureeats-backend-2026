@@ -72,6 +72,41 @@ public class DeliveryOrderController {
         return ApiResponse.success("Order delivered", deliveryOrderService.deliver(principal.userId(), orderId, request.deliveryPin()));
     }
 
+    @PostMapping("/orders/{orderId}/arrived")
+    @Operation(summary = "Tell the customer the delivery partner has reached their location")
+    public ApiResponse<OrderResponse> arrived(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long orderId) {
+        log.info("Rider {} arrived at the customer for order {}", principal.userId(), orderId);
+        return ApiResponse.success("Customer notified", deliveryOrderService.arrived(principal.userId(), orderId));
+    }
+
+    @PostMapping(value = "/orders/{orderId}/pickup-photos", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Upload a photo of the packed order before pickup (max 3)")
+    public ApiResponse<com.pureeats.media.dto.MediaUploadResponse> uploadPickupPhoto(@AuthenticationPrincipal AuthenticatedUser principal,
+                                                                                    @PathVariable Long orderId,
+                                                                                    @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        log.info("Rider {} uploading a pickup photo for order {}", principal.userId(), orderId);
+        return ApiResponse.success("Photo saved", deliveryOrderService.uploadPickupPhoto(principal.userId(), orderId, file));
+    }
+
+    @GetMapping("/orders/{orderId}/pickup-photos")
+    @Operation(summary = "Pickup photos taken for one of the rider's orders")
+    public ApiResponse<List<PickupPhotoResponse>> pickupPhotos(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long orderId) {
+        return ApiResponse.success(deliveryOrderService.pickupPhotosForRider(principal.userId(), orderId));
+    }
+
+    @DeleteMapping("/orders/{orderId}/pickup-photos/{mediaId}")
+    @Operation(summary = "Remove a pickup photo (to retake it) - only before pickup")
+    public ApiResponse<Void> deletePickupPhoto(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long orderId, @PathVariable Long mediaId) {
+        deliveryOrderService.deletePickupPhoto(principal.userId(), orderId, mediaId);
+        return ApiResponse.success("Photo removed", null);
+    }
+
+    @GetMapping("/activity")
+    @Operation(summary = "The rider's own online/offline history (incl. auto-offline) and recent sign-ins")
+    public ApiResponse<RiderActivityResponse> activity(@AuthenticationPrincipal AuthenticatedUser principal) {
+        return ApiResponse.success(deliveryOrderService.activity(principal.userId()));
+    }
+
     @PostMapping("/gps")
     @Operation(summary = "Report the rider's current GPS location for an order")
     public ApiResponse<Void> pingGps(@Valid @RequestBody GpsPingRequest request) {

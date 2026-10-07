@@ -55,9 +55,21 @@ public class ProfileContactChangeService {
     private final RateLimiter rateLimiter;
     private final com.pureeats.media.storage.MediaUrlResolver mediaUrlResolver;
     private final RiderService riderService;
+    private final RiderProfileEditPolicy riderProfileEditPolicy;
+
+    /** Delivery partners can only change their mobile/email when Settings -> Delivery Application -> Profile editing allows it; customers are unaffected. */
+    private void assertRiderMayChange(Long userId, String policyKey, String label) {
+        userRepository.findById(userId)
+                .filter(u -> u.getDeliveryGuyDetailId() != null)
+                .filter(u -> !riderProfileEditPolicy.isEditable(policyKey))
+                .ifPresent(u -> {
+                    throw new com.pureeats.domain.common.exception.BadRequestException(label + " can't be changed from the app - please contact support to update it.");
+                });
+    }
 
     @Transactional
     public LoginChallengeResponse requestPhoneChange(Long userId, String newPhone, RequestMetadata metadata) {
+        assertRiderMayChange(userId, RiderProfileEditPolicy.PHONE, "Mobile number");
         if (userRepository.existsByPhone(newPhone)) {
             throw new ConflictException("PHONE_ALREADY_IN_USE", "This phone number is already linked to another account.");
         }
@@ -66,6 +78,7 @@ public class ProfileContactChangeService {
 
     @Transactional
     public LoginChallengeResponse requestEmailChange(Long userId, String newEmail, RequestMetadata metadata) {
+        assertRiderMayChange(userId, RiderProfileEditPolicy.EMAIL, "Email");
         if (userRepository.existsByEmail(newEmail)) {
             throw new ConflictException("EMAIL_ALREADY_IN_USE", "This email is already linked to another account.");
         }

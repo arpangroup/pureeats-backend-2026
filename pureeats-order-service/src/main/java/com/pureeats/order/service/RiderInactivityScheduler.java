@@ -34,6 +34,8 @@ public class RiderInactivityScheduler {
     private final UserRepository userRepository;
     private final DeliveryOrderService deliveryOrderService;
     private final SettingValueService settingValueService;
+    private final com.pureeats.user.service.RiderStatusLogService riderStatusLogService;
+    private final OrderNotificationService orderNotificationService;
 
     @Scheduled(fixedDelayString = "${pureeats.delivery.inactivity-check-interval-ms:60000}",
             initialDelayString = "${pureeats.delivery.inactivity-check-interval-ms:60000}")
@@ -63,6 +65,14 @@ public class RiderInactivityScheduler {
             rider.setStatusChangedAt(now);
             deliveryGuyDetailRepository.save(rider);
             forced++;
+            // History entry + a message the partner sees in the app (Activity / notifications) explaining why.
+            Long riderUserId = userRepository.findByDeliveryGuyDetailId(rider.getId().intValue()).map(User::getId).orElse(null);
+            riderStatusLogService.record(riderUserId, false, DeliveryGuyDetail.OFFLINE_REASON_INACTIVITY);
+            if (riderUserId != null) {
+                orderNotificationService.notify(com.pureeats.notification.enums.NotificationRecipientRole.DELIVERY_PARTNER, riderUserId,
+                        "You're offline", "We set you offline because your app stopped sharing your location for " + timeoutMinutes
+                                + " minutes. Go online again to keep receiving orders.");
+            }
             log.info("Rider profile {} ({}) auto-set OFFLINE - no location ping since {} (timeout {} min)",
                     rider.getId(), rider.getName(), lastSeen, timeoutMinutes);
         }

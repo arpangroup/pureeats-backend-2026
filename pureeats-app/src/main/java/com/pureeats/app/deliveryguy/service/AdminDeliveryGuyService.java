@@ -46,6 +46,7 @@ public class AdminDeliveryGuyService {
     private final RoleService roleService;
     private final TripDetailRepository tripDetailRepository;
     private final RiderService riderService;
+    private final com.pureeats.user.service.RiderStatusLogService riderStatusLogService;
 
     @Transactional(readOnly = true)
     public PageResponse<AdminDeliveryGuyResponse> listPaged(String search, Pageable pageable) {
@@ -168,6 +169,10 @@ public class AdminDeliveryGuyService {
             detail.setStatusChangedAt(LocalDateTime.now());
             detail.setOfflineReason(request.isOnline() ? null : DeliveryGuyDetail.OFFLINE_REASON_ADMIN);
             if (request.isOnline()) detail.setLastSeenAt(LocalDateTime.now());
+            if (detail.getId() != null) {
+                riderStatusLogService.record(findLinkedUser(detail.getId()).map(User::getId).orElse(null), request.isOnline(),
+                        request.isOnline() ? null : DeliveryGuyDetail.OFFLINE_REASON_ADMIN);
+            }
         }
         detail.setRating(request.rating() != null ? request.rating() : orDefault(detail.getRating(), BigDecimal.ZERO));
         if (request.photo() != null) detail.setPhoto(request.photo());

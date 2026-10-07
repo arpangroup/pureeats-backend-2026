@@ -33,6 +33,12 @@ public record DeliveryAvailableOrderResponse(
         /** Rider's last reported position -> restaurant; null when the rider app hasn't reported a position yet. */
         BigDecimal pickupDistanceKm,
         /** Restaurant -> customer. */
-        BigDecimal dropDistanceKm
+        BigDecimal dropDistanceKm,
+        /** Kitchen status: RESTAURANT_ACCEPTED, PREPARING or READY_FOR_PICKUP. */
+        String orderStatus,
+        /** COD, RAZORPAY, WALLET... - the app shows COD vs Prepaid. */
+        String paymentMode,
+        /** When the food should be ready (acceptance + prep time) - drives the pickup countdown. */
+        LocalDateTime pickupDueAt
 ) {
 }
