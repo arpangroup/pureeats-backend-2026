@@ -101,6 +101,28 @@ public class DeliveryOrderController {
         return ApiResponse.success("Photo removed", null);
     }
 
+    @PostMapping(value = "/orders/{orderId}/delivery-photos", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Upload a photo at handover to the customer (after Arrived, max 3)")
+    public ApiResponse<com.pureeats.media.dto.MediaUploadResponse> uploadDeliveryPhoto(@AuthenticationPrincipal AuthenticatedUser principal,
+                                                                                      @PathVariable Long orderId,
+                                                                                      @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        log.info("Rider {} uploading a delivery photo for order {}", principal.userId(), orderId);
+        return ApiResponse.success("Photo saved", deliveryOrderService.uploadDeliveryPhoto(principal.userId(), orderId, file));
+    }
+
+    @GetMapping("/orders/{orderId}/delivery-photos")
+    @Operation(summary = "Handover photos taken for one of the rider's orders")
+    public ApiResponse<List<PickupPhotoResponse>> deliveryPhotos(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long orderId) {
+        return ApiResponse.success(deliveryOrderService.deliveryPhotosForRider(principal.userId(), orderId));
+    }
+
+    @DeleteMapping("/orders/{orderId}/delivery-photos/{mediaId}")
+    @Operation(summary = "Remove a handover photo (to retake it) - only before delivery")
+    public ApiResponse<Void> deleteDeliveryPhoto(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long orderId, @PathVariable Long mediaId) {
+        deliveryOrderService.deleteDeliveryPhoto(principal.userId(), orderId, mediaId);
+        return ApiResponse.success("Photo removed", null);
+    }
+
     @GetMapping("/activity")
     @Operation(summary = "The rider's own online/offline history (incl. auto-offline) and recent sign-ins")
     public ApiResponse<RiderActivityResponse> activity(@AuthenticationPrincipal AuthenticatedUser principal) {

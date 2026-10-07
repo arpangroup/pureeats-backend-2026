@@ -7,4 +7,6 @@ import java.util.List;
 
 public interface OrderStatusLogRepository extends JpaRepository<OrderStatusLog, Long> {
     List<OrderStatusLog> findByOrderIdOrderByCreatedAtAsc(Long orderId);
+
+    List<OrderStatusLog> findByToStatusAndActorTypeAndNote(String toStatus, String actorType, String note);
 }

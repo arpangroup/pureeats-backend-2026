@@ -44,6 +44,8 @@ public record DeliveryAssignmentResponse(
         LocalDateTime pickupDueAt,
         /** Pickup photos taken so far (at least 1, at most 3, before pickup). */
         int pickupPhotoCount,
+        /** Handover photos taken so far (at least 1 needed, after Arrived, before delivery). */
+        int deliveryPhotoCount,
         LocalDateTime createdAt,
         LocalDateTime acceptedAt,
         LocalDateTime pickedUpAt,
