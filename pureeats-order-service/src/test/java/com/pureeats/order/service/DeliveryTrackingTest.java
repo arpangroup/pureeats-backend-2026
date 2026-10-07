@@ -55,6 +55,7 @@ class DeliveryTrackingTest {
     @Mock private RestaurantRepository restaurantRepository;
     @Mock private OrderItemRepository orderItemRepository;
     @Mock private OrderPricingService orderPricingService;
+    @Mock private com.pureeats.media.service.MediaAssetService mediaAssetService;
     @Mock private OrderStatusLogRepository orderStatusLogRepository;
     @Spy private ObjectMapper objectMapper = new ObjectMapper();
 
@@ -236,6 +237,8 @@ class DeliveryTrackingTest {
         order.setDeliveryCharge(new BigDecimal("30"));
         order.setDriverTipAmount(new BigDecimal("25"));
         when(orderStatusService.idFor(any())).thenReturn(8);
+        when(orderStatusService.codeFor(5)).thenReturn(OrderStatusCode.ARRIVED);
+        when(mediaAssetService.countForOwner(DeliveryOrderService.DELIVERY_PHOTO_OWNER, 77L)).thenReturn(1L);
 
         service.deliver(RIDER, 77L, "1234");
 
@@ -245,5 +248,54 @@ class DeliveryTrackingTest {
         verify(tripDetailRepository).save(trip.capture());
         assertEquals(new BigDecimal("65.00"), trip.getValue().getRiderEarning());
         assertTrue(trip.getValue().getMeta().contains("\"tip\":25"));
+    }
+
+    @Test
+    void deliver_needsAHandoverPhotoAfterArriving() {
+        order.setDeliveryPin("1234");
+        when(orderStatusService.codeFor(5)).thenReturn(OrderStatusCode.ARRIVED);
+        when(mediaAssetService.countForOwner(DeliveryOrderService.DELIVERY_PHOTO_OWNER, 77L)).thenReturn(0L);
+
+        var ex = assertThrows(com.pureeats.domain.common.exception.BadRequestException.class, () -> service.deliver(RIDER, 77L, "1234"));
+        assertTrue(ex.getMessage().contains("photo"));
+    }
+
+    @Test
+    void deliver_beforeArriving_isRejected() {
+        when(orderStatusService.codeFor(5)).thenReturn(OrderStatusCode.PICKED_UP);
+
+        assertThrows(com.pureeats.domain.common.exception.BadRequestException.class, () -> service.deliver(RIDER, 77L, "1234"));
+    }
+
+    @Test
+    void recordMissingEarnings_creditsAnAdminDeliveredOrderOnce() {
+        order.setUniqueOrderId("PE-77");
+        order.setPaymentMode("RAZORPAY");
+        order.setTotal(new BigDecimal("400"));
+        order.setDeliveryCharge(new BigDecimal("30"));
+        when(orderStatusService.codeFor(5)).thenReturn(OrderStatusCode.DELIVERED);
+        AcceptDelivery accept = new AcceptDelivery();
+        accept.setOrderId(77);
+        accept.setUserId((int) RIDER);
+        when(acceptDeliveryRepository.findByOrderId(77)).thenReturn(Optional.of(accept));
+        when(tripDetailRepository.findByOrderId(77)).thenReturn(Optional.empty());
+        LocalDateTime deliveredAt = LocalDateTime.now().minusDays(2);
+
+        assertTrue(service.recordMissingEarnings(77L, deliveredAt));
+
+        verify(walletService).credit(eq(RIDER), eq(new BigDecimal("40.00")), contains("Delivery earning"));
+        ArgumentCaptor<TripDetail> trip = ArgumentCaptor.forClass(TripDetail.class);
+        verify(tripDetailRepository).save(trip.capture());
+        assertEquals(deliveredAt, trip.getValue().getCreatedAt(), "dated by when it was delivered");
+    }
+
+    @Test
+    void recordMissingEarnings_skipsOrdersThatAlreadyHaveATrip() {
+        when(orderStatusService.codeFor(5)).thenReturn(OrderStatusCode.DELIVERED);
+        when(tripDetailRepository.findByOrderId(77)).thenReturn(Optional.of(new TripDetail()));
+
+        assertFalse(service.recordMissingEarnings(77L, LocalDateTime.now()));
+
+        verify(walletService, never()).credit(any(), any(), any());
     }
 }

@@ -240,6 +240,8 @@ public class DeliveryOrderService {
             OrderStatusCode.PICKED_UP, OrderStatusCode.ON_THE_WAY, OrderStatusCode.ARRIVED);
 
     public static final String PICKUP_PHOTO_OWNER = "ORDER_PICKUP";
+    /** Photos at handover to the customer - same media_assets table, different owner type. */
+    public static final String DELIVERY_PHOTO_OWNER = "ORDER_DELIVERY";
     public static final int MAX_PICKUP_PHOTOS = 3;
     private static final String ASSIGNED_WHILE_PREPARING = "Delivery partner assigned - waiting for the food to be ready";
 
@@ -304,12 +306,49 @@ public class DeliveryOrderService {
         mediaAssetService.delete(PICKUP_PHOTO_OWNER, order.getId(), mediaId);
     }
 
+    /** One photo at handover (max {@value #MAX_PICKUP_PHOTOS}) - only after the partner marked Arrived, before delivery. */
+    @Transactional
+    public com.pureeats.media.dto.MediaUploadResponse uploadDeliveryPhoto(Long riderUserId, Long orderId, org.springframework.web.multipart.MultipartFile file) {
+        Order order = ownedByRider(riderUserId, orderId);
+        if (orderStatusService.codeFor(order.getOrderstatusId()) != OrderStatusCode.ARRIVED) {
+            throw new BadRequestException("Mark that you've reached the customer before taking the delivery photo.");
+        }
+        if (mediaAssetService.countForOwner(DELIVERY_PHOTO_OWNER, order.getId()) >= MAX_PICKUP_PHOTOS) {
+            throw new BadRequestException("You can add up to " + MAX_PICKUP_PHOTOS + " photos - remove one to retake it.");
+        }
+        return mediaAssetService.upload(file, DELIVERY_PHOTO_OWNER, order.getId(), riderUserId);
+    }
+
+    @Transactional
+    public void deleteDeliveryPhoto(Long riderUserId, Long orderId, Long mediaId) {
+        Order order = ownedByRider(riderUserId, orderId);
+        if (orderStatusService.codeFor(order.getOrderstatusId()) != OrderStatusCode.ARRIVED) {
+            throw new BadRequestException("Photos can't be removed after delivery.");
+        }
+        mediaAssetService.delete(DELIVERY_PHOTO_OWNER, order.getId(), mediaId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PickupPhotoResponse> deliveryPhotos(Long orderId) {
+        return photos(DELIVERY_PHOTO_OWNER, orderId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PickupPhotoResponse> deliveryPhotosForRider(Long riderUserId, Long orderId) {
+        ownedByRider(riderUserId, orderId);
+        return deliveryPhotos(orderId);
+    }
+
+    private List<PickupPhotoResponse> photos(String owner, Long orderId) {
+        return mediaAssetService.listForOwner(owner, orderId).stream()
+                .map(a -> new PickupPhotoResponse(a.getId(), mediaUrlResolver.resolve(a.getStorageKey()), a.getCreatedAt()))
+                .toList();
+    }
+
     /** Pickup photos for an order (rider: own orders only; admin: any). */
     @Transactional(readOnly = true)
     public List<PickupPhotoResponse> pickupPhotos(Long orderId) {
-        return mediaAssetService.listForOwner(PICKUP_PHOTO_OWNER, orderId).stream()
-                .map(a -> new PickupPhotoResponse(a.getId(), mediaUrlResolver.resolve(a.getStorageKey()), a.getCreatedAt()))
-                .toList();
+        return photos(PICKUP_PHOTO_OWNER, orderId);
     }
 
     @Transactional(readOnly = true)
@@ -358,6 +397,12 @@ public class DeliveryOrderService {
     public OrderResponse deliver(Long riderUserId, Long orderId, String deliveryPin) {
         log.info("Rider {} attempting to complete delivery for order {}", riderUserId, orderId);
         Order order = ownedByRider(riderUserId, orderId);
+        if (orderStatusService.codeFor(order.getOrderstatusId()) != OrderStatusCode.ARRIVED) {
+            throw new BadRequestException("Mark that you've reached the customer's location first.");
+        }
+        if (mediaAssetService.countForOwner(DELIVERY_PHOTO_OWNER, order.getId()) == 0) {
+            throw new BadRequestException("Take a photo of the order being handed over before confirming delivery.");
+        }
         return completeDelivery(order, deliveryPin, "DELIVERY", riderUserId, "Verified by delivery PIN");
     }
 
@@ -418,7 +463,7 @@ public class DeliveryOrderService {
         if (assignment != null) {
             assignment.setIsComplete(true);
             acceptDeliveryRepository.save(assignment);
-            creditRiderAndSettle(order, assignment.getUserId().longValue());
+            creditRiderAndSettle(order, assignment.getUserId().longValue(), LocalDateTime.now());
         } else {
             log.debug("Order {} delivered with no rider assignment on record (likely self-pickup)", order.getId());
         }
@@ -429,7 +474,31 @@ public class DeliveryOrderService {
         return orderService.toResponse(order);
     }
 
-    private void creditRiderAndSettle(Order order, Long riderUserId) {
+    /**
+     * Records the earnings of a DELIVERED order that has none - orders an admin marked delivered before that
+     * path recorded them (it used to only change the status). Same credit as a normal delivery; no-op when
+     * the order already has a trip record, so it's safe to run more than once.
+     * @return true when earnings were recorded now
+     */
+    @Transactional
+    public boolean recordMissingEarnings(Long orderId, LocalDateTime deliveredAt) {
+        Order order = orderService.findOrThrow(orderId);
+        if (orderStatusService.codeFor(order.getOrderstatusId()) != OrderStatusCode.DELIVERED) return false;
+        if (tripDetailRepository.findByOrderId(order.getId().intValue()).isPresent()) return false;
+        AcceptDelivery assignment = acceptDeliveryRepository.findByOrderId(order.getId().intValue()).orElse(null);
+        if (assignment == null) return false;
+        assignment.setIsComplete(true);
+        acceptDeliveryRepository.save(assignment);
+        creditRiderAndSettle(order, assignment.getUserId().longValue(), deliveredAt != null ? deliveredAt : LocalDateTime.now());
+        log.info("Recorded missing earnings for admin-delivered order {} (rider {})", orderId, assignment.getUserId());
+        return true;
+    }
+
+    private void creditRiderAndSettle(Order order, Long riderUserId, LocalDateTime deliveredAt) {
+        if (tripDetailRepository.findByOrderId(order.getId().intValue()).isPresent()) {
+            log.warn("Order {} already has its earnings recorded - not crediting again", order.getId());
+            return;
+        }
         DeliveryGuyDetail rider = riderProfile(riderUserId);
         BigDecimal commissionBase = commissionBasis == CommissionBasis.DELIVERY_CHARGE_ONLY
                 ? order.getDeliveryCharge() : order.getTotal();
@@ -477,7 +546,8 @@ public class DeliveryOrderService {
                 + ",\"commissionBase\":" + commissionBase.toPlainString()
                 + ",\"tip\":" + tip.toPlainString() + "}");
         trip.setIsSettlementDone(0);
-        trip.setCreatedAt(LocalDateTime.now());
+        // Dated by when the order was delivered, so earnings/analytics land on the right day.
+        trip.setCreatedAt(deliveredAt);
         trip.setUpdatedAt(LocalDateTime.now());
         tripDetailRepository.save(trip);
     }
@@ -790,6 +860,7 @@ public class DeliveryOrderService {
                 items, order.getPayable(), order.getPaymentMode(), payoutEstimate, distanceKm, tipOf(order),
                 status != null && (FOOD_READY.contains(status) || OUT_FOR_DELIVERY.contains(status)),
                 pickupDueAt(order), (int) mediaAssetService.countForOwner(PICKUP_PHOTO_OWNER, order.getId()),
+                (int) mediaAssetService.countForOwner(DELIVERY_PHOTO_OWNER, order.getId()),
                 order.getCreatedAt(), acceptedAt, pickedUpAt, deliveredAt);
     }
 
