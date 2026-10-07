@@ -21,6 +21,12 @@ public record PlaceOrderRequest(
         /** Only present (and only checked) when paymentMode is RAZORPAY — the three values Razorpay Checkout's success callback hands back. All three must verify (see OrderService#placeOrder) before a RAZORPAY order is ever persisted. */
         String razorpayOrderId,
         String razorpayPaymentId,
-        String razorpaySignature
+        String razorpaySignature,
+        /**
+         * The total the app showed the customer (excluding nothing - the full payable). When present and it
+         * differs from what the server computes now (delivery charge, tax, fees...), the order is refused
+         * with the new amount instead of being charged silently. Optional for older app versions.
+         */
+        java.math.BigDecimal expectedPayable
 ) {
 }

@@ -177,6 +177,12 @@ public class OrderService {
                 platformFeeResult.type(), platformFeeResult.rate(), platformFeeResult.cap(),
                 commissionPercentage, commission, orderPricingService.restaurantPayout(itemTotal, commission, restaurantCharge))));
 
+        // Never charge a total the customer wasn't shown (e.g. the app showed a flat ₹20 delivery estimate but the
+        // store's distance-based rate is ₹30). Razorpay is checked below against what was actually captured.
+        if (request.paymentMode() != PaymentMode.RAZORPAY) {
+            assertShownTotal(request.expectedPayable(), payable, deliveryCharge);
+        }
+
         if (request.paymentMode() == PaymentMode.RAZORPAY) {
             // The amount Checkout was opened for (CreateRazorpayOrderRequest.amount, see
             // RazorpayController) is never trusted here — `payable` above is computed fresh from
@@ -343,6 +349,18 @@ public class OrderService {
         return status == OrderStatusCode.DELIVERED || status == OrderStatusCode.CANCELLED
                 || status == OrderStatusCode.REJECTED || status == OrderStatusCode.RETURNED
                 || status == OrderStatusCode.AUTO_CANCELLED || status == OrderStatusCode.SELF_PICKUP_COMPLETED;
+    }
+
+    /** Refuses (409 PRICE_CHANGED) when the app showed a total other than what the order would cost now. No-op for older apps that don't send one. */
+    static void assertShownTotal(BigDecimal shown, BigDecimal payable, BigDecimal deliveryCharge) {
+        if (shown == null || shown.subtract(payable).abs().compareTo(new BigDecimal("0.01")) <= 0) return;
+        throw new com.pureeats.domain.common.exception.ConflictException("PRICE_CHANGED",
+                "The total for this order is now ₹" + money(payable) + " (delivery charge ₹" + money(deliveryCharge)
+                        + "), not the ₹" + money(shown) + " shown. Please review your cart and place the order again.");
+    }
+
+    private static String money(BigDecimal v) {
+        return v.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString();
     }
 
     Order findOrThrow(Long orderId) {
