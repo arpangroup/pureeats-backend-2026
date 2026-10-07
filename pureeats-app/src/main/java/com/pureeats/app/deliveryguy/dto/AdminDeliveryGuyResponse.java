@@ -46,6 +46,8 @@ public record AdminDeliveryGuyResponse(
         String bankAccountNumber,
         String bankIfsc,
         String upiId,
-        boolean phoneVerified
+        boolean phoneVerified,
+        /** The partner's profile photo as a viewable URL ({@code photo} stays the stored key the edit form writes back). */
+        String photoUrl
 ) {
 }
