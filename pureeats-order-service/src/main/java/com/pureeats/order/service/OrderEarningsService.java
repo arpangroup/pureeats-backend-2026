@@ -52,22 +52,33 @@ public class OrderEarningsService {
         boolean snapshot = b != null && b.commissionPercentage() != null;
         BigDecimal commissionPct = snapshot ? b.commissionPercentage() : orderPricingService.commissionPercentage(restaurant);
         BigDecimal commission = snapshot && b.commissionAmount() != null ? b.commissionAmount() : orderPricingService.commission(itemTotal, commissionPct);
-        BigDecimal restaurantAmount = orderService.restaurantPayoutFor(order);
         boolean storeOwnRate = restaurant != null && restaurant.getCommissionRate() != null && restaurant.getCommissionRate().signum() > 0;
 
+        // Delivered orders: the amounts RECORDED at delivery (trip_details) are the truth - not today's
+        // formula - so an order fulfilled under an earlier payout rule still shows what was actually credited.
         TripDetail trip = tripDetailRepository.findByOrderId(order.getId().intValue()).orElse(null);
+        BigDecimal formulaPayout = orderPricingService.restaurantPayout(itemTotal, commission, packaging);
+        BigDecimal restaurantAmount = trip != null && trip.getRestaurantEarning() != null
+                ? trip.getRestaurantEarning().setScale(2, RoundingMode.HALF_UP)
+                : orderService.restaurantPayoutFor(order);
+        boolean recordedUnderEarlierRule = trip != null && trip.getRestaurantEarning() != null
+                && trip.getRestaurantEarning().compareTo(formulaPayout) != 0;
         var restaurantShare = new OrderEarningsSplitResponse.RestaurantShare(order.getRestaurantId().longValue(),
                 restaurant != null ? restaurant.getName() : "Restaurant", itemTotal, commissionPct, commission, storeOwnRate,
-                packaging, restaurantAmount, isCompleted(order));
+                packaging, restaurantAmount, isCompleted(order), recordedUnderEarlierRule);
 
         OrderEarningsSplitResponse.RiderShare riderShare = riderShare(order, trip, tip, deliveryCharge);
         BigDecimal riderCommission = riderShare.commissionAmount();
 
-        BigDecimal platformAmount = commission.add(platformFee).add(deliveryCharge).subtract(riderCommission).subtract(discount)
-                .setScale(2, RoundingMode.HALF_UP);
-        var platformShare = new OrderEarningsSplitResponse.PlatformShare(commission, platformFee, deliveryCharge, riderCommission, discount, platformAmount);
+        // The platform keeps whatever isn't tax, the restaurant's share or the rider's - so the four always add up
+        // to what the customer paid, even for orders recorded under earlier rules. retainedFromRestaurant is what
+        // the platform effectively kept from the restaurant side (= commission under the current rule).
+        BigDecimal customerPaid = nz(order.getPayable());
+        BigDecimal platformAmount = customerPaid.subtract(tax).subtract(restaurantAmount).subtract(riderShare.amount()).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal retainedFromRestaurant = itemTotal.add(packaging).subtract(restaurantAmount).setScale(2, RoundingMode.HALF_UP);
+        var platformShare = new OrderEarningsSplitResponse.PlatformShare(retainedFromRestaurant, platformFee, deliveryCharge, riderCommission, discount, platformAmount);
 
-        return new OrderEarningsSplitResponse(nz(order.getPayable()), tax, restaurantShare, riderShare, platformShare, snapshot);
+        return new OrderEarningsSplitResponse(customerPaid, tax, restaurantShare, riderShare, platformShare, snapshot);
     }
 
     private OrderEarningsSplitResponse.RiderShare riderShare(Order order, TripDetail trip, BigDecimal tip, BigDecimal deliveryCharge) {

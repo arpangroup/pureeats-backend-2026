@@ -29,7 +29,9 @@ public record OrderEarningsSplitResponse(
                                   BigDecimal commissionPercentage, BigDecimal commissionAmount,
                                   /** True when the store has its own commission rate; false = the platform default was used. */
                                   boolean storeOwnRate,
-                                  BigDecimal packagingCharge, BigDecimal amount, boolean finalized) {
+                                  BigDecimal packagingCharge, BigDecimal amount, boolean finalized,
+                                  /** Delivered under an earlier payout rule: {@code amount} is what was recorded, which differs from today's formula. */
+                                  boolean recordedUnderEarlierRule) {
     }
 
     public record RiderShare(boolean assigned, Long riderUserId, String riderName,
@@ -40,6 +42,7 @@ public record OrderEarningsSplitResponse(
                              BigDecimal amount, boolean finalized) {
     }
 
+    /** {@code commission} = what the platform kept from the restaurant side (item total + packaging − restaurant share). */
     public record PlatformShare(BigDecimal commission, BigDecimal platformFee, BigDecimal deliveryCharge,
                                 BigDecimal riderCommission, BigDecimal discount, BigDecimal amount) {
     }
