@@ -187,7 +187,7 @@ public class StoreOwnerOrderService {
             OrderStatusCode status = orderStatusService.codeFor(o.getOrderstatusId());
             return new OrderSummaryResponse(o.getId(), o.getUniqueOrderId(), status != null ? status.label() : "UNKNOWN",
                     o.getRestaurantId().longValue(), null, null, o.getPayable(), o.getCreatedAt(), null, o.getOrderComment(),
-                    o.getPrepareTime(), orderTimingService.prepDueAt(o));
+                    o.getPrepareTime(), orderTimingService.prepDueAt(o), o.getEtaMinutes(), null);
         }).toList();
     }
 }
