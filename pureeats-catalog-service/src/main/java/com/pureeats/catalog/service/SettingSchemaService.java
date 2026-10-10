@@ -62,8 +62,6 @@ public class SettingSchemaService {
     public static final String ACCOUNT_DELETED_MESSAGE = "account_deleted_message";
     /** STRAIGHT_LINE (default) or GOOGLE_DISTANCE_MATRIX - see com.pureeats.geo.distance.DistanceSettings. */
     public static final String DISTANCE_METHOD = "distance_calculation_method";
-    /** Server-side Google key for the Distance Matrix API (password field - never sent to the apps). */
-    public static final String GOOGLE_DISTANCE_API_KEY = "google_distance_matrix_api_key";
     /** Which delivery partners hear about a new order: LINKED_STORES (default), NEARBY or ALL. */
     public static final String RIDER_DISPATCH_MODE = "rider_order_dispatch_mode";
     /** NEARBY mode: partners whose last location is within this many km of the restaurant. */
@@ -186,11 +184,9 @@ public class SettingSchemaService {
                                         option("Google Distance Matrix (real road distance & traffic)", "GOOGLE_DISTANCE_MATRIX"))
                                 .info("Straight line: the direct distance between the two points - free, but shorter than the real route (e.g. 3.06 km where the road is 6.7 km). "
                                         + "Google Distance Matrix: the actual driving distance and time with live traffic, from Google Maps. Billed by Google per lookup; results are cached for 10 minutes, and restaurants already out of range in a straight line are never looked up. "
-                                        + "If Google is unavailable or the key is missing, the straight line is used automatically."),
-                        field(GOOGLE_DISTANCE_API_KEY, "Google Maps server API key", "password", "")
-                                .placeholder("AIza…")
-                                .info("A server key with the Distance Matrix API enabled (Google Cloud console -> APIs & Services). Not the browser key used for the apps' maps - restrict this one by the server's IP address. Leave empty to use the server's configured key (pureeats.distance.google.api-key).")
-                                .warning("Never share this key. It's never sent to the customer, partner or store apps.")
+                                        + "Uses the Google Maps API key under Settings -> Google Map (the same key the apps' maps use) - enable the Distance Matrix API for it in the Google Cloud console. "
+                                        + "If Google is unavailable or the key is missing or not allowed, the straight line is used automatically.")
+                                .link("Google Maps API key (Settings -> Google Map)", "/admin/settings/google-map")
                 )),
                 group("Delivery time estimates", "How the delivery time each app shows is worked out: preparation (T1) + delivery partner to the restaurant (T2) + restaurant to the customer (T3, from the map).", "Timer", List.of(
                         field(DEFAULT_PREP_TIME_MINUTES, "Default preparation time - T1 (minutes)", "number", "20")

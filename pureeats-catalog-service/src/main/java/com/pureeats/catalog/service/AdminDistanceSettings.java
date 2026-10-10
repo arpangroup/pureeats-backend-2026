@@ -6,7 +6,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * Settings -> General -> Distance &amp; travel time, read by the app's single DistanceCalculator on every call.
+ * Settings -> General -> Distance &amp; travel time, read by the app's single DistanceCalculator on every call. The
+ * Google key is the one Google Maps key under Settings -> Google Map (App config) - not a second copy.
  * Unset values fall back to the {@code pureeats.distance.*} properties, so a server already configured with
  * {@code provider=google} keeps using Google until an admin chooses otherwise. Values are re-read at most every
  * {@link #REFRESH_MS} - a restaurant list asks once per restaurant, which shouldn't be one query each.
@@ -18,6 +19,7 @@ public class AdminDistanceSettings implements DistanceSettings {
     static final long REFRESH_MS = 15_000;
 
     private final SettingValueService settingValueService;
+    private final AppConfigService appConfigService;
 
     @Value("${pureeats.distance.provider:haversine}")
     private String propertyProvider;
@@ -50,7 +52,8 @@ public class AdminDistanceSettings implements DistanceSettings {
         if (s != null && now - s.at() < REFRESH_MS) return s;
         String fallbackMethod = "google".equalsIgnoreCase(propertyProvider) ? GOOGLE : STRAIGHT_LINE;
         String method = settingValueService.getString(SettingSchemaService.DISTANCE_METHOD, fallbackMethod);
-        String key = settingValueService.getString(SettingSchemaService.GOOGLE_DISTANCE_API_KEY, propertyApiKey);
+        String appKey = appConfigService.getGoogleMapsApiKey();
+        String key = appKey != null && !appKey.isBlank() ? appKey.trim() : propertyApiKey;
         s = new Snapshot(GOOGLE.equalsIgnoreCase(method) ? GOOGLE : STRAIGHT_LINE, key, now);
         snapshot = s;
         return s;
