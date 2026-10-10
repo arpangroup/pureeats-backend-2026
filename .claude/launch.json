@@ -1,6 +1,0 @@
-{
-  "version": "0.0.1",
-  "configurations": [
-    { "name": "backend-dev", "runtimeExecutable": "java", "runtimeArgs": ["-jar", "D:/workspace/pureeats-2026/pureeats-backend-2026/pureeats-app/target/pureeats-app-0.0.1-SNAPSHOT.jar", "--spring.profiles.active=dev"], "port": 8081 }
-  ]
-}
