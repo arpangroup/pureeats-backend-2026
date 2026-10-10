@@ -51,7 +51,13 @@ public record DeliveryAssignmentResponse(
         LocalDateTime createdAt,
         LocalDateTime acceptedAt,
         LocalDateTime pickedUpAt,
-        LocalDateTime deliveredAt
+        LocalDateTime deliveredAt,
+        /** T2 - minutes allowed to reach the restaurant. */
+        int riderToRestaurantMinutes,
+        /** acceptedAt + T2 - the partner's "reach the restaurant" countdown target. */
+        LocalDateTime reachRestaurantBy,
+        /** T3 - restaurant to customer travel minutes estimated when the order was placed. */
+        Integer travelMinutes
 ) {
     public record Item(String name, int quantity) {
     }

@@ -253,6 +253,7 @@ public class RestaurantService {
         restaurant.setIsAcceptCod(request.isAcceptCod());
         restaurant.setIsDineInAvailable(request.isDineInAvailable());
         restaurant.setDeliveryTime(formatDeliveryTime(request.deliveryTime()));
+        restaurant.setPreparationTime(positiveOrNull(request.preparationTime()));
         if (request.weeklySchedule() != null) {
             restaurant.setScheduleData(scheduleCodec.validateAndSerialize(request.weeklySchedule()));
         }
@@ -331,6 +332,7 @@ public class RestaurantService {
         applyField(restaurant.getId(), "deliveryRadius", restaurant.getDeliveryRadius(), request.deliveryRadius(), isPrivileged, callerUserId, restaurant::setDeliveryRadius);
         applyField(restaurant.getId(), "minOrderPrice", restaurant.getMinOrderPrice(), request.minOrderPrice(), isPrivileged, callerUserId, restaurant::setMinOrderPrice);
         applyField(restaurant.getId(), "deliveryTime", parseDeliveryTime(restaurant.getDeliveryTime()), request.deliveryTime(), isPrivileged, callerUserId, v -> restaurant.setDeliveryTime(formatDeliveryTime(v)));
+        applyField(restaurant.getId(), "preparationTime", restaurant.getPreparationTime(), request.preparationTime(), isPrivileged, callerUserId, v -> restaurant.setPreparationTime(positiveOrNull(v)));
         if (request.deliveryType() != null) {
             applyField(restaurant.getId(), "deliveryType", deliveryTypeLabel(restaurant.getDeliveryType()), request.deliveryType(),
                     isPrivileged, callerUserId, label -> restaurant.setDeliveryType(deliveryTypeCode(label)));
@@ -416,6 +418,10 @@ public class RestaurantService {
         return restaurantCategoryRestaurantRepository.findByRestaurantId(restaurantId).stream()
                 .map(RestaurantCategoryRestaurant::getRestaurantCategoryId)
                 .toList();
+    }
+
+    private static Integer positiveOrNull(Integer v) {
+        return v != null && v > 0 ? v : null;
     }
 
     /** {@code Restaurant.deliveryTime} is a legacy free-text column - stored as a string, exposed to the API as the minutes it actually holds. */
@@ -598,7 +604,7 @@ public class RestaurantService {
         RestaurantOpenStatus openStatus = openStatusService.compute(r, weeklySchedule);
         return new RestaurantDetailResponse(r.getId(), r.getName(), r.getDescription(), r.getSlug(),
                 r.getContactNumber(), r.getOpeningTime(), r.getClosingTime(), mediaUrlResolver.resolve(r.getImage()), parseRating(r.getRating()),
-                parseDeliveryTime(r.getDeliveryTime()), r.getPriceRange(), Boolean.TRUE.equals(r.getIsPureveg()), r.getAddress(),
+                parseDeliveryTime(r.getDeliveryTime()), r.getPreparationTime(), r.getPriceRange(), Boolean.TRUE.equals(r.getIsPureveg()), r.getAddress(),
                 r.getPincode(), r.getLandmark(), r.getCertificate(), r.getLocationId(), r.getLatitude(), r.getLongitude(), r.getRestaurantCharges(),
                 r.getDeliveryCharges(), r.getDeliveryRadius(), r.getMinOrderPrice(), deliveryTypeLabel(r.getDeliveryType()),
                 r.getDeliveryChargeType(), r.getBaseDeliveryCharge(), r.getBaseDeliveryDistance(),

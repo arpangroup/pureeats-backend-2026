@@ -36,6 +36,7 @@ public class StoreOwnerOrderService {
     private final WalletService walletService;
     private final OrderNotificationService orderNotificationService;
     private final OrderStatusLogService orderStatusLogService;
+    private final OrderTimingService orderTimingService;
     private final com.pureeats.order.repository.AcceptDeliveryRepository acceptDeliveryRepository;
 
     @Transactional(readOnly = true)
@@ -64,7 +65,8 @@ public class StoreOwnerOrderService {
         requireStatus(order, OrderStatusCode.PLACED);
 
         order.setOrderstatusId(orderStatusService.idFor(OrderStatusCode.RESTAURANT_ACCEPTED));
-        order.setPrepareTime(DEFAULT_PREPARE_TIME_MINUTES);
+        // T1 was set at placement (restaurant's preparation time); older orders get the default.
+        if (order.getPrepareTime() == null || order.getPrepareTime() <= 0) order.setPrepareTime(DEFAULT_PREPARE_TIME_MINUTES);
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
         orderStatusLogService.record(order.getId(), OrderStatusCode.PLACED, OrderStatusCode.RESTAURANT_ACCEPTED, "STORE_OWNER", ownerUserId, null);
@@ -184,7 +186,8 @@ public class StoreOwnerOrderService {
         return orders.stream().map(o -> {
             OrderStatusCode status = orderStatusService.codeFor(o.getOrderstatusId());
             return new OrderSummaryResponse(o.getId(), o.getUniqueOrderId(), status != null ? status.label() : "UNKNOWN",
-                    o.getRestaurantId().longValue(), null, null, o.getPayable(), o.getCreatedAt(), null, o.getOrderComment());
+                    o.getRestaurantId().longValue(), null, null, o.getPayable(), o.getCreatedAt(), null, o.getOrderComment(),
+                    o.getPrepareTime(), orderTimingService.prepDueAt(o), o.getEtaMinutes(), null);
         }).toList();
     }
 }

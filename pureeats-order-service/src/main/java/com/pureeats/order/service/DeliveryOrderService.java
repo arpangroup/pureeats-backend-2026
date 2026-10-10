@@ -55,6 +55,7 @@ public class DeliveryOrderService {
     private final OrderStatusLogRepository orderStatusLogRepository;
     private final com.pureeats.user.service.RiderStatusLogService riderStatusLogService;
     private final com.pureeats.media.service.MediaAssetService mediaAssetService;
+    private final OrderTimingService orderTimingService;
     private final com.pureeats.user.repository.LoginHistoryRepository loginHistoryRepository;
     private final com.pureeats.media.storage.MediaUrlResolver mediaUrlResolver;
 
@@ -198,7 +199,14 @@ public class DeliveryOrderService {
     public OrderResponse assignDriverAsAdmin(Long adminUserId, Long orderId, Long riderUserId) {
         log.info("Admin {} assigning rider {} to order {}", adminUserId, riderUserId, orderId);
         DeliveryGuyDetail rider = riderProfile(riderUserId);
-        requireApproved(rider);
+        try {
+            requireApproved(rider);
+        } catch (ForbiddenException e) {
+            // Same rule, worded for the admin.
+            log.warn("Rejected admin assignment of rider {} to order {}: {}", riderUserId, orderId, e.getMessage());
+            throw new BadRequestException(rider.isApproved() ? e.getMessage()
+                    : "This delivery partner isn't approved yet - approve them under Partner Approvals before assigning orders.");
+        }
         Order order = orderService.findOrThrow(orderId);
         if (acceptDeliveryRepository.findByOrderId(order.getId().intValue()).isPresent()) {
             log.warn("Rejected admin driver assignment for order {}: already assigned to a rider", orderId);
@@ -369,6 +377,38 @@ public class DeliveryOrderService {
         return pickupPhotos(orderId);
     }
 
+    /**
+     * Live drop-off ETA for the partner: travel time from their last reported position to the customer (Google
+     * Maps when configured, else estimated). Before pickup it's from the restaurant.
+     */
+    @Transactional(readOnly = true)
+    public com.pureeats.order.dto.DeliveryEtaResponse liveEta(Long riderUserId, Long orderId) {
+        Order order = ownedByRider(riderUserId, orderId);
+        DeliveryGuyDetail rider = riderProfile(riderUserId);
+        String[] customer = customerLatLng(order);
+        boolean fromRider = rider.getLastLat() != null && rider.getLastLng() != null && OUT_FOR_DELIVERY.contains(orderStatusService.codeFor(order.getOrderstatusId()));
+        int minutes;
+        BigDecimal km;
+        if (fromRider) {
+            minutes = orderTimingService.travelMinutes(rider.getLastLat(), rider.getLastLng(), customer[0], customer[1]);
+            km = orderPricingService.distanceKm(rider.getLastLat().toPlainString(), rider.getLastLng().toPlainString(), customer[0], customer[1]);
+        } else {
+            Restaurant restaurant = restaurantRepository.findById(order.getRestaurantId().longValue()).orElse(null);
+            minutes = restaurant != null ? orderTimingService.travelMinutes(restaurant.getLatitude(), restaurant.getLongitude(), customer[0], customer[1]) : 0;
+            km = restaurant != null ? orderPricingService.distanceKm(restaurant, customer[0], customer[1]) : BigDecimal.ZERO;
+        }
+        return new com.pureeats.order.dto.DeliveryEtaResponse(minutes, km, fromRider ? "RIDER" : "RESTAURANT", LocalDateTime.now());
+    }
+
+    private String[] customerLatLng(Order order) {
+        try {
+            JsonNode node = objectMapper.readTree(order.getLocation());
+            return new String[]{node.path("latitude").asText(null), node.path("longitude").asText(null)};
+        } catch (Exception e) {
+            return new String[]{null, null};
+        }
+    }
+
     /** Online/offline changes and sign-ins for the rider's Activity screen. */
     @Transactional(readOnly = true)
     public RiderActivityResponse activity(Long riderUserId) {
@@ -396,13 +436,7 @@ public class DeliveryOrderService {
 
     /** When the food should be ready for collection: restaurant acceptance + the order's prep time (default 20 min). */
     private LocalDateTime pickupDueAt(Order order) {
-        LocalDateTime accepted = orderStatusLogRepository.findByOrderIdOrderByCreatedAtAsc(order.getId()).stream()
-                .filter(e -> OrderStatusCode.RESTAURANT_ACCEPTED.name().equals(e.getToStatus()))
-                .map(com.pureeats.order.entity.OrderStatusLog::getCreatedAt)
-                .findFirst()
-                .orElse(order.getCreatedAt());
-        int prep = order.getPrepareTime() != null && order.getPrepareTime() > 0 ? order.getPrepareTime() : 20;
-        return accepted != null ? accepted.plusMinutes(prep) : null;
+        return orderTimingService.prepDueAt(order);
     }
 
     @Transactional
@@ -841,6 +875,7 @@ public class DeliveryOrderService {
                 .map(i -> new DeliveryAssignmentResponse.Item(i.getName(), i.getQuantity() != null ? i.getQuantity() : 1))
                 .toList();
 
+        int riderToRestaurant = order.getRiderToRestaurantMinutes() != null ? order.getRiderToRestaurantMinutes() : orderTimingService.riderToRestaurantMinutes();
         LocalDateTime acceptedAt = null;
         LocalDateTime pickedUpAt = null;
         LocalDateTime deliveredAt = null;
@@ -875,7 +910,9 @@ public class DeliveryOrderService {
                 pickupDueAt(order), (int) mediaAssetService.countForOwner(PICKUP_PHOTO_OWNER, order.getId()),
                 (int) mediaAssetService.countForOwner(DELIVERY_PHOTO_OWNER, order.getId()),
                 order.getOrderComment(),
-                order.getCreatedAt(), acceptedAt, pickedUpAt, deliveredAt);
+                order.getCreatedAt(), acceptedAt, pickedUpAt, deliveredAt,
+                // T2 countdown to the restaurant starts when the partner took the order.
+                riderToRestaurant, acceptedAt != null ? acceptedAt.plusMinutes(riderToRestaurant) : null, order.getTravelMinutes());
     }
 
     private void recordCashCollection(Long riderUserId, BigDecimal amount, String uniqueOrderId) {
@@ -936,7 +973,17 @@ public class DeliveryOrderService {
     }
 
     /** Pending or rejected applicants can't go online or take orders. */
-    private static void requireApproved(DeliveryGuyDetail rider) {
+    private void requireApproved(DeliveryGuyDetail rider) {
+        // Deactivated profile, or a blocked/deleted login account: can't take orders either.
+        if (Boolean.FALSE.equals(rider.getIsActive())) {
+            throw new ForbiddenException("PARTNER_INACTIVE", "This delivery partner is deactivated and can't take orders.");
+        }
+        userRepository.findByDeliveryGuyDetailId(rider.getId().intValue()).ifPresent(u -> {
+            com.pureeats.domain.enums.AccountStatus st = u.getAccountStatus() != null ? u.getAccountStatus() : com.pureeats.domain.enums.AccountStatus.ACTIVE;
+            if (com.pureeats.domain.entity.User.STATUS_INACTIVE.equalsIgnoreCase(u.getIsActive()) || st != com.pureeats.domain.enums.AccountStatus.ACTIVE) {
+                throw new ForbiddenException("PARTNER_BLOCKED", "This delivery partner's account is blocked or deleted and can't take orders.");
+            }
+        });
         if (rider.isApproved()) return;
         if (DeliveryGuyDetail.APPROVAL_REJECTED.equals(rider.getApprovalStatus())) {
             throw new ForbiddenException("PARTNER_REJECTED", "Your application was not approved" + (rider.getRejectionReason() != null ? ": " + rider.getRejectionReason() : "."));
