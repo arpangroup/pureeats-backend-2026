@@ -7,7 +7,7 @@ name: Deploy backend API
 # user, and pureeats-api systemd service were provisioned.
 on:
   push:
-    branches: [release/2026.10.10]
+    branches: [main]
   workflow_dispatch: {}
 
 concurrency:
