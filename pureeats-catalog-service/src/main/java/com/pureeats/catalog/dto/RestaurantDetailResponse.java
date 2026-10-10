@@ -16,6 +16,8 @@ public record RestaurantDetailResponse(
         /** Static, admin-set trust signal (e.g. 4.5) - not derived from real customer reviews. */
         BigDecimal rating,
         Integer deliveryTime,
+        /** T1 - minutes to prepare an order; null = platform default. */
+        Integer preparationTime,
         String priceRange,
         boolean isPureveg,
         String address,

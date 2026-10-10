@@ -39,6 +39,7 @@ public class DeliveryPartnerProfileService {
     private final DeliveryGuyDetailRepository deliveryGuyDetailRepository;
     private final RatingRepository ratingRepository;
     private final MediaUrlResolver mediaUrlResolver;
+    private final com.pureeats.order.service.OrderStatusService orderStatusService;
 
     @Transactional(readOnly = true)
     public DeliveryPartnerProfileResponse forCustomerOrder(Long customerUserId, Long orderId) {
@@ -61,11 +62,9 @@ public class DeliveryPartnerProfileService {
                 ? ratingRepository.findByRateableTypeAndRateableId(RateableType.DRIVER.legacyMorphClass(), detail.getId())
                 : List.of();
         List<TripDetail> trips = tripDetailRepository.findByRiderId(riderUserId.intValue());
-        // TripDetail is written on every delivery; fall back to completed assignments for data that predates it.
-        int completed = trips.isEmpty()
-                ? (int) acceptDeliveryRepository.findByUserIdOrderByIdDesc(riderUserId.intValue()).stream()
-                        .filter(a -> Boolean.TRUE.equals(a.getIsComplete())).count()
-                : trips.size();
+        // Only DELIVERED orders count as completed trips. An assignment is also closed (isComplete) when its order is
+        // cancelled/returned - to free the partner - so counting those used to include cancelled orders.
+        int completed = deliveredTrips(riderUserId);
         int forYou = (int) trips.stream().filter(t -> t.getCustomerId() != null && t.getCustomerId().equals(customerUserId.intValue())).count();
         BigDecimal distance = trips.stream().map(TripDetail::getDistanceTravelled).filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add).setScale(1, RoundingMode.HALF_UP);
@@ -134,5 +133,14 @@ public class DeliveryPartnerProfileService {
         if (full == null || full.isBlank()) return "A customer";
         String[] parts = full.trim().split("\\s+");
         return parts.length > 1 ? parts[0] + " " + parts[parts.length - 1].charAt(0) + "." : parts[0];
+    }
+
+    /** Distinct orders this partner was assigned that ended DELIVERED (covers trips recorded before trip_details). */
+    private int deliveredTrips(Long riderUserId) {
+        java.util.List<Long> orderIds = acceptDeliveryRepository.findByUserIdOrderByIdDesc(riderUserId.intValue()).stream()
+                .map(a -> a.getOrderId()).filter(java.util.Objects::nonNull).map(Integer::longValue).distinct().toList();
+        if (orderIds.isEmpty()) return 0;
+        Integer delivered = orderStatusService.idFor(com.pureeats.domain.enums.OrderStatusCode.DELIVERED);
+        return (int) orderRepository.findAllById(orderIds).stream().filter(o -> java.util.Objects.equals(o.getOrderstatusId(), delivered)).count();
     }
 }

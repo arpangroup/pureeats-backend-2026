@@ -53,6 +53,7 @@ public class OrderService {
     private final OrderItemAddonRepository orderItemAddonRepository;
     private final OrderStatusService orderStatusService;
     private final OrderPricingService orderPricingService;
+    private final OrderTimingService orderTimingService;
     private final WalletService walletService;
 
     private final RestaurantRepository restaurantRepository;
@@ -161,6 +162,9 @@ public class OrderService {
         BigDecimal payable = amountAfterDiscount.add(tax).add(restaurantCharge).add(deliveryCharge).add(platformFee).add(order.getDriverTipAmount());
         BigDecimal commissionPercentage = orderPricingService.commissionPercentage(restaurant);
         BigDecimal commission = orderPricingService.commission(itemTotal, commissionPercentage);
+
+        // T1 + T2 + T3 -> base ETA (see OrderTimingService).
+        orderTimingService.initialise(order, restaurant, isSelfPickup, orderLatitude, orderLongitude);
 
         order.setTotal(itemTotal);
         order.setDiscountAmount(discount);
@@ -456,7 +460,9 @@ public class OrderService {
                 order.getDriverTipAmount(), order.getDiscountAmount(), order.getTotal(), order.getPayable(),
                 order.getPaymentMode(), order.getDeliveryPin(), order.getOrderComment(),
                 order.getTransactionId(), order.getDeliveryType(), order.getOrderFrom(), order.getCreatedAt(), order.getUpdatedAt(),
-                legalNextStatuses, deserializeBreakdown(order.getPricingBreakdown()), deliveryGuyId, deliveryGuyName, deliveryPartner);
+                legalNextStatuses, deserializeBreakdown(order.getPricingBreakdown()), deliveryGuyId, deliveryGuyName, deliveryPartner,
+                order.getPrepareTime(), order.getRiderToRestaurantMinutes(), order.getTravelMinutes(), order.getEtaMinutes(),
+                orderTimingService.customerSlowdown());
     }
 
     private String serializeBreakdown(PricingBreakdown breakdown) {
@@ -514,7 +520,7 @@ public class OrderService {
                 .orElse(null);
         return new OrderSummaryResponse(order.getId(), order.getUniqueOrderId(), status != null ? status.label() : "UNKNOWN",
                 order.getRestaurantId().longValue(), restaurant != null ? restaurant.getName() : "Unknown", restaurantImage,
-                order.getPayable(), order.getCreatedAt(), deliveryGuyName, order.getOrderComment());
+                order.getPayable(), order.getCreatedAt(), deliveryGuyName, order.getOrderComment(), order.getPrepareTime(), null);
     }
 
     /** Same fixed, always-PUSH+IN_APP alert as {@code OrderNotificationService#notifyAdminsOfNewOrder} (see that method's doc for why this bypasses the configurable per-role routing) - one per owner of this restaurant, since a new order is that owner's own restaurant's business, not a platform-wide broadcast. */

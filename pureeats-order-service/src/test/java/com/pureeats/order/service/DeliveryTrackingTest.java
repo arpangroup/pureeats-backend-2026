@@ -56,6 +56,7 @@ class DeliveryTrackingTest {
     @Mock private OrderItemRepository orderItemRepository;
     @Mock private OrderPricingService orderPricingService;
     @Mock private com.pureeats.media.service.MediaAssetService mediaAssetService;
+    @Mock private OrderTimingService orderTimingService;
     @Mock private OrderStatusLogRepository orderStatusLogRepository;
     @Spy private ObjectMapper objectMapper = new ObjectMapper();
 
@@ -297,5 +298,25 @@ class DeliveryTrackingTest {
         assertFalse(service.recordMissingEarnings(77L, LocalDateTime.now()));
 
         verify(walletService, never()).credit(any(), any(), any());
+    }
+
+    @Test
+    void admin_cannotAssignAPartnerWhoIsNotApproved() {
+        DeliveryGuyDetail detail = deliveryGuyDetailRepository.findById(4L).orElseThrow();
+        detail.setApprovalStatus(DeliveryGuyDetail.APPROVAL_PENDING);
+
+        assertThrows(com.pureeats.domain.common.exception.ForbiddenException.class, () -> service.assignDriverAsAdmin(1L, 77L, RIDER));
+        verify(acceptDeliveryRepository, never()).save(any());
+    }
+
+    @Test
+    void admin_cannotAssignABlockedPartner() {
+        User blocked = new User();
+        blocked.setId(RIDER);
+        blocked.setIsActive(User.STATUS_INACTIVE);
+        when(userRepository.findByDeliveryGuyDetailId(4)).thenReturn(Optional.of(blocked));
+
+        assertThrows(com.pureeats.domain.common.exception.ForbiddenException.class, () -> service.assignDriverAsAdmin(1L, 77L, RIDER));
+        verify(acceptDeliveryRepository, never()).save(any());
     }
 }

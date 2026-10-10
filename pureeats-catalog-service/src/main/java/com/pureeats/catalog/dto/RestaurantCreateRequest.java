@@ -35,6 +35,8 @@ public record RestaurantCreateRequest(
         List<Long> categoryIds,
         /** Optional - estimated prep+delivery time in minutes. */
         Integer deliveryTime,
+        /** Optional - T1, minutes to prepare an order (null = platform default). */
+        Integer preparationTime,
         /**
          * Optional, ADMIN/SUPER_ADMIN only - ignored on store-owner self-onboarding (see
          * {@code RestaurantService#create}) so a submitted value can never let an owner set their

@@ -40,6 +40,16 @@ public record OrderResponse(
         Long deliveryGuyId,
         String deliveryGuyName,
         /** Richer version of deliveryGuyId/deliveryGuyName above (kept for backward compat) — null until assigned. */
-        OrderDeliveryPartnerSummary deliveryPartner
+        OrderDeliveryPartnerSummary deliveryPartner,
+        /** T1 - preparation minutes. */
+        Integer prepTimeMinutes,
+        /** T2 - delivery partner to restaurant minutes. */
+        Integer riderToRestaurantMinutes,
+        /** T3 - restaurant to customer travel minutes. */
+        Integer travelMinutes,
+        /** Base ETA = T1 + T2 + T3 from createdAt (null for orders placed before timing existed). */
+        Integer etaMinutes,
+        /** The customer app's countdown runs this many times slower than real time (Settings -> Delivery time estimates). */
+        Double etaSlowdownFactor
 ) {
 }
