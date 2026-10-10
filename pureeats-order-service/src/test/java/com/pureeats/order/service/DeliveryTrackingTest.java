@@ -305,7 +305,8 @@ class DeliveryTrackingTest {
         DeliveryGuyDetail detail = deliveryGuyDetailRepository.findById(4L).orElseThrow();
         detail.setApprovalStatus(DeliveryGuyDetail.APPROVAL_PENDING);
 
-        assertThrows(com.pureeats.domain.common.exception.ForbiddenException.class, () -> service.assignDriverAsAdmin(1L, 77L, RIDER));
+        var ex = assertThrows(com.pureeats.domain.common.exception.BadRequestException.class, () -> service.assignDriverAsAdmin(1L, 77L, RIDER));
+        assertTrue(ex.getMessage().contains("isn't approved"));
         verify(acceptDeliveryRepository, never()).save(any());
     }
 
@@ -316,7 +317,7 @@ class DeliveryTrackingTest {
         blocked.setIsActive(User.STATUS_INACTIVE);
         when(userRepository.findByDeliveryGuyDetailId(4)).thenReturn(Optional.of(blocked));
 
-        assertThrows(com.pureeats.domain.common.exception.ForbiddenException.class, () -> service.assignDriverAsAdmin(1L, 77L, RIDER));
+        assertThrows(com.pureeats.domain.common.exception.BadRequestException.class, () -> service.assignDriverAsAdmin(1L, 77L, RIDER));
         verify(acceptDeliveryRepository, never()).save(any());
     }
 }

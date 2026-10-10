@@ -199,7 +199,14 @@ public class DeliveryOrderService {
     public OrderResponse assignDriverAsAdmin(Long adminUserId, Long orderId, Long riderUserId) {
         log.info("Admin {} assigning rider {} to order {}", adminUserId, riderUserId, orderId);
         DeliveryGuyDetail rider = riderProfile(riderUserId);
-        requireApproved(rider);
+        try {
+            requireApproved(rider);
+        } catch (ForbiddenException e) {
+            // Same rule, worded for the admin.
+            log.warn("Rejected admin assignment of rider {} to order {}: {}", riderUserId, orderId, e.getMessage());
+            throw new BadRequestException(rider.isApproved() ? e.getMessage()
+                    : "This delivery partner isn't approved yet - approve them under Partner Approvals before assigning orders.");
+        }
         Order order = orderService.findOrThrow(orderId);
         if (acceptDeliveryRepository.findByOrderId(order.getId().intValue()).isPresent()) {
             log.warn("Rejected admin driver assignment for order {}: already assigned to a rider", orderId);
