@@ -81,6 +81,12 @@ public class AppConfigService {
         return readStored().razorpayKeySecret();
     }
 
+    /** The one Google Maps key (Settings -> Google Map): the apps' maps, and the server's Distance Matrix lookups. */
+    @Transactional(readOnly = true)
+    public String getGoogleMapsApiKey() {
+        return readStored().googleMapsApiKey();
+    }
+
     @Transactional(readOnly = true)
     public String getRazorpayKeyId() {
         return readStored().razorpayKeyId();
