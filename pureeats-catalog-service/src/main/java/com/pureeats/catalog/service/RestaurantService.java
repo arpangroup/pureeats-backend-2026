@@ -1,7 +1,9 @@
 package com.pureeats.catalog.service;
 
 import com.pureeats.catalog.dto.*;
+import com.pureeats.geo.LatLng;
 import com.pureeats.geo.distance.DistanceCalculator;
+import com.pureeats.geo.distance.TravelEstimate;
 import com.pureeats.catalog.repository.RestaurantCategoryRepository;
 import com.pureeats.catalog.repository.RestaurantCategoryRestaurantRepository;
 import com.pureeats.catalog.repository.RestaurantRepository;
@@ -76,8 +78,41 @@ public class RestaurantService {
      */
     @Transactional(readOnly = true)
     public List<RestaurantSummaryResponse> listActive(String customerLat, String customerLng) {
-        return cachedActiveRestaurants().stream().map(r -> toSummary(r, customerLat, customerLng)).toList();
+        List<Restaurant> restaurants = cachedActiveRestaurants();
+        Map<Long, TravelEstimate> travel = travelTo(restaurants, customerLat, customerLng, null);
+        return restaurants.stream().map(r -> toSummary(r, travel.get(r.getId()))).toList();
     }
+
+    /**
+     * Distance + travel time from each restaurant to the customer, using the active distance method (Settings ->
+     * Distance &amp; travel time). With Google, only restaurants still within range in a STRAIGHT LINE are looked up -
+     * in one batched request - since a road route is never shorter, so the rest are out of range anyway and keep
+     * the free straight-line figure. Restaurants with unusable coordinates (or no customer location) are absent.
+     */
+    private Map<Long, TravelEstimate> travelTo(List<Restaurant> restaurants, String customerLat, String customerLng, BigDecimal radiusOverride) {
+        Map<Long, TravelEstimate> out = new java.util.HashMap<>();
+        if (!isParseableCoordinate(customerLat) || !isParseableCoordinate(customerLng)) return out;
+        List<Restaurant> inRange = new java.util.ArrayList<>();
+        for (Restaurant r : restaurants) {
+            if (!isParseableCoordinate(r.getLatitude()) || !isParseableCoordinate(r.getLongitude())) continue;
+            BigDecimal straight = distanceCalculator.straightLineKm(r.getLatitude(), r.getLongitude(), customerLat, customerLng);
+            BigDecimal radius = radiusOverride != null ? radiusOverride : r.getDeliveryRadius();
+            if (radius == null || straight.compareTo(radius) <= 0) {
+                inRange.add(r);
+            } else {
+                out.put(r.getId(), new TravelEstimate(straight, (int) Math.ceil(straight.doubleValue() / STRAIGHT_LINE_KMPH * 60)));
+            }
+        }
+        if (!inRange.isEmpty()) {
+            List<TravelEstimate> estimates = distanceCalculator.estimatesTo(
+                    inRange.stream().map(r -> new LatLng(r.getLatitude(), r.getLongitude())).toList(), new LatLng(customerLat, customerLng));
+            for (int i = 0; i < inRange.size(); i++) out.put(inRange.get(i).getId(), estimates.get(i));
+        }
+        return out;
+    }
+
+    /** Same naive average speed as DistanceCalculator#etaMinutes, for out-of-range restaurants' straight-line figure. */
+    private static final double STRAIGHT_LINE_KMPH = 25.0;
 
     /**
      * Active+accepted restaurants rarely change (a store owner toggling availability, or admin
@@ -118,15 +153,18 @@ public class RestaurantService {
         double latDeltaDeg = maxRadiusKm / KM_PER_DEGREE_LAT;
         double lngDeltaDeg = maxRadiusKm / (KM_PER_DEGREE_LAT * Math.max(Math.cos(Math.toRadians(lat)), 0.1));
 
-        return cachedActiveRestaurants().stream()
+        List<Restaurant> candidates = cachedActiveRestaurants().stream()
                 .filter(r -> withinBoundingBox(r, lat, lng, latDeltaDeg, lngDeltaDeg))
-                .map(r -> Map.entry(r, distanceCalculator.distanceKm(r.getLatitude(), r.getLongitude(), customerLat, customerLng)))
-                .filter(entry -> {
-                    BigDecimal effectiveRadius = radiusKmOverride != null ? radiusKmOverride : entry.getKey().getDeliveryRadius();
-                    return effectiveRadius == null || entry.getValue().compareTo(effectiveRadius) <= 0;
+                .toList();
+        Map<Long, TravelEstimate> travel = travelTo(candidates, customerLat, customerLng, radiusKmOverride);
+        return candidates.stream()
+                .filter(r -> travel.containsKey(r.getId()))
+                .filter(r -> {
+                    BigDecimal effectiveRadius = radiusKmOverride != null ? radiusKmOverride : r.getDeliveryRadius();
+                    return effectiveRadius == null || travel.get(r.getId()).distanceKm().compareTo(effectiveRadius) <= 0;
                 })
-                .sorted(Comparator.comparing(Map.Entry::getValue))
-                .map(entry -> toSummary(entry.getKey()))
+                .sorted(Comparator.comparing(r -> travel.get(r.getId()).distanceKm()))
+                .map(r -> toSummary(r, travel.get(r.getId())))
                 .toList();
     }
 
@@ -572,24 +610,22 @@ public class RestaurantService {
     }
 
     RestaurantSummaryResponse toSummary(Restaurant r) {
-        return toSummary(r, null, null);
+        return toSummary(r, null);
     }
 
     /**
-     * customerLat/customerLng absent (or this restaurant's own coordinates invalid) → deliveryTime
-     * stays the static admin-set estimate and distanceKm is null, exactly the old behavior. Present
-     * and valid → deliveryTime becomes {@link DistanceCalculator#etaMinutes} (straight-line, 25kph
-     * naive average - see that method's own doc) and distanceKm is populated alongside it.
+     * No travel estimate (no customer location, or this restaurant's coordinates invalid) → deliveryTime
+     * stays the static admin-set estimate and distanceKm is null, exactly the old behavior. Otherwise
+     * deliveryTime and distanceKm come from {@link #travelTo} - road figures under Google, else straight-line.
      */
-    private RestaurantSummaryResponse toSummary(Restaurant r, String customerLat, String customerLng) {
+    private RestaurantSummaryResponse toSummary(Restaurant r, TravelEstimate travel) {
         List<DayScheduleDto> weeklySchedule = scheduleCodec.deserialize(r.getScheduleData());
         RestaurantOpenStatus openStatus = openStatusService.compute(r, weeklySchedule);
         Integer deliveryTimeMinutes = parseDeliveryTime(r.getDeliveryTime());
         BigDecimal distanceKm = null;
-        if (isParseableCoordinate(customerLat) && isParseableCoordinate(customerLng)
-                && isParseableCoordinate(r.getLatitude()) && isParseableCoordinate(r.getLongitude())) {
-            distanceKm = distanceCalculator.distanceKm(r.getLatitude(), r.getLongitude(), customerLat, customerLng);
-            deliveryTimeMinutes = distanceCalculator.etaMinutes(r.getLatitude(), r.getLongitude(), customerLat, customerLng);
+        if (travel != null) {
+            distanceKm = travel.distanceKm();
+            deliveryTimeMinutes = travel.minutes();
         }
         return new RestaurantSummaryResponse(r.getId(), r.getName(), r.getSlug(), mediaUrlResolver.resolve(r.getImage()), parseRating(r.getRating()),
                 deliveryTimeMinutes, r.getPriceRange(), Boolean.TRUE.equals(r.getIsPureveg()),

@@ -46,12 +46,13 @@ public class WalletService {
     private final WalletRepository walletRepository;
     private final TransactionRepository transactionRepository;
 
-    @Transactional(readOnly = true)
+    /** Not read-only: a user's first wallet visit creates their (empty) wallet - in a read-only transaction that INSERT failed with a 500. */
+    @Transactional
     public WalletBalanceResponse getBalance(Long userId) {
         return new WalletBalanceResponse(toDecimal(getOrCreateWallet(userId).getBalance()));
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<WalletTransactionResponse> getTransactions(Long userId) {
         Wallet wallet = getOrCreateWallet(userId);
         return transactionRepository.findByWalletIdOrderByCreatedAtDesc(wallet.getId()).stream()

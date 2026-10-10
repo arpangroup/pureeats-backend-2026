@@ -32,6 +32,7 @@ public class ContentService {
     private final MediaUrlResolver mediaUrlResolver;
     private final SettingSchemaService settingSchemaService;
     private final SettingHistoryService settingHistoryService;
+    private final AdminDistanceSettings adminDistanceSettings;
 
     @Transactional(readOnly = true)
     public List<PageResponse> listPages() {
@@ -50,8 +51,24 @@ public class ContentService {
         return new PageResponse(page.getId(), page.getName(), page.getSlug(), page.getBody());
     }
 
+    /**
+     * The unauthenticated GET /api/v1/settings every app reads. Secret ("password") fields - payment gateway
+     * secrets, SMS/email provider tokens, the Google server key - are left out: they're only needed server-side
+     * and by the admin form, which reads {@link #getAllSettingsForAdmin}.
+     */
     @Transactional(readOnly = true)
     public Map<String, String> getPublicSettings() {
+        Set<String> secrets = settingSchemaService.secretKeys();
+        Map<String, String> settings = new HashMap<>();
+        settingRepository.findAll().stream()
+                .filter(s -> !secrets.contains(s.getKey()))
+                .forEach(s -> settings.put(s.getKey(), s.getValue()));
+        return settings;
+    }
+
+    /** Every setting including secrets - admin only (GET /api/v1/admin/settings), for the Settings form. */
+    @Transactional(readOnly = true)
+    public Map<String, String> getAllSettingsForAdmin() {
         Map<String, String> settings = new HashMap<>();
         settingRepository.findAll().forEach(s -> settings.put(s.getKey(), s.getValue()));
         return settings;
@@ -97,7 +114,8 @@ public class ContentService {
             setting.setValue(value);
             settingRepository.save(setting);
         });
-        return getPublicSettings();
+        adminDistanceSettings.refresh();
+        return getAllSettingsForAdmin();
     }
 
     @Transactional(readOnly = true)

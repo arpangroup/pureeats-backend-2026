@@ -109,6 +109,31 @@ public interface DistanceCalculator {
         return (int) Math.ceil(km / naiveAverageSpeedKmph * 60);
     }
 
+    /** Distance and travel time together - one API round-trip for a provider that returns both (Google). */
+    default TravelEstimate estimate(String lat1, String lng1, String lat2, String lng2) {
+        return new TravelEstimate(distanceKm(lat1, lng1, lat2, lng2), etaMinutes(lat1, lng1, lat2, lng2));
+    }
+
+    /**
+     * Estimates from many origins to ONE destination (e.g. every nearby restaurant to the customer), in origin
+     * order. The default makes one {@link #estimate} per origin; Google batches them into as few requests as it allows.
+     */
+    default List<TravelEstimate> estimatesTo(List<LatLng> origins, LatLng destination) {
+        List<TravelEstimate> out = new ArrayList<>(origins.size());
+        for (LatLng origin : origins) {
+            out.add(estimate(origin.lat(), origin.lng(), destination.lat(), destination.lng()));
+        }
+        return out;
+    }
+
+    /**
+     * Always the free straight-line distance, whatever method is active - for cheap pre-filters. A road route is
+     * never shorter than the straight line, so "straight line already beyond the radius" means out of range for sure.
+     */
+    default BigDecimal straightLineKm(String lat1, String lng1, String lat2, String lng2) {
+        return distanceKm(lat1, lng1, lat2, lng2);
+    }
+
     /** Needs a candidate data source (a repository or spatial index) this interface alone can't have - not implementable as a generic default. See {@code com.pureeats.geo.polygon.PolygonBoundaryService} / the KD-Tree index for the real search machinery once built. */
     default List<LatLng> nearby(String lat, String lng, BigDecimal radiusKm, int limit) {
         throw new UnsupportedOperationException("nearby(...) needs a candidate data source - not implemented by " + getClass().getSimpleName());

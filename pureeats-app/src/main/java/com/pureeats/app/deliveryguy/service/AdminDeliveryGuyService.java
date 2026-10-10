@@ -248,6 +248,14 @@ public class AdminDeliveryGuyService {
             com.pureeats.user.service.RiderKyc.validateIdProof(request.idProofType(), request.idProofNumber());
             com.pureeats.user.service.RiderKyc.applyIdProof(detail, request.idProofType(), request.idProofNumber());
         }
+        if (request.aadhaarNumber() != null && !request.aadhaarNumber().isBlank()) {
+            com.pureeats.user.service.RiderKyc.validateAadhaar(request.aadhaarNumber());
+            com.pureeats.user.service.RiderKyc.applyAadhaar(detail, request.aadhaarNumber());
+        }
+        if (request.panNumber() != null && !request.panNumber().isBlank()) {
+            com.pureeats.user.service.RiderKyc.validatePan(request.panNumber());
+            com.pureeats.user.service.RiderKyc.applyPan(detail, request.panNumber());
+        }
         if (request.vehicleType() != null && !request.vehicleType().isBlank()) {
             com.pureeats.user.service.RiderKyc.validateVehicle(request.vehicleType(), request.vehicleNumber() != null ? request.vehicleNumber() : detail.getVehicleNumber());
             com.pureeats.user.service.RiderKyc.applyVehicle(detail, request.vehicleType(), request.vehicleNumber());
@@ -296,7 +304,7 @@ public class AdminDeliveryGuyService {
                 user != null && User.STATUS_ACTIVE.equals(user.getIsActive()),
                 d.getApprovalStatus() != null ? d.getApprovalStatus() : DeliveryGuyDetail.APPROVAL_APPROVED, d.getRejectionReason(),
                 d.getApprovalUpdatedAt(), d.getLicenseNumber(), riderService.licensePhotoUrl(d.getId()), d.getIdProofType(),
-                d.getIdProofNumber(), d.getVehicleType(), d.getPayoutMethod(), d.getBankAccountHolder(), d.getBankAccountNumber(),
+                d.getIdProofNumber(), d.effectiveAadhaar(), d.effectivePan(), d.getVehicleType(), d.getPayoutMethod(), d.getBankAccountHolder(), d.getBankAccountNumber(),
                 d.getBankIfsc(), d.getUpiId(), user != null && user.isPhoneVerified(),
                 mediaUrlResolver.resolve(d.getPhoto() != null ? d.getPhoto() : user != null ? user.getPhoto() : null),
                 user != null ? com.pureeats.user.service.AdminUserService.effectiveStatus(user).name() : null);

@@ -52,6 +52,10 @@ public record OrderResponse(
         /** The customer app's countdown runs this many times slower than real time (Settings -> Delivery time estimates). */
         Double etaSlowdownFactor,
         /** When the food should be ready (restaurant acceptance + T1). */
-        LocalDateTime prepDueAt
+        LocalDateTime prepDueAt,
+        /** The delivery address's landmark when the order was placed (null for self-pickup / older orders). */
+        String addressLandmark,
+        /** The address's "Save as" label when the order was placed - Home, Work, ... (null for self-pickup / older orders). */
+        String addressTag
 ) {
 }

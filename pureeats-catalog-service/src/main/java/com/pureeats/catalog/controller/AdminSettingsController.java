@@ -58,6 +58,12 @@ public class AdminSettingsController {
         return ApiResponse.success(settingSchemaService.schema());
     }
 
+    @GetMapping("/api/v1/admin/settings")
+    @Operation(summary = "Every saved setting value, secrets included - for the admin Settings form (the public GET /api/v1/settings leaves secrets out)")
+    public ApiResponse<Map<String, String>> all() {
+        return ApiResponse.success(contentService.getAllSettingsForAdmin());
+    }
+
     @PutMapping("/api/v1/admin/settings")
     @Operation(summary = "Upsert one or more settings by key - rejects any key not in the schema, creates the row if it doesn't already exist otherwise")
     public ApiResponse<Map<String, String>> update(@AuthenticationPrincipal AuthenticatedUser principal, @RequestBody SettingsUpdateRequest request) {

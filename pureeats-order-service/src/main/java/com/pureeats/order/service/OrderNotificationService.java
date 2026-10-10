@@ -44,6 +44,8 @@ public class OrderNotificationService {
     private final UserRepository userRepository;
     private final RoleService roleService;
     private final FcmSender fcmSender;
+    private final RiderDispatchService riderDispatchService;
+    private final com.pureeats.notification.repository.PushTokenRepository pushTokenRepository;
 
     private static final List<com.pureeats.domain.enums.Role> ADMIN_LIKE_ROLES =
             List.of(com.pureeats.domain.enums.Role.SUPER_ADMIN, com.pureeats.domain.enums.Role.ADMIN, com.pureeats.domain.enums.Role.EMPLOYEE);
@@ -138,10 +140,11 @@ public class OrderNotificationService {
     }
 
     /**
-     * Broadcasts "a new order needs a rider" to every online delivery partner in one FCM call, via
-     * a direct topic send to {@link PushTopics#ALL_DELIVERY_PARTNERS} - every delivery-app device is
-     * auto-subscribed to that topic at push-token registration (see {@code PushTokenService#save}),
-     * so this needs no per-user loop over every rider's tokens. Bypasses {@link
+     * Tells delivery partners "a new order needs a rider" - only the partners {@link RiderDispatchService} says may
+     * take this restaurant's orders (linked to the store, or nearby), one push per device of each. In "All online
+     * partners" mode it's one FCM topic send to {@link PushTopics#ALL_DELIVERY_PARTNERS} instead - every
+     * delivery-app device is auto-subscribed to that topic at push-token registration (see
+     * {@code PushTokenService#save}), so that needs no per-user loop. Bypasses {@link
      * NotificationRoutingService} and {@link NotificationService} entirely, same reasoning as {@link
      * #notifyAdminsOfNewOrder}: "every rider currently online" is a fixed operational broadcast, not
      * a per-recipient configurable preference.
@@ -155,15 +158,30 @@ public class OrderNotificationService {
      * along in {@code data} too.
      */
     @Transactional(readOnly = true)
-    public void notifyDeliveryPartnersOfAvailableOrder(Long orderId, String restaurantName, BigDecimal payable) {
+    public void notifyDeliveryPartnersOfAvailableOrder(Long orderId, com.pureeats.domain.entity.Restaurant restaurant, BigDecimal payable) {
+        String restaurantName = restaurant.getName();
         Map<String, String> data = new HashMap<>();
         data.put("type", "NEW_ORDER");
         data.put("orderId", String.valueOf(orderId));
         data.put("restaurantName", restaurantName);
         data.put("payable", String.valueOf(payable));
-        fcmSender.send(FcmPushRequest.visible(null, PushTopics.ALL_DELIVERY_PARTNERS,
-                "New order available", "Pickup available at " + restaurantName + " - " + payable + " payout", null, data, null, null));
-        log.info("Broadcast new-order-available push to delivery partners for order {} ({})", orderId, restaurantName);
+        String title = "New order available";
+        String body = "Pickup available at " + restaurantName + " - " + payable + " payout";
+        if (RiderDispatchService.ALL.equals(riderDispatchService.mode())) {
+            fcmSender.send(FcmPushRequest.visible(null, PushTopics.ALL_DELIVERY_PARTNERS, title, body, null, data, null, null));
+            log.info("Broadcast new-order-available push to all delivery partners for order {} ({})", orderId, restaurantName);
+            return;
+        }
+        List<Long> riders = riderDispatchService.recipientUserIds(restaurant);
+        int devices = 0;
+        for (Long riderUserId : riders) {
+            for (var token : pushTokenRepository.findByUserIdAndIsActiveTrue(riderUserId.intValue())) {
+                fcmSender.send(FcmPushRequest.visible(token.getToken(), null, title, body, null, data, null, null));
+                devices++;
+            }
+        }
+        log.info("New-order-available push for order {} ({}) sent to {} partner(s) on {} device(s) ({} mode)",
+                orderId, restaurantName, riders.size(), devices, riderDispatchService.mode());
     }
 
     private boolean needsExternalDestination(NotificationChannel channel) {

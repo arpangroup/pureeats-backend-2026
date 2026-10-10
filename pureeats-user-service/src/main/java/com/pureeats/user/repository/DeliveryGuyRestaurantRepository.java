@@ -9,4 +9,7 @@ public interface DeliveryGuyRestaurantRepository extends JpaRepository<DeliveryG
     List<DeliveryGuyRestaurant> findByDeliveryGuyDetailId(Long deliveryGuyDetailId);
 
     void deleteByDeliveryGuyDetailId(Long deliveryGuyDetailId);
+
+    /** Does any partner have this store linked? (New-order dispatch: a store with nobody linked can fall back to nearby partners.) */
+    boolean existsByRestaurantId(Long restaurantId);
 }
