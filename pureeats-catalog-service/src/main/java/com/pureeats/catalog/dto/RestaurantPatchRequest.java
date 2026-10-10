@@ -40,6 +40,8 @@ public record RestaurantPatchRequest(
         BigDecimal minOrderPrice,
         /** Estimated prep+delivery time in minutes. */
         Integer deliveryTime,
+        /** T1, minutes to prepare an order (null = platform default). */
+        Integer preparationTime,
         /** "self-pickup" | "delivery" | "both" - mapped to the legacy 0/1/2 column internally. */
         String deliveryType,
         String deliveryChargeType,

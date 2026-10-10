@@ -101,8 +101,21 @@ public class Order {
     @Column(name = "payable", nullable = false)
     private BigDecimal payable;
 
+    /** T1 - minutes to prepare (from the restaurant, else the platform default), set when the order is placed. */
     @Column(name = "prepare_time")
     private Integer prepareTime;
+
+    /** T2 - minutes for the delivery partner to reach the restaurant (Settings -> Delivery time estimates). */
+    @Column(name = "rider_to_restaurant_minutes")
+    private Integer riderToRestaurantMinutes;
+
+    /** T3 - minutes from the restaurant to the customer (Google Maps travel time, else estimated from distance). */
+    @Column(name = "travel_minutes")
+    private Integer travelMinutes;
+
+    /** Base ETA = T1 + T2 + T3, from when the order was placed. */
+    @Column(name = "eta_minutes")
+    private Integer etaMinutes;
 
     @Column(name = "order_from", nullable = false)
     private String orderFrom;

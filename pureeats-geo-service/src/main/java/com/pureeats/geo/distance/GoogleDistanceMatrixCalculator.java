@@ -63,4 +63,34 @@ public class GoogleDistanceMatrixCalculator implements DistanceCalculator {
             return fallback.distanceKm(lat1, lng1, lat2, lng2);
         }
     }
+
+    /** Real driving time (with live traffic when Google has it) - T3 and the partner's live drop-off ETA. */
+    @Override
+    @SuppressWarnings("unchecked")
+    public int etaMinutes(String lat1, String lng1, String lat2, String lng2) {
+        if (apiKey == null || apiKey.isBlank() || lat1 == null || lng1 == null || lat2 == null || lng2 == null) {
+            return fallback.etaMinutes(lat1, lng1, lat2, lng2);
+        }
+        try {
+            Map<String, Object> body = restClient.get()
+                    .uri("/maps/api/distancematrix/json?origins={o}&destinations={d}&departure_time=now&key={key}",
+                            lat1 + "," + lng1, lat2 + "," + lng2, apiKey)
+                    .retrieve()
+                    .body(Map.class);
+            if (body == null || !"OK".equals(body.get("status"))) {
+                return fallback.etaMinutes(lat1, lng1, lat2, lng2);
+            }
+            List<Map<String, Object>> rows = (List<Map<String, Object>>) body.get("rows");
+            Map<String, Object> element = (Map<String, Object>) ((List<Map<String, Object>>) rows.get(0).get("elements")).get(0);
+            if (!"OK".equals(element.get("status"))) {
+                return fallback.etaMinutes(lat1, lng1, lat2, lng2);
+            }
+            Map<String, Object> duration = (Map<String, Object>) (element.containsKey("duration_in_traffic") ? element.get("duration_in_traffic") : element.get("duration"));
+            double seconds = ((Number) duration.get("value")).doubleValue();
+            return (int) Math.ceil(seconds / 60.0);
+        } catch (Exception e) {
+            log.warn("Google travel time lookup failed, estimating from distance: {}", e.getMessage());
+            return fallback.etaMinutes(lat1, lng1, lat2, lng2);
+        }
+    }
 }

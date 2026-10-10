@@ -49,6 +49,10 @@ public class Restaurant {
     @Column(name = "delivery_time")
     private String deliveryTime;
 
+    /** T1 - minutes the kitchen needs to prepare an order. Null = Settings -> General -> Delivery time estimates default. */
+    @Column(name = "preparation_time")
+    private Integer preparationTime;
+
     @Column(name = "price_range")
     private String priceRange;
 

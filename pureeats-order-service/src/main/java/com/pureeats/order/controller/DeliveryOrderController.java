@@ -123,6 +123,12 @@ public class DeliveryOrderController {
         return ApiResponse.success("Photo removed", null);
     }
 
+    @GetMapping("/orders/{orderId}/eta")
+    @Operation(summary = "Live travel time to the customer from the partner's last position (from the restaurant before pickup)")
+    public ApiResponse<DeliveryEtaResponse> eta(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long orderId) {
+        return ApiResponse.success(deliveryOrderService.liveEta(principal.userId(), orderId));
+    }
+
     @GetMapping("/activity")
     @Operation(summary = "The rider's own online/offline history (incl. auto-offline) and recent sign-ins")
     public ApiResponse<RiderActivityResponse> activity(@AuthenticationPrincipal AuthenticatedUser principal) {

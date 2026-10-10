@@ -40,6 +40,7 @@ class DeliveryPartnerProfileServiceTest {
     @Mock private DeliveryGuyDetailRepository deliveryGuyDetailRepository;
     @Mock private RatingRepository ratingRepository;
     @Mock private MediaUrlResolver mediaUrlResolver;
+    @Mock private com.pureeats.order.service.OrderStatusService orderStatusService;
     @InjectMocks private DeliveryPartnerProfileService service;
 
     @BeforeEach
@@ -95,6 +96,23 @@ class DeliveryPartnerProfileServiceTest {
     @Test
     void profile_aggregatesTripsRatingsComplimentsAndReviews() {
         when(tripDetailRepository.findByRiderId(9)).thenReturn(List.of(trip(30, "2.5"), trip(30, "1.5"), trip(44, "3.0")));
+        // 4 assignments: 3 delivered, 1 cancelled - the cancelled one is closed (isComplete) too, but isn't a trip.
+        when(orderStatusService.idFor(com.pureeats.domain.enums.OrderStatusCode.DELIVERED)).thenReturn(8);
+        List<AcceptDelivery> assignments = new java.util.ArrayList<>();
+        List<Order> orders = new java.util.ArrayList<>();
+        for (int id = 101; id <= 104; id++) {
+            AcceptDelivery a = new AcceptDelivery();
+            a.setOrderId(id);
+            a.setUserId(9);
+            a.setIsComplete(true);
+            assignments.add(a);
+            Order o = new Order();
+            o.setId((long) id);
+            o.setOrderstatusId(id == 104 ? 9 : 8);
+            orders.add(o);
+        }
+        when(acceptDeliveryRepository.findByUserIdOrderByIdDesc(9)).thenReturn(assignments);
+        when(orderRepository.findAllById(org.mockito.ArgumentMatchers.anyList())).thenReturn(orders);
         when(ratingRepository.findByRateableTypeAndRateableId(RateableType.DRIVER.legacyMorphClass(), 4L)).thenReturn(List.of(
                 rating(5, "Polite,On time", "Super quick!", 31, 1),
                 rating(4, "[\"On time\"]", null, 31, 2),
@@ -103,7 +121,7 @@ class DeliveryPartnerProfileServiceTest {
         DeliveryPartnerProfileResponse p = service.forCustomerOrder(30L, 5L);
 
         assertEquals("Ravi Kumar", p.name());
-        assertEquals(3, p.completedTrips());
+        assertEquals(3, p.completedTrips(), "only delivered orders - the cancelled one doesn't count");
         assertEquals(2, p.deliveriesForYou());
         assertEquals(new BigDecimal("7.0"), p.totalDistanceKm());
         assertEquals(new BigDecimal("4.7"), p.rating());

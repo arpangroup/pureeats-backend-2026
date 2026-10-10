@@ -55,6 +55,10 @@ public class SettingSchemaService {
     public static final String DELIVERY_EARNING_FROM = "delivery_earning_from";
     /** Shown when a blocked / deleted user opens any app or tries to sign in. */
     public static final String ACCOUNT_BLOCKED_MESSAGE = "account_blocked_message";
+    /** Delivery time estimates: T1 default, T2, and how much slower the customer's countdown runs. */
+    public static final String DEFAULT_PREP_TIME_MINUTES = "default_prep_time_minutes";
+    public static final String RIDER_TO_RESTAURANT_MINUTES = "rider_to_restaurant_minutes";
+    public static final String CUSTOMER_ETA_SLOWDOWN = "customer_eta_slowdown_factor";
     public static final String ACCOUNT_DELETED_MESSAGE = "account_deleted_message";
     /** Profile fields a delivery partner may edit in the rider app (all view-only by default). Read by RiderService / ProfileContactChangeService too. */
     public static final String DRIVER_EDIT_NAME = "driver_edit_name";
@@ -154,6 +158,15 @@ public class SettingSchemaService {
                         field("max_time_accept_delivery", "Max time to accept delivery", "number", "5")
                                 .placeholder("e.g. 5")
                                 .info("Minutes a delivery partner has to accept an assigned order before it's reassigned.")
+                )),
+                group("Delivery time estimates", "How the delivery time each app shows is worked out: preparation (T1) + delivery partner to the restaurant (T2) + restaurant to the customer (T3, from the map).", "Timer", List.of(
+                        field(DEFAULT_PREP_TIME_MINUTES, "Default preparation time - T1 (minutes)", "number", "20")
+                                .info("Used for stores that haven't set their own preparation time (store edit page -> Preparation time)."),
+                        field(RIDER_TO_RESTAURANT_MINUTES, "Delivery partner to restaurant - T2 (minutes)", "number", "10")
+                                .info("Buffer for the partner to reach the restaurant. Shown to the partner as a countdown after they accept."),
+                        field(CUSTOMER_ETA_SLOWDOWN, "Customer countdown slowdown", "number", "1.5")
+                                .info("The customer's delivery countdown runs this many times slower than real time, so small delays don't make it jump - e.g. 1.5: 90 seconds pass for every minute it counts down. 1 = real time. "
+                                        + "T3 (restaurant to customer) comes from Google Maps when the server's distance provider is Google; otherwise it's estimated from the distance.")
                 )),
                 group("Order alert sound", "Played on the admin panel, restaurant partner dashboard and driver app when a new order arrives.", "Bell", List.of(
                         field(ORDER_ALERT_SOUND_URL, "New order sound", "audio", "")
