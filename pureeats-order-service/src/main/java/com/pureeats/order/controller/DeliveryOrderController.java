@@ -65,11 +65,11 @@ public class DeliveryOrderController {
     }
 
     @PostMapping("/orders/{orderId}/deliver")
-    @Operation(summary = "Complete delivery by verifying the customer's delivery PIN")
+    @Operation(summary = "Complete delivery by verifying the customer's delivery PIN - for cash on delivery, with the cash collected (any extra goes to the customer's wallet)")
     public ApiResponse<OrderResponse> deliver(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long orderId,
                                                @Valid @RequestBody DeliverOrderRequest request) {
         log.info("Rider {} completing delivery for order {}", principal.userId(), orderId);
-        return ApiResponse.success("Order delivered", deliveryOrderService.deliver(principal.userId(), orderId, request.deliveryPin()));
+        return ApiResponse.success("Order delivered", deliveryOrderService.deliver(principal.userId(), orderId, request.deliveryPin(), request.cashCollected()));
     }
 
     @PostMapping("/orders/{orderId}/arrived")

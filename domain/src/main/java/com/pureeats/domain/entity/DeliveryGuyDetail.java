@@ -117,6 +117,26 @@ public class DeliveryGuyDetail {
     @Column(name = "id_proof_number", length = 32)
     private String idProofNumber;
 
+    /** 12 digits. Both Aadhaar and PAN are required now; older partners may have only one, in id_proof_* above. */
+    @Column(name = "aadhaar_number", length = 16)
+    private String aadhaarNumber;
+
+    /** e.g. ABCDE1234F. */
+    @Column(name = "pan_number", length = 16)
+    private String panNumber;
+
+    /** Aadhaar on file - the new column, else the single legacy ID proof when it was an Aadhaar. */
+    public String effectiveAadhaar() {
+        if (aadhaarNumber != null && !aadhaarNumber.isBlank()) return aadhaarNumber;
+        return "AADHAAR".equalsIgnoreCase(idProofType) ? idProofNumber : null;
+    }
+
+    /** PAN on file - the new column, else the single legacy ID proof when it was a PAN. */
+    public String effectivePan() {
+        if (panNumber != null && !panNumber.isBlank()) return panNumber;
+        return "PAN".equalsIgnoreCase(idProofType) ? idProofNumber : null;
+    }
+
     /** BIKE, CYCLE or EV. */
     @Column(name = "vehicle_type", length = 16)
     private String vehicleType;

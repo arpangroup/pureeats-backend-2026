@@ -82,7 +82,7 @@ public class StoreOwnerOrderService {
         // the order was still PLACED (not yet pickable) at placement time.
         if (order.getDeliveryType() == 0) {
             Restaurant restaurant = restaurantService.assertOwnership(ownerUserId, order.getRestaurantId().longValue());
-            orderNotificationService.notifyDeliveryPartnersOfAvailableOrder(order.getId(), restaurant.getName(), order.getPayable());
+            orderNotificationService.notifyDeliveryPartnersOfAvailableOrder(order.getId(), restaurant, order.getPayable());
         }
         return orderService.toResponse(order);
     }

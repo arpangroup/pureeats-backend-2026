@@ -40,6 +40,9 @@ public record AdminDeliveryGuyResponse(
         String licensePhotoUrl,
         String idProofType,
         String idProofNumber,
+        /** Aadhaar / PAN on file (new columns, else the legacy single ID proof); null when missing. */
+        String aadhaarNumber,
+        String panNumber,
         String vehicleType,
         String payoutMethod,
         String bankAccountHolder,

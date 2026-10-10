@@ -36,6 +36,16 @@ public class OrderStatusLogService {
             OrderStatusCode.CANCELLED, OrderStatusCode.REJECTED, OrderStatusCode.RETURNED,
             OrderStatusCode.AUTO_CANCELLED, OrderStatusCode.SELF_PICKUP_COMPLETED);
 
+    /**
+     * A partner assigned before the food is ready leaves the status unchanged (see DeliveryOrderService#recordAssignment),
+     * so that log entry is recognised by this note suffix instead of a RIDER_ASSIGNED status.
+     */
+    public static final String ASSIGNED_WHILE_PREPARING_SUFFIX = " - waiting for the food to be ready";
+
+    static boolean isAssignedWhilePreparing(OrderStatusLog entry) {
+        return entry.getNote() != null && entry.getNote().endsWith(ASSIGNED_WHILE_PREPARING_SUFFIX);
+    }
+
     @Transactional
     public void record(Long orderId, OrderStatusCode from, OrderStatusCode to, String actorType, Long actorUserId, String note) {
         log.debug("Recording status log for order {}: {} -> {} by {} {}", orderId, from, to, actorType, actorUserId);
@@ -102,15 +112,27 @@ public class OrderStatusLogService {
             return new OrderTimelineResponse(null, null, null, null, null, null, null, null);
         }
         Map<String, LocalDateTime> firstSeenAt = new java.util.HashMap<>();
+        LocalDateTime riderAssignedAt = null;
+        LocalDateTime readyAt = null;
         for (OrderStatusLog entry : entries) {
             firstSeenAt.putIfAbsent(entry.getToStatus(), entry.getCreatedAt());
+            // Food marked ready with a partner already assigned goes straight to RIDER_ASSIGNED (StoreOwnerOrderService#ready),
+            // so READY_FOR_PICKUP never appears - the store's step to RIDER_ASSIGNED is when the food was ready.
+            if (readyAt == null && (OrderStatusCode.READY_FOR_PICKUP.name().equals(entry.getToStatus())
+                    || ("STORE_OWNER".equals(entry.getActorType()) && OrderStatusCode.RIDER_ASSIGNED.name().equals(entry.getToStatus())))) {
+                readyAt = entry.getCreatedAt();
+            }
+            // Assigned while the kitchen was still preparing: the status didn't change, but the partner was assigned.
+            if (riderAssignedAt == null && (OrderStatusCode.RIDER_ASSIGNED.name().equals(entry.getToStatus()) || isAssignedWhilePreparing(entry))) {
+                riderAssignedAt = entry.getCreatedAt();
+            }
         }
         LocalDateTime placedAt = entries.get(0).getCreatedAt();
         return new OrderTimelineResponse(
                 placedAt,
                 firstSeenAt.get(OrderStatusCode.RESTAURANT_ACCEPTED.name()),
-                firstSeenAt.get(OrderStatusCode.READY_FOR_PICKUP.name()),
-                firstSeenAt.get(OrderStatusCode.RIDER_ASSIGNED.name()),
+                readyAt,
+                riderAssignedAt,
                 firstSeenAt.get(OrderStatusCode.PICKED_UP.name()),
                 firstSeenAt.get(OrderStatusCode.DELIVERED.name()),
                 firstSeenAt.get(OrderStatusCode.SELF_PICKUP_COMPLETED.name()),

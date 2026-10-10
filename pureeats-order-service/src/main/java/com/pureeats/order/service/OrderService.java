@@ -107,7 +107,7 @@ public class OrderService {
         String orderLatitude = isSelfPickup ? restaurant.getLatitude() : address.getLatitude();
         String orderLongitude = isSelfPickup ? restaurant.getLongitude() : address.getLongitude();
         order.setAddress(isSelfPickup ? restaurant.getAddress() : address.getHouse() + ", " + address.getAddress());
-        order.setLocation("{\"latitude\":\"" + orderLatitude + "\",\"longitude\":\"" + orderLongitude + "\"}");
+        order.setLocation(locationJson(orderLatitude, orderLongitude, isSelfPickup ? null : address));
         order.setPaymentMode(request.paymentMode().name());
         order.setDeliveryType(request.deliveryType() == DeliveryType.SELF_PICKUP ? 1 : 0);
         order.setOrderComment(request.orderComment());
@@ -256,7 +256,7 @@ public class OrderService {
         // restaurant's order is still PLACED here (not yet pickable), so the equivalent broadcast for
         // that path fires from StoreOwnerOrderService#accept instead, once the owner actually accepts it.
         if (autoAccept && order.getDeliveryType() == 0) {
-            orderNotificationService.notifyDeliveryPartnersOfAvailableOrder(order.getId(), restaurant.getName(), payable);
+            orderNotificationService.notifyDeliveryPartnersOfAvailableOrder(order.getId(), restaurant, payable);
         }
 
         return toResponse(order);
@@ -462,7 +462,39 @@ public class OrderService {
                 order.getTransactionId(), order.getDeliveryType(), order.getOrderFrom(), order.getCreatedAt(), order.getUpdatedAt(),
                 legalNextStatuses, deserializeBreakdown(order.getPricingBreakdown()), deliveryGuyId, deliveryGuyName, deliveryPartner,
                 order.getPrepareTime(), order.getRiderToRestaurantMinutes(), order.getTravelMinutes(), order.getEtaMinutes(),
-                orderTimingService.customerSlowdown(), order.getId() != null ? orderTimingService.prepDueAt(order) : null);
+                orderTimingService.customerSlowdown(), order.getId() != null ? orderTimingService.prepDueAt(order) : null,
+                locationField(order, "landmark"), locationField(order, "tag"));
+    }
+
+    /**
+     * The delivery point as JSON: coordinates, plus a snapshot of the saved address's landmark and "Save as" tag
+     * (Home / Work / ...) so the order keeps showing them even if the customer later edits or deletes that address.
+     */
+    String locationJson(String latitude, String longitude, com.pureeats.domain.entity.Address address) {
+        Map<String, String> location = new java.util.LinkedHashMap<>();
+        location.put("latitude", latitude);
+        location.put("longitude", longitude);
+        if (address != null) {
+            if (address.getHouse() != null && !address.getHouse().isBlank()) location.put("house", address.getHouse().trim());
+            if (address.getLandmark() != null && !address.getLandmark().isBlank()) location.put("landmark", address.getLandmark().trim());
+            if (address.getTag() != null && !address.getTag().isBlank()) location.put("tag", address.getTag().trim());
+        }
+        try {
+            return objectMapper.writeValueAsString(location);
+        } catch (Exception e) {
+            return "{\"latitude\":\"" + latitude + "\",\"longitude\":\"" + longitude + "\"}";
+        }
+    }
+
+    /** {@code key} from the order's location JSON, or null (older orders have only the coordinates). */
+    String locationField(Order order, String key) {
+        if (order.getLocation() == null || order.getLocation().isBlank()) return null;
+        try {
+            String v = objectMapper.readTree(order.getLocation()).path(key).asText(null);
+            return v == null || v.isBlank() ? null : v;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private String serializeBreakdown(PricingBreakdown breakdown) {

@@ -58,6 +58,7 @@ class DeliveryTrackingTest {
     @Mock private com.pureeats.media.service.MediaAssetService mediaAssetService;
     @Mock private OrderTimingService orderTimingService;
     @Mock private OrderStatusLogRepository orderStatusLogRepository;
+    @Mock private RiderDispatchService riderDispatchService;
     @Spy private ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks private DeliveryOrderService service;
@@ -100,6 +101,85 @@ class DeliveryTrackingTest {
         accept.setIsComplete(false);
         lenient().when(acceptDeliveryRepository.findByUserIdAndIsCompleteFalse((int) RIDER)).thenReturn(List.of(accept));
         lenient().when(acceptDeliveryRepository.findByOrderId(77)).thenReturn(Optional.of(accept));
+        // Dispatch rule: every partner may take every store's orders unless a test says otherwise.
+        lenient().when(riderDispatchService.ruleFor(any())).thenReturn(r -> true);
+        lenient().when(riderDispatchService.canReceive(any(), any())).thenReturn(true);
+    }
+
+    /** An ARRIVED cash-on-delivery order of 480 with a handover photo, ready for the PIN. */
+    private void codOrderAwaitingPin() {
+        order.setUniqueOrderId("PE-77");
+        order.setDeliveryPin("1234");
+        order.setPaymentMode("COD");
+        order.setTotal(new BigDecimal("480"));
+        order.setPayable(new BigDecimal("480"));
+        order.setRestaurantCharge(BigDecimal.ZERO);
+        order.setDeliveryCharge(new BigDecimal("30"));
+        lenient().when(orderStatusService.idFor(any())).thenReturn(8);
+        when(orderStatusService.codeFor(5)).thenReturn(OrderStatusCode.ARRIVED);
+        when(mediaAssetService.countForOwner(DeliveryOrderService.DELIVERY_PHOTO_OWNER, 77L)).thenReturn(1L);
+        lenient().when(deliveryCollectionRepository.save(any())).thenAnswer(inv -> {
+            DeliveryCollection c = inv.getArgument(0);
+            c.setId(9L);
+            return c;
+        });
+    }
+
+    @Test
+    void cod_customerPaysMore_extraGoesToTheirWallet_andThePartnerHoldsAllTheCash() {
+        codOrderAwaitingPin();
+
+        service.deliver(RIDER, 77L, "1234", new BigDecimal("500"));
+
+        verify(walletService).credit(eq(CUSTOMER), eq(new BigDecimal("20.00")), contains("Change from cash payment for order #PE-77"));
+        ArgumentCaptor<TripDetail> trip = ArgumentCaptor.forClass(TripDetail.class);
+        verify(tripDetailRepository).save(trip.capture());
+        assertEquals(new BigDecimal("500.00"), trip.getValue().getCashCollectedFromCustomer());
+        assertEquals(new BigDecimal("500.00"), trip.getValue().getCashOnHold(), "the partner hands in everything they took");
+    }
+
+    @Test
+    void cod_exactAmount_creditsNothingToTheCustomer() {
+        codOrderAwaitingPin();
+
+        service.deliver(RIDER, 77L, "1234", new BigDecimal("480"));
+
+        verify(walletService, never()).credit(eq(CUSTOMER), any(), any());
+    }
+
+    @Test
+    void cod_needsTheCashConfirmed_andAtLeastTheAmountDue() {
+        codOrderAwaitingPin();
+
+        var missing = assertThrows(com.pureeats.domain.common.exception.BadRequestException.class, () -> service.deliver(RIDER, 77L, "1234", null));
+        assertTrue(missing.getMessage().contains("how much cash"));
+        var short_ = assertThrows(com.pureeats.domain.common.exception.BadRequestException.class, () -> service.deliver(RIDER, 77L, "1234", new BigDecimal("450")));
+        assertTrue(short_.getMessage().contains("full amount"));
+        verify(tripDetailRepository, never()).save(any());
+    }
+
+    @Test
+    void availableOrders_hideStoresThePartnerIsNotLinkedTo() {
+        when(riderDispatchService.ruleFor(any())).thenReturn(r -> false);
+        when(orderStatusService.idFor(any())).thenReturn(3);
+        order.setDeliveryType(0);
+        when(orderRepository.findByOrderstatusIdInAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(any(), any())).thenReturn(List.of(order));
+        when(acceptDeliveryRepository.findByOrderId(77)).thenReturn(Optional.empty());
+        DeliveryGuyDetail detail = deliveryGuyDetailRepository.findById(4L).orElseThrow();
+        detail.setApprovalStatus(DeliveryGuyDetail.APPROVAL_APPROVED);
+
+        assertTrue(service.availableOrders(RIDER).isEmpty());
+    }
+
+    @Test
+    void accept_anOrderNotOfferedToThisPartner_isForbidden() {
+        when(riderDispatchService.canReceive(any(), any())).thenReturn(false);
+        DeliveryGuyDetail detail = deliveryGuyDetailRepository.findById(4L).orElseThrow();
+        detail.setApprovalStatus(DeliveryGuyDetail.APPROVAL_APPROVED);
+
+        var ex = assertThrows(ForbiddenException.class, () -> service.acceptToDeliver(RIDER, 77L));
+        assertTrue(ex.getMessage().contains("wasn't offered to you"));
+        verify(acceptDeliveryRepository, never()).save(any());
     }
 
     private GpsTable gps(String lat, String lng, LocalDateTime at) {
@@ -196,7 +276,7 @@ class DeliveryTrackingTest {
         when(orderRepository.findByOrderstatusIdInAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(any(), any())).thenReturn(List.of(order));
         when(acceptDeliveryRepository.findByOrderId(77)).thenReturn(Optional.empty());
         when(orderPricingService.distanceKm(any(Restaurant.class), any(), any())).thenReturn(new BigDecimal("3.2"));
-        when(orderPricingService.distanceKm("12.9500", "77.6000", "12.9300", "77.6200")).thenReturn(new BigDecimal("1.4"));
+        when(orderPricingService.distanceKm("12.950", "77.600", "12.9300", "77.6200")).thenReturn(new BigDecimal("1.4"));
 
         var available = service.availableOrders(RIDER);
 
@@ -241,7 +321,7 @@ class DeliveryTrackingTest {
         when(orderStatusService.codeFor(5)).thenReturn(OrderStatusCode.ARRIVED);
         when(mediaAssetService.countForOwner(DeliveryOrderService.DELIVERY_PHOTO_OWNER, 77L)).thenReturn(1L);
 
-        service.deliver(RIDER, 77L, "1234");
+        service.deliver(RIDER, 77L, "1234", null);
 
         verify(walletService).credit(eq(RIDER), eq(new BigDecimal("40.00")), contains("Delivery earning"));
         verify(walletService).credit(eq(RIDER), eq(new BigDecimal("25")), contains("Tip for order #PE-77"));
@@ -257,7 +337,7 @@ class DeliveryTrackingTest {
         when(orderStatusService.codeFor(5)).thenReturn(OrderStatusCode.ARRIVED);
         when(mediaAssetService.countForOwner(DeliveryOrderService.DELIVERY_PHOTO_OWNER, 77L)).thenReturn(0L);
 
-        var ex = assertThrows(com.pureeats.domain.common.exception.BadRequestException.class, () -> service.deliver(RIDER, 77L, "1234"));
+        var ex = assertThrows(com.pureeats.domain.common.exception.BadRequestException.class, () -> service.deliver(RIDER, 77L, "1234", null));
         assertTrue(ex.getMessage().contains("photo"));
     }
 
@@ -265,7 +345,7 @@ class DeliveryTrackingTest {
     void deliver_beforeArriving_isRejected() {
         when(orderStatusService.codeFor(5)).thenReturn(OrderStatusCode.PICKED_UP);
 
-        assertThrows(com.pureeats.domain.common.exception.BadRequestException.class, () -> service.deliver(RIDER, 77L, "1234"));
+        assertThrows(com.pureeats.domain.common.exception.BadRequestException.class, () -> service.deliver(RIDER, 77L, "1234", null));
     }
 
     @Test

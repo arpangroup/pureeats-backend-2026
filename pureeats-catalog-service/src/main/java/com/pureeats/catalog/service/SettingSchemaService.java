@@ -60,6 +60,16 @@ public class SettingSchemaService {
     public static final String RIDER_TO_RESTAURANT_MINUTES = "rider_to_restaurant_minutes";
     public static final String CUSTOMER_ETA_SLOWDOWN = "customer_eta_slowdown_factor";
     public static final String ACCOUNT_DELETED_MESSAGE = "account_deleted_message";
+    /** STRAIGHT_LINE (default) or GOOGLE_DISTANCE_MATRIX - see com.pureeats.geo.distance.DistanceSettings. */
+    public static final String DISTANCE_METHOD = "distance_calculation_method";
+    /** Server-side Google key for the Distance Matrix API (password field - never sent to the apps). */
+    public static final String GOOGLE_DISTANCE_API_KEY = "google_distance_matrix_api_key";
+    /** Which delivery partners hear about a new order: LINKED_STORES (default), NEARBY or ALL. */
+    public static final String RIDER_DISPATCH_MODE = "rider_order_dispatch_mode";
+    /** NEARBY mode: partners whose last location is within this many km of the restaurant. */
+    public static final String RIDER_DISPATCH_RADIUS_KM = "rider_order_dispatch_radius_km";
+    /** LINKED_STORES mode: when a store has no linked partner, offer its orders to nearby partners instead of nobody. */
+    public static final String RIDER_DISPATCH_FALLBACK_NEARBY = "rider_order_dispatch_fallback_nearby";
     /** Profile fields a delivery partner may edit in the rider app (all view-only by default). Read by RiderService / ProfileContactChangeService too. */
     public static final String DRIVER_EDIT_NAME = "driver_edit_name";
     public static final String DRIVER_EDIT_VEHICLE_NUMBER = "driver_edit_vehicle_number";
@@ -93,6 +103,16 @@ public class SettingSchemaService {
     }
 
     /** Flattened set of every field key across every section — the allow-list PUT /api/v1/admin/settings checks incoming updates against. */
+    /** Keys of "password" fields - secrets that must never leave the admin API (see ContentService#getPublicSettings). */
+    public Set<String> secretKeys() {
+        return schema().stream()
+                .flatMap(s -> s.groups().stream())
+                .flatMap(g -> g.fields().stream())
+                .filter(f -> "password".equals(f.fieldType()))
+                .map(SettingFieldDefinition::key)
+                .collect(Collectors.toSet());
+    }
+
     public Set<String> validKeys() {
         return schema().stream()
                 .flatMap(s -> s.groups().stream())
@@ -158,6 +178,19 @@ public class SettingSchemaService {
                         field("max_time_accept_delivery", "Max time to accept delivery", "number", "5")
                                 .placeholder("e.g. 5")
                                 .info("Minutes a delivery partner has to accept an assigned order before it's reassigned.")
+                )),
+                group("Distance & travel time", "How the distance and travel time between a restaurant and a customer are worked out - used for delivery charges, the delivery-area check, restaurant lists, ETAs (T3) and the delivery partner's distances.", "MapPin", List.of(
+                        field(DISTANCE_METHOD, "Distance calculation", "dropdown", "STRAIGHT_LINE")
+                                .options(
+                                        option("Straight line (default, free)", "STRAIGHT_LINE"),
+                                        option("Google Distance Matrix (real road distance & traffic)", "GOOGLE_DISTANCE_MATRIX"))
+                                .info("Straight line: the direct distance between the two points - free, but shorter than the real route (e.g. 3.06 km where the road is 6.7 km). "
+                                        + "Google Distance Matrix: the actual driving distance and time with live traffic, from Google Maps. Billed by Google per lookup; results are cached for 10 minutes, and restaurants already out of range in a straight line are never looked up. "
+                                        + "If Google is unavailable or the key is missing, the straight line is used automatically."),
+                        field(GOOGLE_DISTANCE_API_KEY, "Google Maps server API key", "password", "")
+                                .placeholder("AIza…")
+                                .info("A server key with the Distance Matrix API enabled (Google Cloud console -> APIs & Services). Not the browser key used for the apps' maps - restrict this one by the server's IP address. Leave empty to use the server's configured key (pureeats.distance.google.api-key).")
+                                .warning("Never share this key. It's never sent to the customer, partner or store apps.")
                 )),
                 group("Delivery time estimates", "How the delivery time each app shows is worked out: preparation (T1) + delivery partner to the restaurant (T2) + restaurant to the customer (T3, from the map).", "Timer", List.of(
                         field(DEFAULT_PREP_TIME_MINUTES, "Default preparation time - T1 (minutes)", "number", "20")
@@ -417,6 +450,21 @@ public class SettingSchemaService {
                                 .info("What the partner's commission % is applied to. Delivery charge (default): 100% of a ₹40 delivery charge = ₹40 per order. "
                                         + "Order total: the % applies to the items' total - e.g. 10% of a ₹500 order = ₹50. "
                                         + "The customer's tip is always paid on top in full. Recorded on each order when it's delivered, so a change applies to deliveries from then on.")
+                )),
+                group("New order alerts", "Which delivery partners are told about a new order (push notification, the available-orders list and the alert) and can accept it themselves. An admin can still assign any approved partner to any order.", "Bell", List.of(
+                        field(RIDER_DISPATCH_MODE, "Who gets new orders", "dropdown", "LINKED_STORES")
+                                .options(
+                                        option("Partners linked to the store (assigned by admin)", "LINKED_STORES"),
+                                        option("Partners near the store (by distance)", "NEARBY"),
+                                        option("All online partners", "ALL"))
+                                .info("Linked to the store: only partners an admin has linked to that restaurant (sidebar: Delivery partners -> Rider <-> Stores). "
+                                        + "Near the store: online partners whose last known location is within the range below of the restaurant. "
+                                        + "All online partners: every approved online partner, as before."),
+                        field(RIDER_DISPATCH_RADIUS_KM, "Range for \"near the store\" (km)", "number", "5")
+                                .placeholder("e.g. 5")
+                                .info("Straight-line distance from the partner's last reported location to the restaurant."),
+                        field(RIDER_DISPATCH_FALLBACK_NEARBY, "Stores with no linked partner: offer to nearby partners", "boolean", "true")
+                                .info("Only for \"Partners linked to the store\". On (recommended): a store with nobody linked still gets riders, from partners within the range above. Off: its orders reach no partner until an admin links one or assigns the order.")
                 )),
                 group("Order list", "Bike", List.of(
                         field("show_full_address_order_list", "Show full address on order list", "boolean", "false")
