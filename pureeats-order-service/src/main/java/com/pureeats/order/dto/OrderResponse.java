@@ -50,6 +50,8 @@ public record OrderResponse(
         /** Base ETA = T1 + T2 + T3 from createdAt (null for orders placed before timing existed). */
         Integer etaMinutes,
         /** The customer app's countdown runs this many times slower than real time (Settings -> Delivery time estimates). */
-        Double etaSlowdownFactor
+        Double etaSlowdownFactor,
+        /** When the food should be ready (restaurant acceptance + T1). */
+        LocalDateTime prepDueAt
 ) {
 }

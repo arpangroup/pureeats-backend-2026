@@ -462,7 +462,7 @@ public class OrderService {
                 order.getTransactionId(), order.getDeliveryType(), order.getOrderFrom(), order.getCreatedAt(), order.getUpdatedAt(),
                 legalNextStatuses, deserializeBreakdown(order.getPricingBreakdown()), deliveryGuyId, deliveryGuyName, deliveryPartner,
                 order.getPrepareTime(), order.getRiderToRestaurantMinutes(), order.getTravelMinutes(), order.getEtaMinutes(),
-                orderTimingService.customerSlowdown());
+                orderTimingService.customerSlowdown(), order.getId() != null ? orderTimingService.prepDueAt(order) : null);
     }
 
     private String serializeBreakdown(PricingBreakdown breakdown) {
