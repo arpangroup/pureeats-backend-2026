@@ -16,9 +16,12 @@ public record RiderProfileRequest(
         String description,
         // Sign-up details (required when applying; editable again only while pending/rejected).
         String licenseNumber,
-        /** AADHAAR or PAN. */
+        /** Legacy single ID proof (AADHAAR or PAN) from older app versions - see aadhaarNumber / panNumber. */
         String idProofType,
         String idProofNumber,
+        /** Both are required on an application. */
+        String aadhaarNumber,
+        String panNumber,
         /** BIKE, CYCLE or EV. */
         String vehicleType,
         /** BANK or UPI. */
@@ -30,6 +33,7 @@ public record RiderProfileRequest(
 ) {
     /** Older app versions send only the basic profile fields. */
     public boolean hasKyc() {
-        return licenseNumber != null || idProofNumber != null || vehicleType != null || payoutMethod != null;
+        return licenseNumber != null || idProofNumber != null || aadhaarNumber != null || panNumber != null
+                || vehicleType != null || payoutMethod != null;
     }
 }

@@ -12,7 +12,7 @@ import java.util.regex.Pattern;
 /**
  * Validation and normalisation of a delivery partner's sign-up details, in four groups that can also be
  * changed one at a time later (by the partner when Settings -> Profile editing allows it, or by an admin):
- * driving licence, ID proof (Aadhaar/PAN), vehicle, and payout (bank or UPI).
+ * driving licence, ID proof (both Aadhaar AND PAN), vehicle, and payout (bank or UPI).
  */
 public final class RiderKyc {
 
@@ -31,14 +31,16 @@ public final class RiderKyc {
     /** A full application: every group is required. */
     static void validate(RiderProfileRequest r) {
         validateLicense(r.licenseNumber());
-        validateIdProof(r.idProofType(), r.idProofNumber());
+        validateAadhaar(r.aadhaarNumber());
+        validatePan(r.panNumber());
         validateVehicle(r.vehicleType(), r.vehicleNumber());
         validatePayout(r.payoutMethod(), r.bankAccountHolder(), r.bankAccountNumber(), r.bankIfsc(), r.upiId());
     }
 
     static void apply(DeliveryGuyDetail d, RiderProfileRequest r) {
         applyLicense(d, r.licenseNumber());
-        applyIdProof(d, r.idProofType(), r.idProofNumber());
+        applyAadhaar(d, r.aadhaarNumber());
+        applyPan(d, r.panNumber());
         applyVehicle(d, r.vehicleType(), r.vehicleNumber());
         applyPayout(d, r.payoutMethod(), r.bankAccountHolder(), r.bankAccountNumber(), r.bankIfsc(), r.upiId());
     }
@@ -60,6 +62,18 @@ public final class RiderKyc {
         } else {
             throw new BadRequestException("Choose Aadhaar or PAN as your ID proof.");
         }
+    }
+
+    public static void validateAadhaar(String aadhaarNumber) {
+        String id = compact(aadhaarNumber);
+        if (id == null || id.isEmpty()) throw new BadRequestException("Enter your Aadhaar number - both Aadhaar and PAN are required.");
+        if (!AADHAAR.matcher(id).matches()) throw new BadRequestException("Aadhaar number must be 12 digits.");
+    }
+
+    public static void validatePan(String panNumber) {
+        String id = compact(panNumber);
+        if (id == null || id.isEmpty()) throw new BadRequestException("Enter your PAN - both Aadhaar and PAN are required.");
+        if (!PAN.matcher(id).matches()) throw new BadRequestException("Enter a valid PAN (e.g. ABCDE1234F).");
     }
 
     public static void validateVehicle(String vehicleType, String vehicleNumber) {
@@ -96,6 +110,17 @@ public final class RiderKyc {
         d.setIdProofNumber(compact(idProofNumber));
     }
 
+    /** Also kept in the legacy single ID-proof columns so older readers still see an ID. */
+    public static void applyAadhaar(DeliveryGuyDetail d, String aadhaarNumber) {
+        d.setAadhaarNumber(compact(aadhaarNumber));
+        d.setIdProofType("AADHAAR");
+        d.setIdProofNumber(d.getAadhaarNumber());
+    }
+
+    public static void applyPan(DeliveryGuyDetail d, String panNumber) {
+        d.setPanNumber(compact(panNumber));
+    }
+
     public static void applyVehicle(DeliveryGuyDetail d, String vehicleType, String vehicleNumber) {
         d.setVehicleType(upper(vehicleType));
         if (vehicleNumber != null && !vehicleNumber.isBlank()) d.setVehicleNumber(vehicleNumber.trim().toUpperCase(Locale.ROOT));
@@ -116,8 +141,12 @@ public final class RiderKyc {
         return licenseNumber != null && !Objects.equals(compact(licenseNumber), d.getLicenseNumber());
     }
 
-    static boolean idProofChanged(DeliveryGuyDetail d, String type, String number) {
-        return number != null && (!Objects.equals(compact(number), d.getIdProofNumber()) || !Objects.equals(upper(type), d.getIdProofType()));
+    static boolean aadhaarChanged(DeliveryGuyDetail d, String number) {
+        return number != null && !Objects.equals(compact(number), d.effectiveAadhaar());
+    }
+
+    static boolean panChanged(DeliveryGuyDetail d, String number) {
+        return number != null && !Objects.equals(compact(number), d.effectivePan());
     }
 
     static boolean vehicleTypeChanged(DeliveryGuyDetail d, String type) {

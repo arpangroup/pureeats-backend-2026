@@ -21,6 +21,8 @@ public record AdminDeliveryGuyRequest(
         String licenseNumber,
         String idProofType,
         String idProofNumber,
+        String aadhaarNumber,
+        String panNumber,
         String vehicleType,
         String payoutMethod,
         String bankAccountHolder,

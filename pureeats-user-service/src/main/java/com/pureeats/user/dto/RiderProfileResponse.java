@@ -34,6 +34,10 @@ public record RiderProfileResponse(
         String idProofType,
         /** Masked except the last 4 characters. */
         String idProofNumberMasked,
+        /** Masked except the last 4 digits; null when not on file. */
+        String aadhaarNumberMasked,
+        /** Masked except the last 4 characters; null when not on file. */
+        String panNumberMasked,
         String vehicleType,
         String payoutMethod,
         String bankAccountHolder,

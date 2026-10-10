@@ -1,39 +1,47 @@
 package com.pureeats.geo.distance;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Selects the single active {@link DistanceCalculator} implementation via
- * {@code pureeats.distance.provider} (haversine / euclidean / google) - the exact same
- * {@code @ConditionalOnProperty}-per-bean pattern {@code NotificationProviderConfig} uses to pick
- * the active email/SMS provider. Adding a new algorithm (e.g. a routed-road-distance service) means
- * writing one more {@link DistanceCalculator} implementation and one more {@code @Bean} method here
- * - every existing caller (delivery-charge pricing, delivery-area checks, nearby-restaurant search)
- * keeps injecting the plain interface and never changes.
+ * The application's single {@link DistanceCalculator}: a {@link SwitchableDistanceCalculator} that picks
+ * straight-line or Google Distance Matrix on every call from {@link DistanceSettings} (admin Settings -> General ->
+ * Distance &amp; travel time). Every caller (delivery-charge pricing, delivery-area checks, restaurant lists, ETAs,
+ * the partner's distances) keeps injecting the plain interface and never changes.
+ * <p>
+ * The {@code pureeats.distance.*} properties are the fallback when the admin hasn't chosen yet (or no
+ * {@link DistanceSettings} bean exists): {@code provider=google} + {@code google.api-key} still turns Google on, and
+ * {@code provider=euclidean} still selects the flat-plane approximation as the straight-line method.
  */
 @Configuration
 public class DistanceCalculatorConfig {
 
     @Bean
-    @ConditionalOnProperty(prefix = "pureeats.distance", name = "provider", havingValue = "haversine", matchIfMissing = true)
-    public DistanceCalculator haversineDistanceCalculator() {
-        return new HaversineDistanceCalculator();
-    }
-
-    @Bean
-    @ConditionalOnProperty(prefix = "pureeats.distance", name = "provider", havingValue = "euclidean")
-    public DistanceCalculator euclideanDistanceCalculator() {
-        return new EuclideanDistanceCalculator();
-    }
-
-    @Bean
-    @ConditionalOnProperty(prefix = "pureeats.distance", name = "provider", havingValue = "google")
-    public DistanceCalculator googleDistanceMatrixCalculator(
+    public DistanceCalculator distanceCalculator(
+            ObjectProvider<DistanceSettings> settingsProvider,
+            @Value("${pureeats.distance.provider:haversine}") String provider,
             @Value("${pureeats.distance.google.api-key:}") String apiKey,
             @Value("${pureeats.distance.google.timeout-ms:3000}") int timeoutMs) {
-        return new GoogleDistanceMatrixCalculator(apiKey, timeoutMs);
+        DistanceSettings fromProperties = propertySettings(provider, apiKey);
+        DistanceCalculator straightLine = "euclidean".equalsIgnoreCase(provider)
+                ? new EuclideanDistanceCalculator() : new HaversineDistanceCalculator();
+        // Resolved lazily on each call - the settings bean lives in another module and is created after this one.
+        return new SwitchableDistanceCalculator(() -> settingsProvider.getIfAvailable(() -> fromProperties), straightLine, timeoutMs);
+    }
+
+    static DistanceSettings propertySettings(String provider, String apiKey) {
+        return new DistanceSettings() {
+            @Override
+            public String method() {
+                return "google".equalsIgnoreCase(provider) ? GOOGLE : STRAIGHT_LINE;
+            }
+
+            @Override
+            public String googleApiKey() {
+                return apiKey;
+            }
+        };
     }
 }

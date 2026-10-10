@@ -56,6 +56,7 @@ public class DeliveryOrderService {
     private final com.pureeats.user.service.RiderStatusLogService riderStatusLogService;
     private final com.pureeats.media.service.MediaAssetService mediaAssetService;
     private final OrderTimingService orderTimingService;
+    private final RiderDispatchService riderDispatchService;
     private final com.pureeats.user.repository.LoginHistoryRepository loginHistoryRepository;
     private final com.pureeats.media.storage.MediaUrlResolver mediaUrlResolver;
 
@@ -97,8 +98,13 @@ public class DeliveryOrderService {
                 orderStatusService.idFor(OrderStatusCode.RESTAURANT_ACCEPTED),
                 orderStatusService.idFor(OrderStatusCode.READY_FOR_PICKUP));
         LocalDateTime cutoff = LocalDateTime.now().minusHours(availableOrderWindowHours);
+        // Only orders from stores this partner may take (Settings -> New order alerts: linked stores / nearby / all).
+        java.util.function.Predicate<Restaurant> mayTake = riderDispatchService.ruleFor(rider);
+        Map<Integer, Restaurant> restaurants = new java.util.HashMap<>();
         return orderRepository.findByOrderstatusIdInAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(statusIds, cutoff).stream()
                 .filter(o -> o.getDeliveryType() == 0 && acceptDeliveryRepository.findByOrderId(o.getId().intValue()).isEmpty())
+                .filter(o -> mayTake.test(restaurants.computeIfAbsent(o.getRestaurantId(),
+                        id -> restaurantRepository.findById(id.longValue()).orElse(null))))
                 .map(o -> toAvailableOrderResponse(o, rider))
                 .toList();
     }
@@ -129,7 +135,7 @@ public class DeliveryOrderService {
         int itemsCount = orderItemRepository.findByOrderId(order.getId().intValue()).size();
 
         BigDecimal pickupDistanceKm = restaurant != null && rider.getLastLat() != null && rider.getLastLng() != null
-                ? orderPricingService.distanceKm(rider.getLastLat().toPlainString(), rider.getLastLng().toPlainString(),
+                ? orderPricingService.distanceKm(approx(rider.getLastLat()), approx(rider.getLastLng()),
                         restaurant.getLatitude(), restaurant.getLongitude())
                 : null;
 
@@ -145,6 +151,14 @@ public class DeliveryOrderService {
                 tipOf(order), pickupDistanceKm, distanceKm,
                 java.util.Optional.ofNullable(orderStatusService.codeFor(order.getOrderstatusId())).map(Enum::name).orElse("UNKNOWN"),
                 order.getPaymentMode(), pickupDueAt(order));
+    }
+
+    /**
+     * The partner's position rounded to ~100 m for distance lookups: they move between polls, and with Google
+     * Distance Matrix on, an exact position would never hit the cache - one paid lookup per poll per order.
+     */
+    private static String approx(BigDecimal coordinate) {
+        return coordinate.setScale(3, RoundingMode.HALF_UP).toPlainString();
     }
 
     private static BigDecimal tipOf(Order order) {
@@ -166,6 +180,11 @@ public class DeliveryOrderService {
         DeliveryGuyDetail rider = riderProfile(riderUserId);
         requireApproved(rider);
         Order order = orderService.findOrThrow(orderId);
+        Restaurant restaurant = restaurantRepository.findById(order.getRestaurantId().longValue()).orElse(null);
+        if (!riderDispatchService.canReceive(rider, restaurant)) {
+            log.warn("Rejected delivery acceptance for order {} by rider {}: not offered to them ({} mode)", orderId, riderUserId, riderDispatchService.mode());
+            throw new ForbiddenException("ORDER_NOT_OFFERED", "This order is for delivery partners linked to the restaurant or nearby - it wasn't offered to you.");
+        }
         if (acceptDeliveryRepository.findByOrderId(order.getId().intValue()).isPresent()) {
             log.warn("Rejected delivery acceptance for order {}: already assigned to a rider", orderId);
             throw new BadRequestException("This order has already been assigned to a rider");
@@ -263,7 +282,7 @@ public class DeliveryOrderService {
     /** Photos at handover to the customer - same media_assets table, different owner type. */
     public static final String DELIVERY_PHOTO_OWNER = "ORDER_DELIVERY";
     public static final int MAX_PICKUP_PHOTOS = 3;
-    private static final String ASSIGNED_WHILE_PREPARING = "Delivery partner assigned - waiting for the food to be ready";
+    private static final String ASSIGNED_WHILE_PREPARING = "Delivery partner assigned" + OrderStatusLogService.ASSIGNED_WHILE_PREPARING_SUFFIX;
 
     /**
      * Records a rider assignment. If the food is already READY_FOR_PICKUP the order moves to RIDER_ASSIGNED as
@@ -280,7 +299,7 @@ public class DeliveryOrderService {
         } else {
             orderRepository.save(order);
             orderStatusLogService.record(order.getId(), from, from, actorType, actorUserId,
-                    note != null ? note + " - waiting for the food to be ready" : ASSIGNED_WHILE_PREPARING);
+                    note != null ? note + OrderStatusLogService.ASSIGNED_WHILE_PREPARING_SUFFIX : ASSIGNED_WHILE_PREPARING);
         }
     }
 
@@ -390,8 +409,8 @@ public class DeliveryOrderService {
         int minutes;
         BigDecimal km;
         if (fromRider) {
-            minutes = orderTimingService.travelMinutes(rider.getLastLat(), rider.getLastLng(), customer[0], customer[1]);
-            km = orderPricingService.distanceKm(rider.getLastLat().toPlainString(), rider.getLastLng().toPlainString(), customer[0], customer[1]);
+            minutes = orderTimingService.travelMinutes(approx(rider.getLastLat()), approx(rider.getLastLng()), customer[0], customer[1]);
+            km = orderPricingService.distanceKm(approx(rider.getLastLat()), approx(rider.getLastLng()), customer[0], customer[1]);
         } else {
             Restaurant restaurant = restaurantRepository.findById(order.getRestaurantId().longValue()).orElse(null);
             minutes = restaurant != null ? orderTimingService.travelMinutes(restaurant.getLatitude(), restaurant.getLongitude(), customer[0], customer[1]) : 0;
@@ -439,8 +458,12 @@ public class DeliveryOrderService {
         return orderTimingService.prepDueAt(order);
     }
 
+    /** A cash amount above the bill by more than this is almost certainly a typo (e.g. 4800 for 480) - rejected. */
+    static final BigDecimal MAX_COD_CHANGE = new BigDecimal("2000");
+
+    /** @param cashCollected cash on delivery: what the partner received - at least the amount due; the extra goes to the customer's wallet. */
     @Transactional
-    public OrderResponse deliver(Long riderUserId, Long orderId, String deliveryPin) {
+    public OrderResponse deliver(Long riderUserId, Long orderId, String deliveryPin, BigDecimal cashCollected) {
         log.info("Rider {} attempting to complete delivery for order {}", riderUserId, orderId);
         Order order = ownedByRider(riderUserId, orderId);
         if (orderStatusService.codeFor(order.getOrderstatusId()) != OrderStatusCode.ARRIVED) {
@@ -449,7 +472,32 @@ public class DeliveryOrderService {
         if (mediaAssetService.countForOwner(DELIVERY_PHOTO_OWNER, order.getId()) == 0) {
             throw new BadRequestException("Take a photo of the order being handed over before confirming delivery.");
         }
-        return completeDelivery(order, deliveryPin, "DELIVERY", riderUserId, "Verified by delivery PIN");
+        BigDecimal cash = null;
+        if (isCashOnDelivery(order)) {
+            BigDecimal due = order.getPayable();
+            if (cashCollected == null) {
+                throw new BadRequestException("Confirm how much cash you collected from the customer.");
+            }
+            cash = cashCollected.setScale(2, RoundingMode.HALF_UP);
+            if (cash.compareTo(due) < 0) {
+                throw new BadRequestException("Collect the full amount due (" + rupees(due) + ") - you entered " + rupees(cash) + ".");
+            }
+            if (cash.subtract(due).compareTo(MAX_COD_CHANGE) > 0) {
+                throw new BadRequestException("That's " + rupees(cash.subtract(due)) + " more than the bill - check the amount collected.");
+            }
+        }
+        return completeDelivery(order, deliveryPin, "DELIVERY", riderUserId,
+                cash != null && cash.compareTo(order.getPayable()) > 0
+                        ? "Verified by delivery PIN - cash collected " + rupees(cash) + " for " + rupees(order.getPayable())
+                        : "Verified by delivery PIN", cash);
+    }
+
+    private static boolean isCashOnDelivery(Order order) {
+        return "COD".equals(order.getPaymentMode());
+    }
+
+    private static String rupees(BigDecimal amount) {
+        return "\u20b9" + amount.setScale(2, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString();
     }
 
     /** The customer confirms delivery themself by reading out the same PIN - e.g. handed to the rider in person. */
@@ -461,7 +509,7 @@ public class DeliveryOrderService {
             log.warn("User {} attempted to confirm delivery of order {} which does not belong to them", customerUserId, orderId);
             throw new ForbiddenException("This order does not belong to you");
         }
-        return completeDelivery(order, deliveryPin, "CUSTOMER", customerUserId, "Confirmed by customer via delivery PIN");
+        return completeDelivery(order, deliveryPin, "CUSTOMER", customerUserId, "Confirmed by customer via delivery PIN", null);
     }
 
     /**
@@ -480,10 +528,10 @@ public class DeliveryOrderService {
         if (!OrderStatusTransitions.isLegal(from, OrderStatusCode.DELIVERED)) {
             throw new BadRequestException("Cannot change order status from " + (from != null ? from.name() : "UNKNOWN") + " to DELIVERED");
         }
-        return finishDelivery(order, "ADMIN", adminUserId, "Marked delivered by admin");
+        return finishDelivery(order, "ADMIN", adminUserId, "Marked delivered by admin", null);
     }
 
-    private OrderResponse completeDelivery(Order order, String deliveryPin, String actorType, Long actorUserId, String note) {
+    private OrderResponse completeDelivery(Order order, String deliveryPin, String actorType, Long actorUserId, String note, BigDecimal cashCollected) {
         OrderStatusCode current = orderStatusService.codeFor(order.getOrderstatusId());
         if (!OUT_FOR_DELIVERY.contains(current)) {
             log.warn("Rejected delivery completion for order {} by {} {}: status is {}", order.getId(), actorType, actorUserId, current);
@@ -493,10 +541,11 @@ public class DeliveryOrderService {
             log.warn("Rejected delivery completion for order {} by {} {}: incorrect delivery PIN", order.getId(), actorType, actorUserId);
             throw new BadRequestException("Incorrect delivery PIN");
         }
-        return finishDelivery(order, actorType, actorUserId, note);
+        return finishDelivery(order, actorType, actorUserId, note, cashCollected);
     }
 
-    private OrderResponse finishDelivery(Order order, String actorType, Long actorUserId, String note) {
+    /** @param cashCollected cash the partner confirmed receiving (COD), or null = exactly the amount due. */
+    private OrderResponse finishDelivery(Order order, String actorType, Long actorUserId, String note, BigDecimal cashCollected) {
 
         OrderStatusCode from = orderStatusService.codeFor(order.getOrderstatusId());
         order.setOrderstatusId(orderStatusService.idFor(OrderStatusCode.DELIVERED));
@@ -509,7 +558,7 @@ public class DeliveryOrderService {
         if (assignment != null) {
             assignment.setIsComplete(true);
             acceptDeliveryRepository.save(assignment);
-            creditRiderAndSettle(order, assignment.getUserId().longValue(), LocalDateTime.now());
+            creditRiderAndSettle(order, assignment.getUserId().longValue(), LocalDateTime.now(), cashCollected);
         } else {
             log.debug("Order {} delivered with no rider assignment on record (likely self-pickup)", order.getId());
         }
@@ -517,7 +566,25 @@ public class DeliveryOrderService {
         orderNotificationService.notify(NotificationRecipientRole.CUSTOMER, order.getUserId().longValue(), "Order delivered",
                 "Your order #" + order.getUniqueOrderId() + " has been delivered. Enjoy your meal!",
                 Map.of("orderId", order.getId(), "status", OrderStatusCode.DELIVERED.name()));
+        creditCashChange(order, cashCollected);
         return orderService.toResponse(order);
+    }
+
+    /**
+     * Cash on delivery where the customer handed over more than the bill (e.g. ₹500 for ₹480): the extra goes to
+     * their wallet, with a note saying why, instead of the partner having to find change.
+     */
+    private void creditCashChange(Order order, BigDecimal cashCollected) {
+        if (cashCollected == null || !isCashOnDelivery(order)) return;
+        BigDecimal change = cashCollected.subtract(order.getPayable());
+        if (change.signum() <= 0) return;
+        walletService.credit(order.getUserId().longValue(), change,
+                "Change from cash payment for order #" + order.getUniqueOrderId() + ": paid " + rupees(cashCollected)
+                        + " for a " + rupees(order.getPayable()) + " bill");
+        log.info("Credited {} change to customer {} for COD order {} ({} paid for {})",
+                change, order.getUserId(), order.getId(), cashCollected, order.getPayable());
+        orderNotificationService.notify(NotificationRecipientRole.CUSTOMER, order.getUserId().longValue(), "Change added to your wallet",
+                rupees(change) + " from your cash payment for order #" + order.getUniqueOrderId() + " is in your PureEats wallet.");
     }
 
     /**
@@ -541,6 +608,11 @@ public class DeliveryOrderService {
     }
 
     private void creditRiderAndSettle(Order order, Long riderUserId, LocalDateTime deliveredAt) {
+        creditRiderAndSettle(order, riderUserId, deliveredAt, null);
+    }
+
+    /** @param cashCollected COD cash the partner confirmed receiving; null = the amount due. */
+    private void creditRiderAndSettle(Order order, Long riderUserId, LocalDateTime deliveredAt, BigDecimal cashCollectedArg) {
         if (tripDetailRepository.findByOrderId(order.getId().intValue()).isPresent()) {
             log.warn("Order {} already has its earnings recorded - not crediting again", order.getId());
             return;
@@ -566,8 +638,10 @@ public class DeliveryOrderService {
         restaurantPayoutService.recordEarning(order.getRestaurantId(), restaurantEarning);
 
         BigDecimal cashCollected = BigDecimal.ZERO;
-        if ("COD".equals(order.getPaymentMode())) {
-            cashCollected = order.getPayable();
+        if (isCashOnDelivery(order)) {
+            // The partner holds ALL the cash they took (e.g. ₹500 on a ₹480 bill) until settlement; the extra was
+            // credited to the customer's wallet, so the platform is square once the partner hands it in.
+            cashCollected = cashCollectedArg != null ? cashCollectedArg : order.getPayable();
             recordCashCollection(riderUserId, cashCollected, order.getUniqueOrderId());
             log.debug("Recorded COD cash collection of {} for rider {} on order {}", cashCollected, riderUserId, order.getId());
         }
@@ -882,7 +956,7 @@ public class DeliveryOrderService {
         String assignedBy = "DELIVERY";
         for (var entry : orderStatusLogRepository.findByOrderIdOrderByCreatedAtAsc(order.getId())) {
             if (OrderStatusCode.RIDER_ASSIGNED.name().equals(entry.getToStatus())
-                    || (entry.getNote() != null && entry.getNote().contains("waiting for the food to be ready"))) {
+                    || OrderStatusLogService.isAssignedWhilePreparing(entry)) {
                 acceptedAt = entry.getCreatedAt();
                 assignedBy = entry.getActorType() != null ? entry.getActorType() : assignedBy;
             } else if (OrderStatusCode.PICKED_UP.name().equals(entry.getToStatus())) {

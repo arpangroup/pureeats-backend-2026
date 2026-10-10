@@ -171,10 +171,15 @@ public class RiderService {
             RiderKyc.validateLicense(r.licenseNumber());
             RiderKyc.applyLicense(d, r.licenseNumber());
         }
-        if (RiderKyc.idProofChanged(d, r.idProofType(), r.idProofNumber())) {
+        if (RiderKyc.aadhaarChanged(d, r.aadhaarNumber())) {
             profileEditPolicy.assertEditable(RiderProfileEditPolicy.ID_PROOF, "Aadhaar / PAN");
-            RiderKyc.validateIdProof(r.idProofType(), r.idProofNumber());
-            RiderKyc.applyIdProof(d, r.idProofType(), r.idProofNumber());
+            RiderKyc.validateAadhaar(r.aadhaarNumber());
+            RiderKyc.applyAadhaar(d, r.aadhaarNumber());
+        }
+        if (RiderKyc.panChanged(d, r.panNumber())) {
+            profileEditPolicy.assertEditable(RiderProfileEditPolicy.ID_PROOF, "Aadhaar / PAN");
+            RiderKyc.validatePan(r.panNumber());
+            RiderKyc.applyPan(d, r.panNumber());
         }
         if (RiderKyc.vehicleTypeChanged(d, r.vehicleType())) {
             profileEditPolicy.assertEditable(RiderProfileEditPolicy.VEHICLE_TYPE, "Vehicle type");
@@ -261,7 +266,8 @@ public class RiderService {
                 Boolean.TRUE.equals(detail.getIsActive()),
                 detail.getApprovalStatus() != null ? detail.getApprovalStatus() : DeliveryGuyDetail.APPROVAL_APPROVED,
                 detail.getRejectionReason(), detail.getLicenseNumber(), licensePhotoUrl(detail.getId()), detail.getIdProofType(),
-                RiderKyc.mask(detail.getIdProofNumber()), detail.getVehicleType(), detail.getPayoutMethod(), detail.getBankAccountHolder(),
+                RiderKyc.mask(detail.getIdProofNumber()), RiderKyc.mask(detail.effectiveAadhaar()), RiderKyc.mask(detail.effectivePan()),
+                detail.getVehicleType(), detail.getPayoutMethod(), detail.getBankAccountHolder(),
                 RiderKyc.mask(detail.getBankAccountNumber()), detail.getBankIfsc(), detail.getUpiId());
     }
 }
