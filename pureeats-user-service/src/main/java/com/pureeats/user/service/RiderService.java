@@ -40,6 +40,7 @@ public class RiderService {
     private final RoleService roleService;
     private final MediaUrlResolver mediaUrlResolver;
     private final MediaAssetService mediaAssetService;
+    private final RiderDocuments riderDocuments;
 
     private static final String OWNER_TYPE_DELIVERY_GUY = "DELIVERY_GUY";
     /** Driving licence photo, owned by the DeliveryGuyDetail id - media_assets, no extra table. */
@@ -76,7 +77,7 @@ public class RiderService {
         detail.setApprovalUpdatedAt(LocalDateTime.now());
         detail.setIsActive(true);
         detail.setIsOnline(false);
-        detail.setName(request.name() != null && !request.name().isBlank() ? request.name() : user.getName());
+        detail.setName(request.name().trim());
         detail.setAge(request.age());
         detail.setGender(request.gender());
         detail.setDescription(request.description());
@@ -90,6 +91,7 @@ public class RiderService {
         detail = deliveryGuyDetailRepository.save(detail);
 
         user.setDeliveryGuyDetailId(detail.getId().intValue());
+        adoptApplicantName(user, detail.getName());
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
 
@@ -119,7 +121,8 @@ public class RiderService {
             // Pending or rejected: the applicant can correct their details; a rejected application goes back for review.
             RiderKyc.validate(request);
             RiderKyc.apply(detail, request);
-            if (request.name() != null && !request.name().isBlank()) detail.setName(request.name());
+            if (request.name() != null && !request.name().isBlank()) detail.setName(request.name().trim());
+            if (adoptApplicantName(user, detail.getName())) userRepository.save(user);
             detail.setApprovalStatus(DeliveryGuyDetail.APPROVAL_PENDING);
             detail.setRejectionReason(null);
             detail.setApprovalUpdatedAt(LocalDateTime.now());
@@ -156,8 +159,32 @@ public class RiderService {
         if (detail.isApproved()) {
             profileEditPolicy.assertEditable(RiderProfileEditPolicy.LICENSE, "Driving licence");
         }
-        mediaAssetService.upload(file, OWNER_TYPE_LICENSE, detail.getId(), userId);
+        riderDocuments.upload(detail, RiderDocuments.LICENSE, file, userId);
         log.info("Rider {} uploaded a driving licence photo", userId);
+        return toResponse(user, detail);
+    }
+
+    /**
+     * One document (Aadhaar front/back, PAN, vehicle RC, bank passbook, licence) - a photo or a PDF; the latest upload
+     * counts. Always allowed while the application isn't approved; afterwards only when Settings -> Delivery
+     * Application -> Profile editing unlocks that group.
+     */
+    @Transactional
+    @CacheEvict(cacheNames = RIDER_PROFILES_CACHE, key = "#userId")
+    public RiderProfileResponse uploadDocument(Long userId, String type, MultipartFile file) {
+        String docType = RiderDocuments.normalize(type);
+        User user = userService.findUserOrThrow(userId);
+        DeliveryGuyDetail detail = resolveOwnDetail(user);
+        if (detail.isApproved()) {
+            switch (docType) {
+                case RiderDocuments.LICENSE -> profileEditPolicy.assertEditable(RiderProfileEditPolicy.LICENSE, "Driving licence");
+                case RiderDocuments.RC -> profileEditPolicy.assertEditable(RiderProfileEditPolicy.VEHICLE_NUMBER, "Vehicle RC");
+                case RiderDocuments.PASSBOOK -> profileEditPolicy.assertEditable(RiderProfileEditPolicy.PAYOUT, "Bank passbook");
+                default -> profileEditPolicy.assertEditable(RiderProfileEditPolicy.ID_PROOF, "Aadhaar / PAN");
+            }
+        }
+        riderDocuments.upload(detail, docType, file, userId);
+        log.info("Rider {} uploaded document {}", userId, docType);
         return toResponse(user, detail);
     }
 
@@ -201,6 +228,19 @@ public class RiderService {
                 .orElse(null);
     }
 
+    /**
+     * An OTP sign-up's account is called "PureEats User" until someone says otherwise - the applicant's full name
+     * (as on their licence) replaces that placeholder on the account too, so the admin's user list and the
+     * session show the real name. A name the user chose themself is left alone.
+     */
+    private static boolean adoptApplicantName(User user, String applicantName) {
+        String current = user.getName() == null ? "" : user.getName().trim();
+        if (applicantName == null || applicantName.isBlank() || !(current.isEmpty() || current.equalsIgnoreCase(RiderKyc.PLACEHOLDER_NAME))) return false;
+        user.setName(applicantName.trim());
+        user.setUpdatedAt(LocalDateTime.now());
+        return true;
+    }
+
     private static String blankToNull(String s) {
         return s == null || s.isBlank() ? null : s;
     }
@@ -211,6 +251,10 @@ public class RiderService {
     public RiderProfileResponse uploadPhoto(Long userId, MultipartFile file) {
         User user = userService.findUserOrThrow(userId);
         DeliveryGuyDetail detail = resolveOwnDetail(user);
+        // Once approved the photo is locked (customers recognise the partner by it) unless an admin unlocks it.
+        if (detail.isApproved()) {
+            profileEditPolicy.assertEditable(RiderProfileEditPolicy.PHOTO, "Profile photo");
+        }
         String storageKey = mediaAssetService.upload(file, OWNER_TYPE_DELIVERY_GUY, detail.getId(), userId).storageKey();
         detail.setPhoto(storageKey);
         detail.setUpdatedAt(LocalDateTime.now());
@@ -259,7 +303,8 @@ public class RiderService {
         // Prefer the rider-specific one but fall back to the user-identity one so a photo set via
         // either admin path actually shows up here.
         String photoKey = detail.getPhoto() != null ? detail.getPhoto() : user.getPhoto();
-        return new RiderProfileResponse(detail.getId(), user.getId(), detail.getName(), user.getEmail(), user.getPhone(),
+        var documents = riderDocuments.uploaded(detail.getId());
+        return new RiderProfileResponse(detail.getId(), user.getId(), detail.getName(), UserProvisioningService.displayEmail(user.getEmail()), user.getPhone(),
                 mediaUrlResolver.resolve(photoKey), detail.getVehicleNumber(), detail.getAge(), detail.getGender(),
                 detail.getDescription(), detail.getCommissionRate(), detail.getMaxAcceptDeliveryLimit(), detail.getRating(),
                 Boolean.TRUE.equals(detail.getIsNotifiable()), Boolean.TRUE.equals(detail.getIsOnline()),
@@ -268,6 +313,7 @@ public class RiderService {
                 detail.getRejectionReason(), detail.getLicenseNumber(), licensePhotoUrl(detail.getId()), detail.getIdProofType(),
                 RiderKyc.mask(detail.getIdProofNumber()), RiderKyc.mask(detail.effectiveAadhaar()), RiderKyc.mask(detail.effectivePan()),
                 detail.getVehicleType(), detail.getPayoutMethod(), detail.getBankAccountHolder(),
-                RiderKyc.mask(detail.getBankAccountNumber()), detail.getBankIfsc(), detail.getUpiId());
+                RiderKyc.mask(detail.getBankAccountNumber()), detail.getBankIfsc(), detail.getUpiId(),
+                java.util.List.copyOf(documents.values()), riderDocuments.missing(detail, user, documents), user.isPhoneVerified());
     }
 }

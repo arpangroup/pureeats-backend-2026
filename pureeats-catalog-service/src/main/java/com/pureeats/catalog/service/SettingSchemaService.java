@@ -80,6 +80,7 @@ public class SettingSchemaService {
     public static final String DRIVER_EDIT_ID_PROOF = "driver_edit_id_proof";
     public static final String DRIVER_EDIT_VEHICLE_TYPE = "driver_edit_vehicle_type";
     public static final String DRIVER_EDIT_PAYOUT = "driver_edit_payout";
+    public static final String DRIVER_EDIT_PHOTO = "driver_edit_photo";
 
     public static final String DEFAULT_MAX_ACTIVE_ORDERS_MESSAGE =
             "You already have {count} orders in progress - please wait for one to be delivered before placing another.";
@@ -478,9 +479,8 @@ public class SettingSchemaService {
                 group("Profile editing", "Which profile fields a delivery partner can change in the rider app. Everything is view-only by default; switch a field on to let partners edit it. The server enforces this too.", "UserCheck", List.of(
                         field(DRIVER_EDIT_NAME, "Name", "boolean", "false").info("Off: the name is shown but can only be changed from the admin panel."),
                         field(DRIVER_EDIT_VEHICLE_NUMBER, "Vehicle number", "boolean", "false").info("Off: partners can't change the vehicle on record - e.g. to stop swapping to an unverified vehicle."),
-                        field(DRIVER_EDIT_AGE, "Age", "boolean", "false"),
-                        field(DRIVER_EDIT_GENDER, "Gender", "boolean", "false"),
-                        field(DRIVER_EDIT_ABOUT, "About you", "boolean", "false").info("The short description customers can see."),
+                        field(DRIVER_EDIT_PHOTO, "Profile photo", "boolean", "false")
+                                .info("Off (default): once approved, a partner can't change their photo - customers recognise them by it. Applicants can always change it until approved. An admin can replace it any time."),
                         field(DRIVER_EDIT_PHONE, "Mobile number", "boolean", "false").info("On: partners can change their number through an OTP check on the new number. Off: shown read-only."),
                         field(DRIVER_EDIT_EMAIL, "Email", "boolean", "false").info("On: partners can change their email through an OTP check. Off: shown read-only."),
                         field(DRIVER_EDIT_LICENSE, "Driving licence (number + photo)", "boolean", "false")

@@ -78,6 +78,31 @@ public class MediaAssetService {
     }
 
     /**
+     * Same as {@link #upload}, but for an identity/vehicle/bank document: a photo (JPEG/PNG/WebP) or a PDF scan.
+     */
+    @Transactional
+    public MediaUploadResponse uploadDocument(MultipartFile file, String ownerType, Long ownerId, Long uploadedBy) {
+        if (file == null || file.isEmpty()) {
+            log.warn("Document upload rejected for {}/{}: no file was uploaded", ownerType, ownerId);
+            throw new BadRequestException("No file was uploaded");
+        }
+        if (file.getSize() > maxSizeBytes) {
+            log.warn("Document upload rejected for {}/{}: file size {} exceeds limit {}", ownerType, ownerId, file.getSize(), maxSizeBytes);
+            throw new BadRequestException("The file must be smaller than " + (maxSizeBytes / (1024 * 1024)) + "MB");
+        }
+        String contentType = file.getContentType();
+        String filename = file.getOriginalFilename() != null ? file.getOriginalFilename().toLowerCase(Locale.ROOT) : "";
+        if ("application/pdf".equals(contentType) || (contentType == null && filename.endsWith(".pdf"))) {
+            return storeAndRecord(file, ownerType, ownerId, uploadedBy, "application/pdf", ".pdf");
+        }
+        if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType)) {
+            log.warn("Document upload rejected for {}/{}: unsupported content type {}", ownerType, ownerId, contentType);
+            throw new BadRequestException("Upload a photo (JPG, PNG) or a PDF");
+        }
+        return storeAndRecord(file, ownerType, ownerId, uploadedBy, contentType, extensionFor(contentType));
+    }
+
+    /**
      * Same pipeline as {@link #upload}, for a short MP3/WAV alert sound (e.g. the admin-configurable
      * new-order sound) instead of an image. Accepts the file when either its declared content type or
      * its filename extension says MP3/WAV - some browsers/OSes send a WAV as {@code audio/x-wav}, others

@@ -27,6 +27,8 @@ public class RiderProfileEditPolicy {
     public static final String ID_PROOF = "driver_edit_id_proof";
     public static final String VEHICLE_TYPE = "driver_edit_vehicle_type";
     public static final String PAYOUT = "driver_edit_payout";
+    /** Profile photo after approval (locked by default - before approval the applicant can always change it). */
+    public static final String PHOTO = "driver_edit_photo";
 
     /** Throws unless the field group may be changed from the app (used when a change was detected). */
     public void assertEditable(String key, String label) {

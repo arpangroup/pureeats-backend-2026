@@ -25,6 +25,16 @@ public class UserProvisioningService {
     /** Placeholder-email domain for phone-only accounts (email is NOT NULL/unique on `users`). */
     public static final String OTP_PLACEHOLDER_EMAIL_DOMAIN = "@otp.pureeats.local";
 
+    /** A phone-only account's internal placeholder email (e.g. 9876543210@otp.pureeats.local) - never shown to people. */
+    public static boolean isPlaceholderEmail(String email) {
+        return email != null && email.toLowerCase(java.util.Locale.ROOT).endsWith(OTP_PLACEHOLDER_EMAIL_DOMAIN);
+    }
+
+    /** The email to show: null for a placeholder. */
+    public static String displayEmail(String email) {
+        return isPlaceholderEmail(email) ? null : email;
+    }
+
     private final UserRepository userRepository;
     private final RoleService roleService;
 

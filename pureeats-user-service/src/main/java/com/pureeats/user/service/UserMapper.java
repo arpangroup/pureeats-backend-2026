@@ -19,6 +19,7 @@ final class UserMapper {
                 role,
                 user.getDefaultAddressId() != null ? user.getDefaultAddressId().longValue() : null,
                 user.getDob(),
-                user.getGender());
+                user.getGender(),
+                user.isPhoneVerified());
     }
 }

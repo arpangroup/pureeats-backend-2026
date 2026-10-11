@@ -57,6 +57,13 @@ public class RiderController {
         return ApiResponse.success("Photo updated", riderService.uploadPhoto(principal.userId(), file));
     }
 
+    @PostMapping(value = "/documents/{type}", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Upload a document - LICENSE, AADHAAR_FRONT, AADHAAR_BACK, PAN, RC or PASSBOOK (photo or PDF)")
+    public ApiResponse<RiderProfileResponse> uploadDocument(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable String type,
+                                                            @RequestParam("file") MultipartFile file) {
+        return ApiResponse.success("Document saved", riderService.uploadDocument(principal.userId(), type, file));
+    }
+
     @PostMapping(value = "/license-photo", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
     @io.swagger.v3.oas.annotations.Operation(summary = "Upload a photo of the applicant's driving licence")
     public ApiResponse<RiderProfileResponse> uploadLicensePhoto(@org.springframework.security.core.annotation.AuthenticationPrincipal com.pureeats.user.security.AuthenticatedUser principal,
