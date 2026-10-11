@@ -158,11 +158,13 @@ public class OrderNotificationService {
      * along in {@code data} too.
      */
     @Transactional(readOnly = true)
-    public void notifyDeliveryPartnersOfAvailableOrder(Long orderId, com.pureeats.domain.entity.Restaurant restaurant, BigDecimal payable) {
+    public void notifyDeliveryPartnersOfAvailableOrder(Long orderId, com.pureeats.domain.entity.Restaurant restaurant, BigDecimal payable, int offerRound) {
         String restaurantName = restaurant.getName();
         Map<String, String> data = new HashMap<>();
         data.put("type", "NEW_ORDER");
         data.put("orderId", String.valueOf(orderId));
+        // 1 = first offer; higher = offered again (RiderOfferService) - the app alerts again for a new round.
+        data.put("offerRound", String.valueOf(offerRound));
         data.put("restaurantName", restaurantName);
         data.put("payable", String.valueOf(payable));
         String title = "New order available";

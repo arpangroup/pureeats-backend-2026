@@ -24,6 +24,7 @@ import java.util.List;
 public class DeliveryOrderController {
 
     private final DeliveryOrderService deliveryOrderService;
+    private final com.pureeats.order.service.RiderOfferService riderOfferService;
 
     @GetMapping("/orders/available")
     @Operation(summary = "List orders available to be picked up for delivery, with a payout estimate against the caller's own commission rate")
@@ -48,6 +49,13 @@ public class DeliveryOrderController {
     @Operation(summary = "The signed-in rider's server-side online/offline status, including why they went offline (SELF / INACTIVITY / ADMIN)")
     public ApiResponse<RiderStatusResponse> getStatus(@AuthenticationPrincipal AuthenticatedUser principal) {
         return ApiResponse.success(deliveryOrderService.getOnlineStatus(principal.userId()));
+    }
+
+    @PostMapping("/orders/{orderId}/dismiss")
+    @Operation(summary = "Dismiss a new-order alert - the order is hidden from this partner's available orders until it's offered again")
+    public ApiResponse<Void> dismiss(@AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long orderId) {
+        riderOfferService.dismiss(principal.userId(), orderId);
+        return ApiResponse.success("Order dismissed", null);
     }
 
     @PostMapping("/orders/{orderId}/accept")

@@ -39,6 +39,8 @@ public record DeliveryAvailableOrderResponse(
         /** COD, RAZORPAY, WALLET... - the app shows COD vs Prepaid. */
         String paymentMode,
         /** When the food should be ready (acceptance + prep time) - drives the pickup countdown. */
-        LocalDateTime pickupDueAt
+        LocalDateTime pickupDueAt,
+        /** 1 = first offer; higher when offered again because nobody took it - the app alerts again for a new round. */
+        int offerRound
 ) {
 }

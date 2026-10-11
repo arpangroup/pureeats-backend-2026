@@ -117,6 +117,18 @@ public class Order {
     @Column(name = "eta_minutes")
     private Integer etaMinutes;
 
+    /** How many times delivery partners have been alerted about this order (1 = the first offer). */
+    @Column(name = "rider_offer_count")
+    private Integer riderOfferCount;
+
+    /** When delivery partners were last alerted - the re-offer scheduler waits the configured interval after this. */
+    @Column(name = "last_rider_offer_at")
+    private LocalDateTime lastRiderOfferAt;
+
+    /** When admins were told no partner took the order after the last re-offer (so it's said once). */
+    @Column(name = "no_rider_alerted_at")
+    private LocalDateTime noRiderAlertedAt;
+
     @Column(name = "order_from", nullable = false)
     private String orderFrom;
 }
