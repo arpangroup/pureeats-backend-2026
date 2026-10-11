@@ -47,6 +47,7 @@ public class AdminOrderController {
     private final OrderStatusService orderStatusService;
     private final OrderStatusLogService orderStatusLogService;
     private final DeliveryOrderService deliveryOrderService;
+    private final com.pureeats.order.service.RiderOfferService riderOfferService;
     private final com.pureeats.order.service.OrderEarningsService orderEarningsService;
 
     @GetMapping("/api/v1/admin/orders")
@@ -100,6 +101,18 @@ public class AdminOrderController {
             return ApiResponse.success("Order status updated", deliveryOrderService.adminMarkDelivered(principal.userId(), id));
         }
         return ApiResponse.success("Order status updated", orderService.adminUpdateStatus(principal.userId(), id, toStatus));
+    }
+
+    @GetMapping("/api/v1/admin/orders/{id}/rider-offers")
+    @Operation(summary = "Which delivery partners were alerted about this order (per round), who dismissed it, and when the next alert is due")
+    public ApiResponse<com.pureeats.order.dto.RiderOfferSummaryResponse> riderOffers(@PathVariable Long id) {
+        return ApiResponse.success(riderOfferService.summary(id));
+    }
+
+    @GetMapping("/api/v1/admin/rider-offers")
+    @Operation(summary = "Partner alerts: the re-offer scheduler's settings and recent runs, and every order still waiting for a delivery partner")
+    public ApiResponse<com.pureeats.order.dto.RiderOfferOverviewResponse> riderOfferOverview() {
+        return ApiResponse.success(riderOfferService.overview());
     }
 
     @GetMapping("/api/v1/admin/orders/{id}/log")

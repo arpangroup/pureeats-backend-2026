@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 
 /**
  * A delivery partner dismissed a new-order alert: the order is hidden from their available orders until it's
- * offered again (RiderOfferService re-offers unassigned orders, which clears these rows for that order).
+ * offered again in a later round (RiderOfferService). Kept afterwards, so the admin sees who dismissed and when.
  */
 @Entity
 @Table(name = "rider_order_dismissals", indexes = {
@@ -33,4 +33,8 @@ public class RiderOrderDismissal {
 
     @Column(name = "dismissed_at", nullable = false)
     private LocalDateTime dismissedAt;
+
+    /** The offer round dismissed - the order shows again once it's offered in a later round. */
+    @Column(name = "offer_round")
+    private Integer offerRound;
 }

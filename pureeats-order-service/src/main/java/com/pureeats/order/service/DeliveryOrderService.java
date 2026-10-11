@@ -101,12 +101,13 @@ public class DeliveryOrderService {
         LocalDateTime cutoff = LocalDateTime.now().minusHours(availableOrderWindowHours);
         // Only orders from stores this partner may take (Settings -> New order alerts: linked stores / nearby / all).
         java.util.function.Predicate<Restaurant> mayTake = riderDispatchService.ruleFor(rider);
-        // Orders this partner dismissed stay hidden until they're offered again (RiderOfferService).
-        java.util.Set<Long> dismissed = riderOfferService.dismissedOrderIds(riderUserId);
+        // Orders this partner dismissed stay hidden until they're offered again in a later round (RiderOfferService).
+        Map<Long, Integer> dismissed = riderOfferService.dismissedRounds(riderUserId);
         Map<Integer, Restaurant> restaurants = new java.util.HashMap<>();
         return orderRepository.findByOrderstatusIdInAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(statusIds, cutoff).stream()
                 .filter(o -> o.getDeliveryType() == 0 && acceptDeliveryRepository.findByOrderId(o.getId().intValue()).isEmpty())
-                .filter(o -> !dismissed.contains(o.getId()))
+                .filter(o -> !dismissed.containsKey(o.getId())
+                        || dismissed.get(o.getId()) < (o.getRiderOfferCount() != null ? o.getRiderOfferCount() : 1))
                 .filter(o -> mayTake.test(restaurants.computeIfAbsent(o.getRestaurantId(),
                         id -> restaurantRepository.findById(id.longValue()).orElse(null))))
                 .map(o -> toAvailableOrderResponse(o, rider))

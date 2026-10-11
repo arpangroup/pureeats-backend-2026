@@ -36,6 +36,10 @@ class RiderOfferServiceTest {
     @Mock private OrderStatusService orderStatusService;
     @Mock private SettingValueService settings;
     @Mock private RiderOrderDismissalRepository dismissals;
+    @Mock private com.pureeats.order.repository.RiderOrderOfferRepository offers;
+    @Mock private com.pureeats.order.repository.RiderOfferRunRepository runs;
+    @Mock private com.pureeats.user.repository.UserRepository users;
+    @Mock private RiderDispatchService dispatch;
     @InjectMocks private RiderOfferService service;
 
     private Order order;
@@ -63,8 +67,10 @@ class RiderOfferServiceTest {
     }
 
     @Test
-    void offer_countsTheRound_andSendsIt() {
-        service.offer(order, restaurant);
+    void offer_countsTheRound_sendsIt_andRecordsWhoWasAlerted() {
+        when(notifications.notifyDeliveryPartnersOfAvailableOrder(any(), any(), any(), anyInt())).thenReturn(List.of(11L, 12L));
+        assertEquals(2, service.offer(order, restaurant));
+        verify(offers, times(2)).save(any());
         service.offer(order, restaurant);
 
         assertEquals(2, order.getRiderOfferCount());
@@ -73,14 +79,41 @@ class RiderOfferServiceTest {
     }
 
     @Test
-    void anUnassignedOrder_isOfferedAgainAfterTheInterval_andComesBackForThoseWhoDismissedIt() {
+    void anUnassignedOrder_isOfferedAgainAfterTheInterval_andTheRunIsRecorded() {
         order.setRiderOfferCount(1);
         order.setLastRiderOfferAt(LocalDateTime.now().minusMinutes(3));
 
         service.reofferUnassigned();
 
-        verify(dismissals).deleteByOrderId(7L);
         verify(notifications).notifyDeliveryPartnersOfAvailableOrder(7L, restaurant, new BigDecimal("250"), 2);
+        var run = org.mockito.ArgumentCaptor.forClass(com.pureeats.order.entity.RiderOfferRun.class);
+        verify(runs).save(run.capture());
+        assertEquals(1, run.getValue().getReoffered());
+        assertEquals("PE-7", run.getValue().getReofferedOrders());
+    }
+
+    @Test
+    void aDismissal_countsForTheRoundItWasMadeIn() {
+        when(orderRepository.findById(7L)).thenReturn(Optional.of(order));
+        order.setRiderOfferCount(2);
+        service.dismiss(42L, 7L);
+        var saved = org.mockito.ArgumentCaptor.forClass(com.pureeats.order.entity.RiderOrderDismissal.class);
+        verify(dismissals).save(saved.capture());
+        assertEquals(2, saved.getValue().getOfferRound());
+    }
+
+    @Test
+    void summary_saysWhenTheNextAlertIsDue() {
+        when(orderRepository.findById(7L)).thenReturn(Optional.of(order));
+        when(orderStatusService.codeFor(any())).thenReturn(com.pureeats.domain.enums.OrderStatusCode.RESTAURANT_ACCEPTED);
+        LocalDateTime last = LocalDateTime.now().minusSeconds(30);
+        order.setRiderOfferCount(1);
+        order.setLastRiderOfferAt(last);
+
+        var summary = service.summary(7L);
+
+        assertEquals("WAITING", summary.state());
+        assertEquals(last.plusMinutes(2), summary.nextOfferAt());
     }
 
     @Test
@@ -128,11 +161,12 @@ class RiderOfferServiceTest {
     }
 
     @Test
-    void switchedOff_doesNothing() {
+    void switchedOff_offersNothing_butTheRunIsStillRecorded() {
         when(settings.getBoolean(eq(SettingSchemaService.RIDER_REOFFER_ENABLED), anyBoolean())).thenReturn(false);
 
         service.reofferUnassigned();
 
         verifyNoInteractions(notifications);
+        verify(runs).save(any());
     }
 }
