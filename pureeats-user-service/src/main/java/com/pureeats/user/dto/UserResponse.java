@@ -14,6 +14,8 @@ public record UserResponse(
         Role role,
         Long defaultAddressId,
         LocalDate dob,
-        Gender gender
+        Gender gender,
+        /** The phone was verified by OTP (phone sign-in or a verified change) - apps show it read-only. */
+        boolean phoneVerified
 ) {
 }

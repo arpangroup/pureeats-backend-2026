@@ -50,6 +50,10 @@ public record AdminDeliveryGuyResponse(
         String bankIfsc,
         String upiId,
         boolean phoneVerified,
+        /** Latest upload of each document type. */
+        java.util.List<com.pureeats.user.dto.RiderDocumentResponse> documents,
+        /** Still needed before approval (document types and/or PHOTO); approving is refused until it's empty. */
+        java.util.List<String> missingDocuments,
         /** The partner's profile photo as a viewable URL ({@code photo} stays the stored key the edit form writes back). */
         String photoUrl,
         /** The partner's login account: ACTIVE, BLOCKED, DELETED, DISABLED or TEMPORARILY_LOCKED. */
