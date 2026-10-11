@@ -44,6 +44,12 @@ public record RiderProfileResponse(
         /** Masked except the last 4 digits. */
         String bankAccountNumberMasked,
         String bankIfsc,
-        String upiId
+        String upiId,
+        /** Latest upload of each document type (licence, Aadhaar front/back, PAN, RC, passbook). */
+        java.util.List<RiderDocumentResponse> documents,
+        /** Still needed before approval: document types and/or PHOTO. Empty = complete. */
+        java.util.List<String> missingDocuments,
+        /** The mobile number was verified by OTP (phone sign-in, or the verification step) - shown read-only. */
+        boolean phoneVerified
 ) {
 }
