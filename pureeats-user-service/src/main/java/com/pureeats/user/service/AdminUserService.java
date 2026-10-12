@@ -186,7 +186,7 @@ public class AdminUserService {
         user.setUpdatedAt(LocalDateTime.now());
         adminUserRepository.save(user);
         if (request.role() != null) {
-            roleService.assignRole(id, request.role());
+            roleService.replaceRoles(id, request.role());
         }
         riderService.evictProfileCache(id);
         // Blocking takes effect immediately: open apps are signed out on their next request.

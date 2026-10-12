@@ -18,9 +18,25 @@ import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
 
-/** Renders an {@link OrderResponse} as a simple one-page PDF invoice - the same fields the customer app's order-details bill summary shows, so the two never disagree. */
+/**
+ * Renders an {@link OrderResponse} as a one-page PDF invoice - the same fields the customer app's order-details bill
+ * summary shows, so the two never disagree. Settings -> General -> Invoice -> Invoice style picks the layout: SIMPLE
+ * (black and white, the default) or BRANDED (see {@link BrandedInvoicePdf}).
+ */
 @Service
+@lombok.RequiredArgsConstructor
 public class InvoiceService {
+
+    public static final String STYLE_SIMPLE = "SIMPLE";
+    public static final String STYLE_BRANDED = "BRANDED";
+
+    private final com.pureeats.catalog.service.SettingValueService settingValueService;
+    private final com.pureeats.catalog.repository.RestaurantRepository restaurantRepository;
+
+    public String style() {
+        return STYLE_BRANDED.equalsIgnoreCase(settingValueService.getString(com.pureeats.catalog.service.SettingSchemaService.INVOICE_STYLE, STYLE_SIMPLE))
+                ? STYLE_BRANDED : STYLE_SIMPLE;
+    }
 
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a");
     private static final Font TITLE_FONT = new Font(Font.HELVETICA, 18, Font.BOLD);
@@ -29,6 +45,20 @@ public class InvoiceService {
     private static final Font MUTED_FONT = new Font(Font.HELVETICA, 9, Font.NORMAL, java.awt.Color.GRAY);
 
     public byte[] render(OrderResponse order) {
+        if (STYLE_BRANDED.equals(style())) {
+            var restaurant = order.restaurant() != null ? restaurantRepository.findById(order.restaurant().id()).orElse(null) : null;
+            String terms = settingValueService.getString(com.pureeats.catalog.service.SettingSchemaService.INVOICE_TERMS,
+                    com.pureeats.catalog.service.SettingSchemaService.DEFAULT_INVOICE_TERMS);
+            return BrandedInvoicePdf.render(order,
+                    restaurant != null ? restaurant.getAddress() : null,
+                    restaurant != null ? restaurant.getCertificate() : null,
+                    settingValueService.getString(com.pureeats.catalog.service.SettingSchemaService.INVOICE_PLATFORM_FSSAI, ""),
+                    java.util.Arrays.asList(terms.split("\\r?\\n")));
+        }
+        return renderSimple(order);
+    }
+
+    private byte[] renderSimple(OrderResponse order) {
         Document document = new Document(PageSize.A4, 40, 40, 50, 50);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         try {

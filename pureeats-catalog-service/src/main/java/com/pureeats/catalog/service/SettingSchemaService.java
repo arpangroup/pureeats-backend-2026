@@ -75,6 +75,19 @@ public class SettingSchemaService {
     public static final String RIDER_REOFFER_MAX_OFFERS = "rider_reoffer_max_offers";
     /** Show how a delivery's earning was worked out (commission %, base) in the partner's wallet. */
     public static final String DRIVER_SHOW_EARNING_BREAKDOWN = "driver_show_earning_breakdown";
+    /** Invoice layout (customer PDF and the admin's printed invoice): SIMPLE (default) or BRANDED. */
+    public static final String INVOICE_STYLE = "invoice_style";
+    /** Branded invoice: terms & conditions, one per line. */
+    public static final String INVOICE_TERMS = "invoice_terms";
+    /** Branded invoice: the platform's FSSAI licence number (blank = not printed). */
+    public static final String INVOICE_PLATFORM_FSSAI = "invoice_platform_fssai";
+    public static final String DEFAULT_INVOICE_TERMS = String.join("\n",
+            "Order Acceptance: PureEats reserves the right to accept or refuse orders. Price errors will be corrected.",
+            "Delivery: Estimated delivery times are approximations. Delays may occur due to traffic or weather.",
+            "Cancellations & Refunds: Cancellation must be requested within 5 minutes. Refunds are processed according to the full policy online.",
+            "Food Quality: Concerns must be reported within 24 hours of the order, with photos. PureEats is not liable for food quality but will mediate.",
+            "Data Privacy: Your data is handled per our privacy policy.",
+            "Liability: PureEats' liability is limited to the value of the order.");
     /** Profile fields a delivery partner may edit in the rider app (all view-only by default). Read by RiderService / ProfileContactChangeService too. */
     public static final String DRIVER_EDIT_NAME = "driver_edit_name";
     public static final String DRIVER_EDIT_VEHICLE_NUMBER = "driver_edit_vehicle_number";
@@ -204,6 +217,18 @@ public class SettingSchemaService {
                         field(CUSTOMER_ETA_SLOWDOWN, "Customer countdown slowdown", "number", "1.5")
                                 .info("The customer's delivery countdown runs this many times slower than real time, so small delays don't make it jump - e.g. 1.5: 90 seconds pass for every minute it counts down. 1 = real time. "
                                         + "T3 (restaurant to customer) comes from Google Maps when the server's distance provider is Google; otherwise it's estimated from the distance.")
+                )),
+                group("Invoice", "The invoice customers download from the app and admins print from an order's page.", "Receipt", List.of(
+                        field(INVOICE_STYLE, "Invoice style", "dropdown", "SIMPLE")
+                                .options(
+                                        option("Simple (black and white)", "SIMPLE"),
+                                        option("Branded (coloured summary and receipt)", "BRANDED"))
+                                .info("Simple: the current plain invoice. Branded: PureEats header, order / customer / delivery partner boxes, restaurant and delivery address, item table, bill breakdown and terms & conditions."),
+                        field(INVOICE_TERMS, "Terms & conditions (branded invoice)", "textarea", DEFAULT_INVOICE_TERMS)
+                                .info("One term per line - they're numbered on the invoice. The restaurant's licence number (store edit page -> Certificate) and the platform FSSAI number below are added as an FSSAI line when set."),
+                        field(INVOICE_PLATFORM_FSSAI, "PureEats FSSAI licence number", "text", "")
+                                .placeholder("e.g. 10019064001810")
+                                .info("Printed on the branded invoice. Leave empty to leave it out.")
                 )),
                 group("Order alert sound", "Played on the admin panel, restaurant partner dashboard and driver app when a new order arrives.", "Bell", List.of(
                         field(ORDER_ALERT_SOUND_URL, "New order sound", "audio", "")

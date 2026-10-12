@@ -11,4 +11,6 @@ public interface ModelHasRoleRepository extends JpaRepository<ModelHasRole, Mode
     List<ModelHasRole> findByModelTypeAndRoleIdIn(String modelType, List<Long> roleIds);
 
     boolean existsByRoleId(Long roleId);
+
+    void deleteByModelTypeAndModelId(String modelType, Long modelId);
 }

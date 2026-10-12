@@ -423,7 +423,7 @@ public class OrderService {
                 : null;
         OrderRestaurantSummary restaurantSummary = new OrderRestaurantSummary(order.getRestaurantId().longValue(),
                 restaurant != null ? restaurant.getName() : "Unknown", restaurant != null ? restaurant.getContactNumber() : null,
-                restaurantImage);
+                restaurantImage, restaurant != null ? restaurant.getAddress() : null, restaurant != null ? restaurant.getCertificate() : null);
         var liveCoupon = order.getCouponCode() == null ? null : couponService.findByCode(order.getCouponCode()).orElse(null);
         OrderCouponSummary couponSummary = order.getCouponCode() == null ? null : new OrderCouponSummary(
                 liveCoupon != null ? liveCoupon.id() : null, order.getCouponCode(), order.getCouponName(),

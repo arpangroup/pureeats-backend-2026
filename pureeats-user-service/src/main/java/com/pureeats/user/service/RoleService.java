@@ -71,6 +71,18 @@ public class RoleService {
         }
     }
 
+    /**
+     * Makes {@code role} the user's ONLY role - the admin's "Move to ..." on a user's page. {@link #assignRole} only
+     * adds, so a customer moved to delivery partner kept the customer role too and still showed as a customer.
+     */
+    @org.springframework.transaction.annotation.Transactional
+    public void replaceRoles(Long userId, com.pureeats.domain.enums.Role role) {
+        modelHasRoleRepository.deleteByModelTypeAndModelId(USER_MORPH_TYPE, userId);
+        modelHasRoleRepository.flush();
+        assignRole(userId, role);
+        log.info("User {} now holds only role {}", userId, role);
+    }
+
     /** Whether any user currently holds {@code role} at all - used by the SUPER_ADMIN startup seeder to stay idempotent. */
     @Transactional(readOnly = true)
     public boolean anyUserHasRole(com.pureeats.domain.enums.Role role) {

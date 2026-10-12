@@ -17,6 +17,8 @@ public record TripDetailResponse(
         BigDecimal cashOnHold,
         boolean isSettlementDone,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+        /** The order's number as everyone sees it (e.g. PE-1A2B3C4D) - orderId is the internal id the order page uses. */
+        String uniqueOrderId
 ) {
 }

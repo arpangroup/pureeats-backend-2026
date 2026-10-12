@@ -96,7 +96,18 @@ public class RiderEarningsService {
         return new RiderEarningsSummaryResponse(lifetime, trips.size(), pendingEarnings, cashInHand, net, direction(net),
                 pending.size(), lifetime.subtract(pendingEarnings).max(BigDecimal.ZERO), last, open.size(), orderValue(open), cashTrips.size(),
                 (int) pending.stream().filter(this::recordedOnOtherBasis).count(), walletBalance, pendingWithdrawals, available,
-                payoutTo(riderProfile(riderUserId)));
+                payoutTo(riderProfile(riderUserId)), codOrders(cashTrips));
+    }
+
+    /** The trips behind the "COD cash to collect" figure, with their order numbers. */
+    private List<RiderEarningsSummaryResponse.CodOrder> codOrders(List<TripDetail> cashTrips) {
+        java.util.Map<Long, String> numbers = orderRepository.findAllById(cashTrips.stream().map(t -> t.getOrderId().longValue()).distinct().toList()).stream()
+                .collect(java.util.stream.Collectors.toMap(com.pureeats.domain.entity.Order::getId, com.pureeats.domain.entity.Order::getUniqueOrderId));
+        return cashTrips.stream()
+                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                .map(t -> new RiderEarningsSummaryResponse.CodOrder(t.getOrderId().longValue(), numbers.get(t.getOrderId().longValue()),
+                        t.getCashCollectedFromCustomer(), t.getCashOnHold(), t.getCreatedAt()))
+                .toList();
     }
 
     /** Every delivered trip, newest first. {@code onlyPending} limits it to trips not yet settled. */

@@ -33,6 +33,12 @@ public record RiderEarningsSummaryResponse(
         /** What can be withdrawn or paid out now: walletBalance - pendingWithdrawals. */
         BigDecimal availableToWithdraw,
         /** Where earnings are paid (e.g. "UPI ravi@okhdfcbank"), null when the partner hasn't added one. */
-        String payoutTo
+        String payoutTo,
+        /** The COD orders behind cashInHand - what the partner still holds from each, newest first. */
+        java.util.List<CodOrder> codOrdersToCollect
 ) {
+    /** One COD order whose cash is still with the partner. */
+    public record CodOrder(Long orderId, String uniqueOrderId, java.math.BigDecimal cashCollected, java.math.BigDecimal cashToCollect,
+                           java.time.LocalDateTime deliveredAt) {
+    }
 }

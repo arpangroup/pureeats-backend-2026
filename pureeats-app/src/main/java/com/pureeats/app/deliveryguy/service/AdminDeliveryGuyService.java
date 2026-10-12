@@ -46,6 +46,7 @@ public class AdminDeliveryGuyService {
     private final RoleService roleService;
     private final TripDetailRepository tripDetailRepository;
     private final RiderService riderService;
+    private final com.pureeats.order.repository.OrderRepository orderRepository;
     private final com.pureeats.user.service.RiderDocuments riderDocuments;
     private final com.pureeats.media.storage.MediaUrlResolver mediaUrlResolver;
     private final com.pureeats.user.service.RiderStatusLogService riderStatusLogService;
@@ -221,9 +222,12 @@ public class AdminDeliveryGuyService {
     /** {@code riderUserId} is the rider's User id (matching how order-service records TripDetail.riderId), not the DeliveryGuyDetail id. */
     @Transactional(readOnly = true)
     public List<TripDetailResponse> earningsForRider(Long riderUserId) {
-        return tripDetailRepository.findByRiderId(riderUserId.intValue()).stream()
+        List<TripDetail> trips = tripDetailRepository.findByRiderId(riderUserId.intValue());
+        java.util.Map<Long, String> orderNumbers = orderRepository.findAllById(trips.stream().map(t -> t.getOrderId().longValue()).distinct().toList()).stream()
+                .collect(java.util.stream.Collectors.toMap(com.pureeats.domain.entity.Order::getId, com.pureeats.domain.entity.Order::getUniqueOrderId));
+        return trips.stream()
                 .sorted((a, b) -> b.getId().compareTo(a.getId()))
-                .map(this::toTripResponse)
+                .map(t -> toTripResponse(t, orderNumbers.get(t.getOrderId().longValue())))
                 .toList();
     }
 
@@ -330,11 +334,11 @@ public class AdminDeliveryGuyService {
                 user != null ? com.pureeats.user.service.AdminUserService.effectiveStatus(user).name() : null);
     }
 
-    private TripDetailResponse toTripResponse(TripDetail t) {
+    private TripDetailResponse toTripResponse(TripDetail t, String uniqueOrderId) {
         return new TripDetailResponse(t.getId(), t.getOrderId().longValue(), t.getCustomerId().longValue(),
                 t.getRestaurantId().longValue(), t.getRiderId().longValue(),
                 t.getDeliveryCollectionId() != null ? t.getDeliveryCollectionId().longValue() : null,
                 t.getDistanceTravelled(), t.getRiderEarning(), t.getRestaurantEarning(), t.getCashCollectedFromCustomer(),
-                t.getCashOnHold(), t.getIsSettlementDone() != null && t.getIsSettlementDone() == 1, t.getCreatedAt(), t.getUpdatedAt());
+                t.getCashOnHold(), t.getIsSettlementDone() != null && t.getIsSettlementDone() == 1, t.getCreatedAt(), t.getUpdatedAt(), uniqueOrderId);
     }
 }
