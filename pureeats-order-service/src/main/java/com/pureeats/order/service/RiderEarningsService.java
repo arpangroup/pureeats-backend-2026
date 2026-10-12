@@ -101,10 +101,11 @@ public class RiderEarningsService {
 
     /** The trips behind the "COD cash to collect" figure, with their order numbers. */
     private List<RiderEarningsSummaryResponse.CodOrder> codOrders(List<TripDetail> cashTrips) {
-        java.util.Map<Long, String> numbers = orderRepository.findAllById(cashTrips.stream().map(t -> t.getOrderId().longValue()).distinct().toList()).stream()
-                .collect(java.util.stream.Collectors.toMap(com.pureeats.domain.entity.Order::getId, com.pureeats.domain.entity.Order::getUniqueOrderId));
+        java.util.Map<Long, String> numbers = new java.util.HashMap<>();
+        // A plain map: Collectors.toMap rejects a null order number.
+        orderRepository.findAllById(cashTrips.stream().map(t -> t.getOrderId().longValue()).distinct().toList()).forEach(o -> numbers.put(o.getId(), o.getUniqueOrderId()));
         return cashTrips.stream()
-                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                .sorted(java.util.Comparator.comparing(TripDetail::getCreatedAt, java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())))
                 .map(t -> new RiderEarningsSummaryResponse.CodOrder(t.getOrderId().longValue(), numbers.get(t.getOrderId().longValue()),
                         t.getCashCollectedFromCustomer(), t.getCashOnHold(), t.getCreatedAt()))
                 .toList();

@@ -223,8 +223,9 @@ public class AdminDeliveryGuyService {
     @Transactional(readOnly = true)
     public List<TripDetailResponse> earningsForRider(Long riderUserId) {
         List<TripDetail> trips = tripDetailRepository.findByRiderId(riderUserId.intValue());
-        java.util.Map<Long, String> orderNumbers = orderRepository.findAllById(trips.stream().map(t -> t.getOrderId().longValue()).distinct().toList()).stream()
-                .collect(java.util.stream.Collectors.toMap(com.pureeats.domain.entity.Order::getId, com.pureeats.domain.entity.Order::getUniqueOrderId));
+        java.util.Map<Long, String> orderNumbers = new java.util.HashMap<>();
+        // A plain map: Collectors.toMap rejects a null order number.
+        orderRepository.findAllById(trips.stream().map(t -> t.getOrderId().longValue()).distinct().toList()).forEach(o -> orderNumbers.put(o.getId(), o.getUniqueOrderId()));
         return trips.stream()
                 .sorted((a, b) -> b.getId().compareTo(a.getId()))
                 .map(t -> toTripResponse(t, orderNumbers.get(t.getOrderId().longValue())))
