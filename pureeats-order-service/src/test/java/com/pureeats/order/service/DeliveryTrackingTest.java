@@ -59,6 +59,7 @@ class DeliveryTrackingTest {
     @Mock private OrderTimingService orderTimingService;
     @Mock private OrderStatusLogRepository orderStatusLogRepository;
     @Mock private RiderDispatchService riderDispatchService;
+    @Mock private RiderOfferService riderOfferService;
     @Spy private ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks private DeliveryOrderService service;

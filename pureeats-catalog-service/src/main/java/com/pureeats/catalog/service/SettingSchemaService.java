@@ -68,6 +68,13 @@ public class SettingSchemaService {
     public static final String RIDER_DISPATCH_RADIUS_KM = "rider_order_dispatch_radius_km";
     /** LINKED_STORES mode: when a store has no linked partner, offer its orders to nearby partners instead of nobody. */
     public static final String RIDER_DISPATCH_FALLBACK_NEARBY = "rider_order_dispatch_fallback_nearby";
+    /** Re-offer orders nobody has taken (RiderOfferService): on/off, every N minutes, LIMITED (max offers) or UNTIL_ASSIGNED. */
+    public static final String RIDER_REOFFER_ENABLED = "rider_reoffer_enabled";
+    public static final String RIDER_REOFFER_INTERVAL_MINUTES = "rider_reoffer_interval_minutes";
+    public static final String RIDER_REOFFER_MODE = "rider_reoffer_mode";
+    public static final String RIDER_REOFFER_MAX_OFFERS = "rider_reoffer_max_offers";
+    /** Show how a delivery's earning was worked out (commission %, base) in the partner's wallet. */
+    public static final String DRIVER_SHOW_EARNING_BREAKDOWN = "driver_show_earning_breakdown";
     /** Profile fields a delivery partner may edit in the rider app (all view-only by default). Read by RiderService / ProfileContactChangeService too. */
     public static final String DRIVER_EDIT_NAME = "driver_edit_name";
     public static final String DRIVER_EDIT_VEHICLE_NUMBER = "driver_edit_vehicle_number";
@@ -80,6 +87,7 @@ public class SettingSchemaService {
     public static final String DRIVER_EDIT_ID_PROOF = "driver_edit_id_proof";
     public static final String DRIVER_EDIT_VEHICLE_TYPE = "driver_edit_vehicle_type";
     public static final String DRIVER_EDIT_PAYOUT = "driver_edit_payout";
+    public static final String DRIVER_EDIT_PHOTO = "driver_edit_photo";
 
     public static final String DEFAULT_MAX_ACTIVE_ORDERS_MESSAGE =
             "You already have {count} orders in progress - please wait for one to be delivered before placing another.";
@@ -460,7 +468,20 @@ public class SettingSchemaService {
                                 .placeholder("e.g. 5")
                                 .info("Straight-line distance from the partner's last reported location to the restaurant."),
                         field(RIDER_DISPATCH_FALLBACK_NEARBY, "Stores with no linked partner: offer to nearby partners", "boolean", "true")
-                                .info("Only for \"Partners linked to the store\". On (recommended): a store with nobody linked still gets riders, from partners within the range above. Off: its orders reach no partner until an admin links one or assigns the order.")
+                                .info("Only for \"Partners linked to the store\". On (recommended): a store with nobody linked still gets riders, from partners within the range above. Off: its orders reach no partner until an admin links one or assigns the order."),
+                        field(RIDER_REOFFER_ENABLED, "Alert again while nobody accepts", "boolean", "true")
+                                .info("An order no partner has taken is offered again - the alert repeats and it comes back for partners who dismissed it. Checked every minute."),
+                        field(RIDER_REOFFER_INTERVAL_MINUTES, "Alert again every (minutes)", "number", "2")
+                                .placeholder("e.g. 2")
+                                .info("Minutes after the previous alert before the order is offered again."),
+                        field(RIDER_REOFFER_MODE, "Keep alerting", "dropdown", "LIMITED")
+                                .options(
+                                        option("Up to the maximum below", "LIMITED"),
+                                        option("Until a partner accepts (no limit)", "UNTIL_ASSIGNED"))
+                                .info("Up to the maximum: after that many alerts admins are notified once, to assign a partner by hand."),
+                        field(RIDER_REOFFER_MAX_OFFERS, "Maximum alerts per order", "number", "5")
+                                .placeholder("e.g. 5")
+                                .info("Counting the first one. Only for \"Up to the maximum below\".")
                 )),
                 group("Order list", "Bike", List.of(
                         field("show_full_address_order_list", "Show full address on order list", "boolean", "false")
@@ -470,6 +491,10 @@ public class SettingSchemaService {
                         field("driver_location_tracking_enabled", "Enable driver location tracking", "boolean", "true")
                                 .info("When off, every delivery partner's app stops sending GPS pings and shows a \"Maintenance mode\" banner instead of the online/offline toggle - use this to pause location tracking platform-wide (e.g. during a backend issue) without disabling the app itself.")
                 )),
+                group("Wallet", "Wallet", List.of(
+                        field(DRIVER_SHOW_EARNING_BREAKDOWN, "Show how each earning was calculated", "boolean", "false")
+                                .info("Off (default): the wallet shows what each delivery earned (and the tip), not the commission % or what it was applied to. On: the breakdown is shown too.")
+                )),
                 group("Order screens", "Bike", List.of(
                         field(DRIVER_SHOW_PAYOUT, "Show payout to delivery partners", "boolean", "false")
                                 .info("When on, the rider app shows what the partner will earn (commission + tip) on the new-order popup, the available orders list and the active delivery. "
@@ -478,9 +503,8 @@ public class SettingSchemaService {
                 group("Profile editing", "Which profile fields a delivery partner can change in the rider app. Everything is view-only by default; switch a field on to let partners edit it. The server enforces this too.", "UserCheck", List.of(
                         field(DRIVER_EDIT_NAME, "Name", "boolean", "false").info("Off: the name is shown but can only be changed from the admin panel."),
                         field(DRIVER_EDIT_VEHICLE_NUMBER, "Vehicle number", "boolean", "false").info("Off: partners can't change the vehicle on record - e.g. to stop swapping to an unverified vehicle."),
-                        field(DRIVER_EDIT_AGE, "Age", "boolean", "false"),
-                        field(DRIVER_EDIT_GENDER, "Gender", "boolean", "false"),
-                        field(DRIVER_EDIT_ABOUT, "About you", "boolean", "false").info("The short description customers can see."),
+                        field(DRIVER_EDIT_PHOTO, "Profile photo", "boolean", "false")
+                                .info("Off (default): once approved, a partner can't change their photo - customers recognise them by it. Applicants can always change it until approved. An admin can replace it any time."),
                         field(DRIVER_EDIT_PHONE, "Mobile number", "boolean", "false").info("On: partners can change their number through an OTP check on the new number. Off: shown read-only."),
                         field(DRIVER_EDIT_EMAIL, "Email", "boolean", "false").info("On: partners can change their email through an OTP check. Off: shown read-only."),
                         field(DRIVER_EDIT_LICENSE, "Driving licence (number + photo)", "boolean", "false")

@@ -46,6 +46,7 @@ public class AdminDeliveryGuyService {
     private final RoleService roleService;
     private final TripDetailRepository tripDetailRepository;
     private final RiderService riderService;
+    private final com.pureeats.user.service.RiderDocuments riderDocuments;
     private final com.pureeats.media.storage.MediaUrlResolver mediaUrlResolver;
     private final com.pureeats.user.service.RiderStatusLogService riderStatusLogService;
     private final com.pureeats.user.security.AccountAccessGuard accountAccessGuard;
@@ -64,10 +65,17 @@ public class AdminDeliveryGuyService {
     /** Admin uploads/replaces a partner's driving licence photo. */
     @Transactional
     public AdminDeliveryGuyResponse uploadLicensePhoto(Long id, org.springframework.web.multipart.MultipartFile file, Long adminUserId) {
+        return uploadDocument(id, com.pureeats.user.service.RiderDocuments.LICENSE, file, adminUserId);
+    }
+
+    /** Admin uploads or replaces one of a partner's documents (photo or PDF) - any partner, whatever the editing settings say. */
+    @Transactional
+    public AdminDeliveryGuyResponse uploadDocument(Long id, String type, org.springframework.web.multipart.MultipartFile file, Long adminUserId) {
+        String docType = com.pureeats.user.service.RiderDocuments.normalize(type);
         DeliveryGuyDetail detail = findOrThrow(id);
-        mediaAssetService.upload(file, com.pureeats.user.service.RiderService.OWNER_TYPE_LICENSE, detail.getId(), adminUserId);
+        riderDocuments.upload(detail, docType, file, adminUserId);
         findLinkedUser(id).ifPresent(user -> riderService.evictProfileCache(user.getId()));
-        log.info("Admin {} uploaded a licence photo for delivery partner {}", adminUserId, id);
+        log.info("Admin {} uploaded document {} for delivery partner {}", adminUserId, docType, id);
         return toResponse(detail);
     }
 
@@ -83,6 +91,16 @@ public class AdminDeliveryGuyService {
         DeliveryGuyDetail detail = findOrThrow(id);
         if (!approve && (reason == null || reason.isBlank())) {
             throw new BadRequestException("Give a reason so the partner knows what to fix.");
+        }
+        if (approve) {
+            // Every required document (and the partner's photo) must be on file before they can take orders.
+            User linked = findLinkedUser(id).orElse(null);
+            java.util.List<String> missing = riderDocuments.missing(detail, linked, riderDocuments.uploaded(detail.getId()));
+            if (!missing.isEmpty()) {
+                throw new BadRequestException("Can't approve yet - missing: "
+                        + String.join(", ", missing.stream().map(com.pureeats.user.service.RiderDocuments::label).toList())
+                        + ". Ask the partner to upload them, or upload them in the Documents section.");
+            }
         }
         detail.setApprovalStatus(approve ? DeliveryGuyDetail.APPROVAL_APPROVED : DeliveryGuyDetail.APPROVAL_REJECTED);
         detail.setRejectionReason(approve ? null : reason.trim());
@@ -295,17 +313,19 @@ public class AdminDeliveryGuyService {
 
     private AdminDeliveryGuyResponse toResponse(DeliveryGuyDetail d) {
         User user = findLinkedUser(d.getId()).orElse(null);
+        var documents = riderDocuments.uploaded(d.getId());
         return new AdminDeliveryGuyResponse(d.getId(), user != null ? user.getId() : null, d.getName(),
                 parseAge(d.getAge()), d.getGender(), d.getPhoto(), d.getDescription(), d.getVehicleNumber(), d.getCommissionRate(),
                 Boolean.TRUE.equals(d.getIsNotifiable()), d.getMaxAcceptDeliveryLimit(), d.getRating(),
                 Boolean.TRUE.equals(d.getIsActive()), Boolean.TRUE.equals(d.getIsOnline()), d.getLastLat(), d.getLastLng(),
                 d.getLastSeenAt(), d.getOfflineReason(), d.getStatusChangedAt(), d.getCreatedBy(), d.getUpdatedBy(), d.getCreatedAt(), d.getUpdatedAt(),
-                user != null ? user.getEmail() : null, user != null ? user.getPhone() : null,
+                user != null ? com.pureeats.user.service.UserProvisioningService.displayEmail(user.getEmail()) : null, user != null ? user.getPhone() : null,
                 user != null && User.STATUS_ACTIVE.equals(user.getIsActive()),
                 d.getApprovalStatus() != null ? d.getApprovalStatus() : DeliveryGuyDetail.APPROVAL_APPROVED, d.getRejectionReason(),
                 d.getApprovalUpdatedAt(), d.getLicenseNumber(), riderService.licensePhotoUrl(d.getId()), d.getIdProofType(),
                 d.getIdProofNumber(), d.effectiveAadhaar(), d.effectivePan(), d.getVehicleType(), d.getPayoutMethod(), d.getBankAccountHolder(), d.getBankAccountNumber(),
                 d.getBankIfsc(), d.getUpiId(), user != null && user.isPhoneVerified(),
+                java.util.List.copyOf(documents.values()), riderDocuments.missing(d, user, documents),
                 mediaUrlResolver.resolve(d.getPhoto() != null ? d.getPhoto() : user != null ? user.getPhoto() : null),
                 user != null ? com.pureeats.user.service.AdminUserService.effectiveStatus(user).name() : null);
     }

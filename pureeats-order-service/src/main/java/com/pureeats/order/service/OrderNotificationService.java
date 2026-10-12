@@ -158,21 +158,24 @@ public class OrderNotificationService {
      * along in {@code data} too.
      */
     @Transactional(readOnly = true)
-    public void notifyDeliveryPartnersOfAvailableOrder(Long orderId, com.pureeats.domain.entity.Restaurant restaurant, BigDecimal payable) {
+    /** @return the partners alerted (in "All online partners" mode: every approved online partner the topic reaches) */
+    public List<Long> notifyDeliveryPartnersOfAvailableOrder(Long orderId, com.pureeats.domain.entity.Restaurant restaurant, BigDecimal payable, int offerRound) {
         String restaurantName = restaurant.getName();
         Map<String, String> data = new HashMap<>();
         data.put("type", "NEW_ORDER");
         data.put("orderId", String.valueOf(orderId));
+        // 1 = first offer; higher = offered again (RiderOfferService) - the app alerts again for a new round.
+        data.put("offerRound", String.valueOf(offerRound));
         data.put("restaurantName", restaurantName);
         data.put("payable", String.valueOf(payable));
         String title = "New order available";
         String body = "Pickup available at " + restaurantName + " - " + payable + " payout";
+        List<Long> riders = riderDispatchService.recipientUserIds(restaurant);
         if (RiderDispatchService.ALL.equals(riderDispatchService.mode())) {
             fcmSender.send(FcmPushRequest.visible(null, PushTopics.ALL_DELIVERY_PARTNERS, title, body, null, data, null, null));
             log.info("Broadcast new-order-available push to all delivery partners for order {} ({})", orderId, restaurantName);
-            return;
+            return riders;
         }
-        List<Long> riders = riderDispatchService.recipientUserIds(restaurant);
         int devices = 0;
         for (Long riderUserId : riders) {
             for (var token : pushTokenRepository.findByUserIdAndIsActiveTrue(riderUserId.intValue())) {
@@ -182,6 +185,7 @@ public class OrderNotificationService {
         }
         log.info("New-order-available push for order {} ({}) sent to {} partner(s) on {} device(s) ({} mode)",
                 orderId, restaurantName, riders.size(), devices, riderDispatchService.mode());
+        return riders;
     }
 
     private boolean needsExternalDestination(NotificationChannel channel) {

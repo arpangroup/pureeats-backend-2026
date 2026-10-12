@@ -63,6 +63,7 @@ public class OrderService {
     private final CouponService couponService;
     private final AddressRepository addressRepository;
     private final OrderNotificationService orderNotificationService;
+    private final RiderOfferService riderOfferService;
     private final UserRepository userRepository;
     private final OrderStatusLogService orderStatusLogService;
     private final ObjectMapper objectMapper;
@@ -256,7 +257,7 @@ public class OrderService {
         // restaurant's order is still PLACED here (not yet pickable), so the equivalent broadcast for
         // that path fires from StoreOwnerOrderService#accept instead, once the owner actually accepts it.
         if (autoAccept && order.getDeliveryType() == 0) {
-            orderNotificationService.notifyDeliveryPartnersOfAvailableOrder(order.getId(), restaurant, payable);
+            riderOfferService.offer(order, restaurant);
         }
 
         return toResponse(order);

@@ -57,6 +57,7 @@ public class DeliveryOrderService {
     private final com.pureeats.media.service.MediaAssetService mediaAssetService;
     private final OrderTimingService orderTimingService;
     private final RiderDispatchService riderDispatchService;
+    private final RiderOfferService riderOfferService;
     private final com.pureeats.user.repository.LoginHistoryRepository loginHistoryRepository;
     private final com.pureeats.media.storage.MediaUrlResolver mediaUrlResolver;
 
@@ -100,9 +101,13 @@ public class DeliveryOrderService {
         LocalDateTime cutoff = LocalDateTime.now().minusHours(availableOrderWindowHours);
         // Only orders from stores this partner may take (Settings -> New order alerts: linked stores / nearby / all).
         java.util.function.Predicate<Restaurant> mayTake = riderDispatchService.ruleFor(rider);
+        // Orders this partner dismissed stay hidden until they're offered again in a later round (RiderOfferService).
+        Map<Long, Integer> dismissed = riderOfferService.dismissedRounds(riderUserId);
         Map<Integer, Restaurant> restaurants = new java.util.HashMap<>();
         return orderRepository.findByOrderstatusIdInAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(statusIds, cutoff).stream()
                 .filter(o -> o.getDeliveryType() == 0 && acceptDeliveryRepository.findByOrderId(o.getId().intValue()).isEmpty())
+                .filter(o -> !dismissed.containsKey(o.getId())
+                        || dismissed.get(o.getId()) < (o.getRiderOfferCount() != null ? o.getRiderOfferCount() : 1))
                 .filter(o -> mayTake.test(restaurants.computeIfAbsent(o.getRestaurantId(),
                         id -> restaurantRepository.findById(id.longValue()).orElse(null))))
                 .map(o -> toAvailableOrderResponse(o, rider))
@@ -150,7 +155,8 @@ public class DeliveryOrderService {
                 distanceKm, payoutEstimate, itemsCount, order.getCreatedAt(),
                 tipOf(order), pickupDistanceKm, distanceKm,
                 java.util.Optional.ofNullable(orderStatusService.codeFor(order.getOrderstatusId())).map(Enum::name).orElse("UNKNOWN"),
-                order.getPaymentMode(), pickupDueAt(order));
+                order.getPaymentMode(), pickupDueAt(order),
+                order.getRiderOfferCount() != null ? order.getRiderOfferCount() : 1);
     }
 
     /**
@@ -460,6 +466,8 @@ public class DeliveryOrderService {
 
     /** A cash amount above the bill by more than this is almost certainly a typo (e.g. 4800 for 480) - rejected. */
     static final BigDecimal MAX_COD_CHANGE = new BigDecimal("2000");
+    /** The partner app takes at most 4 digits for the cash collected. */
+    static final BigDecimal MAX_COD_CASH = new BigDecimal("9999");
 
     /** @param cashCollected cash on delivery: what the partner received - at least the amount due; the extra goes to the customer's wallet. */
     @Transactional
@@ -481,6 +489,9 @@ public class DeliveryOrderService {
             cash = cashCollected.setScale(2, RoundingMode.HALF_UP);
             if (cash.compareTo(due) < 0) {
                 throw new BadRequestException("Collect the full amount due (" + rupees(due) + ") - you entered " + rupees(cash) + ".");
+            }
+            if (cash.compareTo(MAX_COD_CASH) > 0) {
+                throw new BadRequestException("The cash collected can be at most " + rupees(MAX_COD_CASH) + " - check the amount.");
             }
             if (cash.subtract(due).compareTo(MAX_COD_CHANGE) > 0) {
                 throw new BadRequestException("That's " + rupees(cash.subtract(due)) + " more than the bill - check the amount collected.");
@@ -967,6 +978,9 @@ public class DeliveryOrderService {
         }
 
         OrderStatusCode status = orderStatusService.codeFor(order.getOrderstatusId());
+        // The customer's address, location and phone only once the food is picked up (or the order is done) - while
+        // heading to the restaurant the partner doesn't need them. The available-orders list still shows the area.
+        boolean showCustomer = status != null && (OUT_FOR_DELIVERY.contains(status) || status == OrderStatusCode.DELIVERED);
         return new DeliveryAssignmentResponse(
                 order.getId(), order.getUniqueOrderId(), status != null ? status.name() : "UNKNOWN", assignedBy,
                 order.getRestaurantId().longValue(),
@@ -976,9 +990,9 @@ public class DeliveryOrderService {
                 restaurant != null ? parseCoordinate(restaurant.getLongitude()) : BigDecimal.ZERO,
                 restaurant != null ? restaurant.getContactNumber() : null,
                 customer != null ? customer.getName() : "Customer",
-                order.getAddress(),
-                parseCoordinate(customerLat), parseCoordinate(customerLng),
-                customer != null ? customer.getPhone() : null,
+                showCustomer ? order.getAddress() : null,
+                showCustomer ? parseCoordinate(customerLat) : null, showCustomer ? parseCoordinate(customerLng) : null,
+                showCustomer && customer != null ? customer.getPhone() : null,
                 items, order.getPayable(), order.getPaymentMode(), payoutEstimate, distanceKm, tipOf(order),
                 status != null && (FOOD_READY.contains(status) || OUT_FOR_DELIVERY.contains(status)),
                 pickupDueAt(order), (int) mediaAssetService.countForOwner(PICKUP_PHOTO_OWNER, order.getId()),

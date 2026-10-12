@@ -30,6 +30,7 @@ public final class RiderKyc {
 
     /** A full application: every group is required. */
     static void validate(RiderProfileRequest r) {
+        validateName(r.name());
         validateLicense(r.licenseNumber());
         validateAadhaar(r.aadhaarNumber());
         validatePan(r.panNumber());
@@ -43,6 +44,16 @@ public final class RiderKyc {
         applyPan(d, r.panNumber());
         applyVehicle(d, r.vehicleType(), r.vehicleNumber());
         applyPayout(d, r.payoutMethod(), r.bankAccountHolder(), r.bankAccountNumber(), r.bankIfsc(), r.upiId());
+    }
+
+    /** The default name of an OTP sign-up - never accepted as an applicant's real name. */
+    static final String PLACEHOLDER_NAME = "PureEats User";
+
+    public static void validateName(String name) {
+        String n = name == null ? "" : name.trim();
+        if (n.length() < 2 || n.equalsIgnoreCase(PLACEHOLDER_NAME)) {
+            throw new BadRequestException("Enter your full name as printed on your driving licence.");
+        }
     }
 
     public static void validateLicense(String licenseNumber) {

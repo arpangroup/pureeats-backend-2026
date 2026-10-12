@@ -1,9 +1,11 @@
-package com.pureeats.order.service;
+package com.pureeats.order.scheduler;
 
 import com.pureeats.catalog.service.SettingSchemaService;
 import com.pureeats.catalog.service.SettingValueService;
 import com.pureeats.domain.entity.DeliveryGuyDetail;
 import com.pureeats.domain.entity.User;
+import com.pureeats.order.service.DeliveryOrderService;
+import com.pureeats.order.service.OrderNotificationService;
 import com.pureeats.user.repository.DeliveryGuyDetailRepository;
 import com.pureeats.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;

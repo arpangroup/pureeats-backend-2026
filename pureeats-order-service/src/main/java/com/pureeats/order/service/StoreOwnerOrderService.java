@@ -35,6 +35,7 @@ public class StoreOwnerOrderService {
     private final RestaurantPayoutService restaurantPayoutService;
     private final WalletService walletService;
     private final OrderNotificationService orderNotificationService;
+    private final RiderOfferService riderOfferService;
     private final OrderStatusLogService orderStatusLogService;
     private final OrderTimingService orderTimingService;
     private final com.pureeats.order.repository.AcceptDeliveryRepository acceptDeliveryRepository;
@@ -82,7 +83,7 @@ public class StoreOwnerOrderService {
         // the order was still PLACED (not yet pickable) at placement time.
         if (order.getDeliveryType() == 0) {
             Restaurant restaurant = restaurantService.assertOwnership(ownerUserId, order.getRestaurantId().longValue());
-            orderNotificationService.notifyDeliveryPartnersOfAvailableOrder(order.getId(), restaurant, order.getPayable());
+            riderOfferService.offer(order, restaurant);
         }
         return orderService.toResponse(order);
     }
