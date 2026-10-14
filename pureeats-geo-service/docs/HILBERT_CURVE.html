@@ -1,0 +1,1414 @@
+<meta charset="utf-8">
+<title>Hilbert Curve &amp; Space-Filling Curves — (lat, lng) to One Number</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --bg:#f2f3f7; --surface:#ffffff; --surface-alt:#e9ebf1; --border:#d6d9e2;
+    --ink:#171a24; --ink-soft:#4c5165; --ink-faint:#7d8296;
+    --accent:#0e7f8c; --accent-strong:#0a5f69; --accent-soft:#dcf1f1; --accent-soft-border:#a9d9d9;
+    --code-bg:#eef1f4;
+    --ok:#2f8f5b; --ok-fill:#e1f3e8; --ok-border:#9bcfb0;
+    --warn:#a8650a; --warn-fill:#fbf0dc; --warn-border:#e3c07f;
+    --bad:#b3261e;
+    --shadow: 0 1px 2px rgba(23,26,36,0.05), 0 10px 26px -14px rgba(23,26,36,0.16);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0e1017; --surface:#171a24; --surface-alt:#1e222f; --border:#2c303f;
+      --ink:#e9ebf3; --ink-soft:#aeb2c4; --ink-faint:#787d92;
+      --accent:#3fd0c9; --accent-strong:#5fe0d9; --accent-soft:#123632; --accent-soft-border:#245a54;
+      --code-bg:#1b1f2a;
+      --ok:#3fb87a; --ok-fill:#123425; --ok-border:#2c6b48;
+      --warn:#e0a648; --warn-fill:#332512; --warn-border:#7a5a26;
+      --bad:#ff7b72;
+      --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 10px 26px -14px rgba(0,0,0,0.55);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0e1017; --surface:#171a24; --surface-alt:#1e222f; --border:#2c303f;
+    --ink:#e9ebf3; --ink-soft:#aeb2c4; --ink-faint:#787d92;
+    --accent:#3fd0c9; --accent-strong:#5fe0d9; --accent-soft:#123632; --accent-soft-border:#245a54;
+    --code-bg:#1b1f2a;
+    --ok:#3fb87a; --ok-fill:#123425; --ok-border:#2c6b48;
+    --warn:#e0a648; --warn-fill:#332512; --warn-border:#7a5a26;
+    --bad:#ff7b72;
+    --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 10px 26px -14px rgba(0,0,0,0.55);
+  }
+
+  *{ box-sizing:border-box; }
+  html{ scroll-behavior:smooth; }
+  html,body{ margin:0; }
+  body{ background:var(--bg); color:var(--ink); font-family:'IBM Plex Sans', system-ui, sans-serif; font-size:16px; line-height:1.65; }
+  a{ color:var(--accent-strong); }
+  :root[data-theme="dark"] a, :root:not([data-theme="light"]) a{ color:var(--accent); }
+
+  .shell{ max-width:1280px; margin:0 auto; padding:0 24px 90px; }
+
+  header.doc-header{
+    display:flex; align-items:flex-start; justify-content:space-between; gap:20px; flex-wrap:wrap;
+    padding:36px 0 26px; margin-bottom:32px; border-bottom:1px solid var(--border);
+    background:linear-gradient(180deg, var(--accent-soft) 0%, transparent 100%);
+    margin-left:-24px; margin-right:-24px; padding-left:24px; padding-right:24px;
+  }
+  .doc-header .title-block{ flex:1 1 380px; min-width:0; }
+  .eyebrow{ font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent-strong); font-weight:600; }
+  :root[data-theme="dark"] .eyebrow, :root:not([data-theme="light"]) .eyebrow{ color:var(--accent); }
+  h1{ font-size:clamp(26px,4vw,38px); margin:8px 0 10px; letter-spacing:-0.015em; line-height:1.15; }
+  .dek{ margin:0; color:var(--ink-soft); font-size:15.5px; max-width:70ch; }
+  .selftest{ margin-top:12px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink-faint); }
+  .selftest.ok{ color:var(--ok); } .selftest.bad{ color:var(--bad); }
+
+  .print-btn{
+    flex:0 0 auto; margin-top:4px; font-family:'IBM Plex Sans',sans-serif; font-size:13.5px; font-weight:600;
+    color:#fff; background:var(--accent-strong); border:none; border-radius:9px; padding:11px 20px; cursor:pointer;
+    box-shadow:var(--shadow); display:inline-flex; align-items:center; gap:8px; transition:background .15s,transform .1s;
+  }
+  .print-btn:hover{ background:var(--accent); transform:translateY(-1px); }
+  .print-btn svg{ width:15px; height:15px; flex-shrink:0; }
+
+  .layout{ display:flex; gap:44px; align-items:flex-start; }
+  main.article{ flex:1 1 auto; min-width:0; max-width:840px; }
+
+  .sidebar-toc{
+    flex:0 0 280px; position:sticky; top:24px; align-self:flex-start; max-height:calc(100vh - 48px); overflow-y:auto;
+    background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); padding:6px 20px 20px;
+  }
+  .sidebar-toc summary{
+    font-size:11.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-faint); font-weight:700;
+    cursor:pointer; list-style:none; padding:14px 0; display:flex; align-items:center; justify-content:space-between; user-select:none;
+  }
+  .sidebar-toc summary::-webkit-details-marker{ display:none; }
+  .sidebar-toc summary::after{ content:'\2212'; color:var(--ink-faint); font-size:14px; }
+  .sidebar-toc details:not([open]) summary::after{ content:'+'; }
+  .sidebar-toc ol, .sidebar-toc ul{ list-style:none; margin:0; padding-left:0; }
+  .sidebar-toc ol{ counter-reset:toc-phase; }
+  .sidebar-toc ul{ padding-left:18px; margin-top:2px; margin-bottom:10px; }
+  .sidebar-toc li{ margin:0 0 2px; }
+  .sidebar-toc .toc-lvl-2{ counter-increment:toc-phase; font-weight:600; margin-top:14px; }
+  .sidebar-toc .toc-lvl-2:first-child{ margin-top:2px; }
+  .sidebar-toc .toc-lvl-3{ font-size:13px; }
+  .sidebar-toc a{ text-decoration:none; display:block; padding:5px 10px; border-radius:7px; color:var(--ink-soft); transition:background .12s,color .12s; }
+  .sidebar-toc .toc-lvl-2 > a{ padding-left:8px; }
+  .sidebar-toc .toc-lvl-2 > a::before{ content:counter(toc-phase) '.'; display:inline-block; width:22px; color:var(--accent); font-weight:700; font-variant-numeric:tabular-nums; }
+  .sidebar-toc a:hover{ background:var(--surface-alt); color:var(--accent-strong); }
+  .sidebar-toc a.active{ background:var(--accent-soft); color:var(--accent-strong); font-weight:600; }
+
+  @media (max-width:1000px){
+    .layout{ flex-direction:column; align-items:stretch; }
+    .sidebar-toc{ position:static; max-height:none; overflow:visible; width:100%; flex-basis:auto; align-self:stretch; margin-bottom:8px; }
+    main.article{ max-width:none; }
+  }
+  @media (max-width:640px){
+    .shell{ padding:0 16px 60px; }
+    header.doc-header{ margin-left:-16px; margin-right:-16px; padding-left:16px; padding-right:16px; padding-top:26px; }
+    main.article h2{ font-size:21px; margin-top:36px; }
+    main.article h3{ font-size:17.5px; }
+  }
+
+  main.article h2{ font-size:25px; margin:52px 0 16px; padding-bottom:10px; border-bottom:2px solid var(--accent-soft-border); color:var(--accent-strong); scroll-margin-top:16px; letter-spacing:-0.01em; }
+  main.article h3{ font-size:19px; margin:34px 0 10px; scroll-margin-top:16px; }
+  main.article h4{ font-size:16px; margin:24px 0 8px; color:var(--ink-soft); scroll-margin-top:16px; }
+  main.article p{ margin:0 0 15px; }
+  main.article ul, main.article ol{ margin:0 0 15px; padding-left:26px; }
+  main.article li{ margin:0 0 6px; }
+
+  code{ font-family:'IBM Plex Mono',monospace; background:var(--code-bg); border:1px solid var(--border); border-radius:4px; padding:1px 5px; font-size:0.88em; color:var(--ink); }
+  .code-wrap{ position:relative; margin:0 0 18px; }
+  .code-lang{ position:absolute; top:9px; right:12px; font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); background:var(--surface); border:1px solid var(--border); border-radius:5px; padding:2px 7px; pointer-events:none; }
+  pre.code-block{ background:var(--code-bg); border:1px solid var(--border); border-left:3px solid var(--accent-soft-border); border-radius:8px; padding:14px 16px; margin:0; overflow-x:auto; }
+  pre.code-block code{ background:none; border:none; padding:0; font-size:12.8px; line-height:1.55; color:var(--ink); white-space:pre; }
+  .runs-badge{ display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--ok); border:1px solid var(--ok-border); background:var(--ok-fill); border-radius:5px; padding:1px 7px; margin:0 0 6px; }
+
+  .math{ font-family:'IBM Plex Mono',monospace; color:var(--accent-strong); }
+  .fig-diagram{ background:var(--code-bg); border:1px solid var(--border); border-radius:8px; padding:14px 16px; margin:0 0 18px; overflow-x:auto; }
+  .fig-diagram pre{ margin:0; font-family:'IBM Plex Mono',monospace; font-size:12.5px; line-height:1.45; color:var(--ink); white-space:pre; }
+  .fig-diagram figcaption{ margin-top:8px; font-size:12px; color:var(--ink-faint); font-style:italic; font-family:'IBM Plex Sans',sans-serif; }
+
+  blockquote{ margin:0 0 18px; padding:8px 16px; border-left:3px solid var(--accent-soft-border); color:var(--ink-soft); background:var(--surface-alt); border-radius:0 6px 6px 0; }
+  blockquote p{ margin:0; }
+  .callout{ border-radius:10px; padding:14px 18px; margin:0 0 18px; font-size:14.5px; }
+  .callout.tip{ background:var(--accent-soft); border:1px solid var(--accent-soft-border); }
+  .callout.warn{ background:var(--warn-fill); border:1px solid var(--warn-border); }
+  .callout strong{ color:var(--accent-strong); } .callout.warn strong{ color:var(--warn); }
+  .callout p:last-child{ margin-bottom:0; }
+
+  .table-wrap{ overflow-x:auto; margin:0 0 18px; }
+  table{ width:100%; border-collapse:collapse; font-size:13.5px; }
+  th, td{ border:1px solid var(--border); padding:7px 10px; text-align:left; vertical-align:top; }
+  th{ background:var(--accent-soft); color:var(--accent-strong); font-weight:600; }
+  tr:nth-child(even) td{ background:var(--surface-alt); }
+  td.num, th.num{ text-align:right; font-variant-numeric:tabular-nums; }
+  tr.best td{ background:var(--ok-fill) !important; font-weight:600; }
+
+  hr{ border:none; border-top:1px solid var(--border); margin:36px 0; }
+  footer{ margin-top:40px; padding-top:16px; border-top:1px solid var(--border); font-size:12px; color:var(--ink-faint); font-family:'IBM Plex Mono',monospace; }
+
+  /* ---- demos ---- */
+  .demo{ border:1px solid var(--border); border-radius:12px; background:var(--surface); box-shadow:var(--shadow); margin:0 0 24px; overflow:hidden; }
+  .demo-head{ padding:12px 16px 10px; border-bottom:1px solid var(--border); }
+  .demo-tag{ display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.06em; text-transform:uppercase; background:var(--accent-soft); color:var(--accent-strong); border:1px solid var(--accent-soft-border); border-radius:5px; padding:2px 8px; margin-bottom:6px; }
+  .demo-head p{ margin:0; font-size:13px; color:var(--ink-soft); }
+  .demo-controls{ display:flex; flex-wrap:wrap; gap:10px 14px; align-items:center; padding:10px 16px; background:var(--surface-alt); border-bottom:1px solid var(--border); font-size:12.5px; }
+  .demo-controls label{ display:flex; align-items:center; gap:6px; color:var(--ink-soft); white-space:nowrap; }
+  .demo-controls select, .demo-controls input[type=number], .demo-controls input[type=text]{ font-size:12.5px; padding:3px 6px; border:1px solid var(--border); border-radius:5px; background:var(--surface); color:var(--ink); }
+  .demo-controls input[type=number]{ width:70px; }
+  .demo-controls input[type=range]{ width:110px; }
+  .demo-btn{ font-family:'IBM Plex Sans',sans-serif; font-size:12.5px; font-weight:600; color:var(--accent-strong); background:var(--surface); border:1px solid var(--accent-soft-border); border-radius:7px; padding:5px 11px; cursor:pointer; }
+  .demo-btn:hover{ background:var(--accent-soft); }
+  .demo-btn.primary{ background:var(--accent-strong); border-color:var(--accent-strong); color:#fff; }
+  .demo-btn.active{ background:var(--accent-soft); border-color:var(--accent); }
+  .demo-body{ padding:14px 16px; display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start; }
+  .demo-body .grid-col{ flex:1 1 300px; max-width:480px; min-width:0; }
+  .demo-body .side-col{ flex:1 1 260px; min-width:0; }
+  svg.curve{ display:block; width:100%; height:auto; background:var(--surface); border:1px solid var(--border); border-radius:8px; touch-action:none; }
+  .demo-readout{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; line-height:1.7; padding:10px 16px; background:var(--code-bg); border-top:1px solid var(--border); white-space:pre-wrap; color:var(--ink-soft); min-height:20px; }
+  .demo-readout b{ color:var(--accent-strong); }
+  .demo-map{ height:470px; width:100%; background:var(--surface-alt); }
+  .legend{ display:flex; flex-wrap:wrap; gap:6px 16px; font-size:12px; color:var(--ink-soft); padding:8px 16px; border-top:1px solid var(--border); }
+  .legend i{ display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:5px; vertical-align:-2px; border:1px solid rgba(0,0,0,.25); }
+  .strip-row{ margin:0 0 10px; }
+  .strip-row .lbl{ font-size:12.5px; font-weight:600; display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+  .strip-row .lbl span.s{ font-weight:400; color:var(--ink-soft); font-family:'IBM Plex Mono',monospace; font-size:11.5px; }
+  svg.strip{ display:block; width:100%; height:auto; border:1px solid var(--border); border-radius:4px; background:var(--surface); }
+  table.steps{ font-size:12px; } table.steps td, table.steps th{ padding:4px 7px; }
+  .leaflet-container{ font-family:'IBM Plex Sans',sans-serif; }
+
+  @media print{
+    @page{ size:A4; margin:16mm 14mm; }
+    :root, :root[data-theme="dark"], :root[data-theme="light"]{
+      --bg:#ffffff; --surface:#ffffff; --surface-alt:#f2f3f5; --border:#d6d9e2; --ink:#171a24; --ink-soft:#4c5165; --ink-faint:#7d8296;
+      --accent:#0e7f8c; --accent-strong:#0a5f69; --accent-soft:#dcf1f1; --accent-soft-border:#a9d9d9; --code-bg:#f2f3f5; --shadow:none;
+    }
+    *{ -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
+    html, body{ background:#fff; }
+    .no-print, .demo{ display:none !important; }
+    .shell{ max-width:none; padding:0; }
+    header.doc-header{ background:none; margin:0 0 16px; padding:0 0 12px; }
+    .layout{ display:block; }
+    .sidebar-toc{ position:static; max-height:none; overflow:visible; box-shadow:none; break-after:page; width:100%; }
+    main.article{ max-width:none; }
+    main.article h2, main.article h3{ break-after:avoid; }
+    pre.code-block, table, blockquote, .fig-diagram{ break-inside:avoid; }
+    pre.code-block code{ white-space:pre-wrap; overflow-wrap:anywhere; }
+    a{ color:var(--ink); text-decoration:none; }
+  }
+</style>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+
+<div class="shell">
+  <header class="doc-header">
+    <div class="title-block">
+      <div class="eyebrow">pureeats-geo-service &nbsp;/&nbsp; reference guide &nbsp;/&nbsp; companion to LOCATION_DB.html</div>
+      <h1>Hilbert Curve &amp; Space-Filling Curves — Turning (lat, lng) into One Number</h1>
+      <p class="dek">How can a 2-D position like <code>(17.4435, 78.3772)</code> become a <strong>single integer</strong> so that places close on the map get close numbers — and so that an ordinary B-tree can answer a range query like “everything within 2 km of me”? This guide goes from a 16-house colony to the whole planet, compares Row-major, N, Z and U (Hilbert) curves, and ends with working JavaScript. The code shown on this page is the code the demos execute.</p>
+      <div class="selftest" id="selftest">running self-test…</div>
+    </div>
+    <button class="print-btn no-print" onclick="window.print()" type="button">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2M6 14h12v7H6v-7z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path></svg>
+      Print
+    </button>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar-toc" aria-label="Table of contents">
+      <details open>
+        <summary>Table of Contents</summary>
+        <div class="toc-body"><ol>
+          <li class="toc-lvl-2"><a href="#problem">The problem: two numbers, one index</a></li>
+          <li class="toc-lvl-2"><a href="#colony">A tiny example: 16 houses</a></li>
+          <li class="toc-lvl-2"><a href="#properties">What makes a good mapping</a></li>
+          <li class="toc-lvl-2"><a href="#tour">A tour of the curves</a></li>
+          <ul>
+            <li class="toc-lvl-3"><a href="#row-major">Row-major</a></li>
+            <li class="toc-lvl-3"><a href="#z-order">Z-order (Morton) &amp; N-order</a></li>
+            <li class="toc-lvl-3"><a href="#u-order">U-order = Hilbert</a></li>
+            <li class="toc-lvl-3"><a href="#others">Peano, Moore, Gray, βΩ — and “alpha”</a></li>
+            <li class="toc-lvl-3"><a href="#viewer">Live: curve viewer</a></li>
+          </ul>
+          <li class="toc-lvl-2"><a href="#hilbert">The Hilbert curve, step by step</a></li>
+          <ul>
+            <li class="toc-lvl-3"><a href="#levels">Level 1, 2, 3 …</a></li>
+            <li class="toc-lvl-3"><a href="#rule">The recursive rule</a></li>
+            <li class="toc-lvl-3"><a href="#encoder">Live: step-by-step encoder</a></li>
+            <li class="toc-lvl-3"><a href="#prefix">The prefix (quadtree) property</a></li>
+            <li class="toc-lvl-3"><a href="#limits">Why it works — and where it cannot</a></li>
+          </ul>
+          <li class="toc-lvl-2"><a href="#javascript">Implementing it in JavaScript</a></li>
+          <li class="toc-lvl-2"><a href="#world">From the whole world to a single line</a></li>
+          <ul>
+            <li class="toc-lvl-3"><a href="#world-demo">Live: the world map</a></li>
+          </ul>
+          <li class="toc-lvl-2"><a href="#range">Range queries with a Hilbert index</a></li>
+          <ul>
+            <li class="toc-lvl-3"><a href="#several-ranges">Why a rectangle becomes several ranges</a></li>
+            <li class="toc-lvl-3"><a href="#compare">Live: compare the curves</a></li>
+            <li class="toc-lvl-3"><a href="#cover">The decomposition algorithm</a></li>
+            <li class="toc-lvl-3"><a href="#benchmark">Is it actually better? (measured)</a></li>
+            <li class="toc-lvl-3"><a href="#radius-demo">Live: radius query on the map</a></li>
+          </ul>
+          <li class="toc-lvl-2"><a href="#pureeats">Putting it into PureEats</a></li>
+          <li class="toc-lvl-2"><a href="#real-world">Where this is used in the real world</a></li>
+          <li class="toc-lvl-2"><a href="#pitfalls">Pitfalls &amp; cheat sheet</a></li>
+        </ol></div>
+      </details>
+    </aside>
+
+    <main class="article">
+
+<!-- ===================================================================================== -->
+      <h2 id="problem">1. The problem: two numbers, one index</h2>
+      <p>A location is <strong>two</strong> numbers — latitude and longitude. A database index (B-tree, sorted set, LSM-tree, a sorted file) keeps rows in <strong>one</strong> sorted order. If you create a composite index <code>(lat, lng)</code> and ask for a small box,</p>
+      <div class="code-wrap"><span class="code-lang">SQL</span><pre class="code-block"><code>WHERE lat BETWEEN 17.42 AND 17.46
+  AND lng BETWEEN 78.35 AND 78.40</code></pre></div>
+      <p>the index narrows <code>lat</code> nicely, but inside that latitude band the rows are ordered by <code>lng</code> <em>across the whole planet</em> — the database walks a thin strip that circles the Earth and throws almost everything away. The index only really helps with one of the two dimensions.</p>
+      <p><strong>The space-filling-curve idea:</strong> draw one continuous line that visits <em>every</em> cell of a 2-D grid exactly once, and number the cells in the order the line visits them. Every cell now has a single integer — its position along the line — which a plain B-tree can index.</p>
+      <div class="fig-diagram"><pre>2-D map                              1-D line
+┌───┬───┬───┬───┐
+│   │   │   │   │                    0──1──2──3──4──5──6── … ──15
+├───┼───┼───┼───┤        ───────►     (the curve, unrolled)
+│   │   │   │   │
+└───┴───┴───┴───┘</pre></div>
+      <p>The whole game: <strong>choose a curve such that cells close in 2-D tend to be close along the line.</strong> The Hilbert curve is the best-known answer.</p>
+
+<!-- ===================================================================================== -->
+      <h2 id="colony">2. A tiny practical example: numbering 16 houses</h2>
+      <p>A colony of <strong>4 × 4 = 16 houses</strong>; the postman wants one house number per house.</p>
+      <h3>2.1 The obvious way — row by row (row-major)</h3>
+      <div class="fig-diagram"><pre> 0  1  2  3
+ 4  5  6  7
+ 8  9 10 11
+12 13 14 15</pre></div>
+      <p>Horizontal neighbours are great (5 and 6 differ by 1). But the house directly <em>below</em> house 5 is 9 — <strong>four</strong> away. With 1,000,000 houses per row it would be a million away. The numbering respects one direction and ignores the other.</p>
+      <h3>2.2 A smarter way — follow a “U” recursively (Hilbert)</h3>
+      <div class="fig-diagram"><pre> 0── 1  14──15            0  1 14 15
+     │   │                3  2 13 12
+ 3── 2  13──12            4  7  8 11
+ │           │            5  6  9 10
+ 4   7── 8  11
+ │   │   │   │
+ 5── 6   9──10</pre><figcaption>The same 16 houses: as a path (left) and as numbers (right). Start top-left; the curve ends top-right.</figcaption></div>
+      <ul>
+        <li>Consecutive numbers are <strong>always next-door neighbours</strong> — the curve never jumps.</li>
+        <li>Vertical <em>and</em> horizontal neighbours tend to be close: house <code>2</code>'s neighbours are <code>1, 3, 7, 13</code> — three of the four are within 5.</li>
+        <li>Whole <strong>blocks</strong> get contiguous numbers: top-left 2×2 = <code>0–3</code>, bottom-left = <code>4–7</code>, bottom-right = <code>8–11</code>, top-right = <code>12–15</code>. <strong>That is the property that makes range queries cheap.</strong></li>
+      </ul>
+      <h3>2.3 A first range query</h3>
+      <p>“Find the four centre houses” — columns 1–2, rows 1–2:</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Numbering</th><th>House numbers</th><th>Contiguous runs (“ranges”)</th></tr></thead>
+        <tbody>
+          <tr><td>Row-major</td><td>5, 6, 9, 10</td><td><code>[5–6]</code> <code>[9–10]</code> → <strong>2 ranges</strong></td></tr>
+          <tr><td>Z-order</td><td>3, 6, 9, 12</td><td><code>[3]</code> <code>[6]</code> <code>[9]</code> <code>[12]</code> → <strong>4 ranges</strong></td></tr>
+          <tr><td>Hilbert</td><td>2, 7, 8, 13</td><td><code>[2]</code> <code>[7–8]</code> <code>[13]</code> → <strong>3 ranges</strong></td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout warn"><strong>Honest note.</strong> In this toy, row-major is just as good — or better — because each row has only 4 houses. Scale the colony up to a planet (millions of cells per row) and the picture reverses; <a href="#benchmark">section 8.5</a> measures it. A space-filling curve is not about “fewest ranges in a toy”; it is about <strong>locality in both directions at every scale</strong>.</div>
+
+<!-- ===================================================================================== -->
+      <h2 id="properties">3. What makes a good 2-D → 1-D mapping</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>#</th><th>Property</th><th>Why we want it</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td><strong>Bijective</strong> — every cell ↔ exactly one number, and back</td><td>no collisions; a number can be decoded into a place</td></tr>
+          <tr><td>2</td><td><strong>Locality</strong> — close in 1-D ⇒ close in 2-D</td><td>scanning a few consecutive keys reads a compact area</td></tr>
+          <tr><td>3</td><td><strong>Hierarchical / prefix</strong> — a big square = one contiguous run; its 4 children = 4 consecutive sub-runs</td><td>one range covers a whole block; precision changes by dropping digits</td></tr>
+          <tr><td>4</td><td><strong>Cheap to compute</strong> — <code>O(order)</code> bit operations</td><td>millions of points per second</td></tr>
+          <tr><td>5</td><td><strong>Continuity</strong> (bonus) — consecutive numbers are adjacent cells</td><td>fewer “jumps”, tighter ranges</td></tr>
+        </tbody>
+      </table></div>
+      <p>No mapping is perfect: a plane has two directions, a line has one, so some neighbours <em>must</em> end up far apart (<a href="#limits">section 5.6</a>). Curves differ in how they trade these properties.</p>
+
+<!-- ===================================================================================== -->
+      <h2 id="tour">4. A tour of the curves</h2>
+      <p>All curves work on an <code>n × n</code> grid, <code>n = 2^order</code>. Cell <code>(x, y)</code>: <code>x</code> = column (left→right), <code>y</code> = row (top→bottom). Every picture starts at the <strong>top-left</strong>.</p>
+
+      <h3 id="row-major">4.1 Row-major (scan-line)</h3>
+      <p><span class="math">d = y · n + x</span>. Trivial and cheap, but locality exists in one direction only, and it is not hierarchical (a square block is <em>not</em> a contiguous run).</p>
+
+      <h3 id="z-order">4.2 Z-order (Morton) and its twin, N-order</h3>
+      <p><strong>Z-order</strong> interleaves the bits of <code>x</code> and <code>y</code>. The visiting order traces the letter <strong>Z</strong> at every scale. <strong>N-order</strong> is the same with the two axes swapped, so it traces an <strong>N</strong>.</p>
+      <div class="fig-diagram"><pre>  Z-order                N-order
+ 0  1  4  5            0  2  8 10
+ 2  3  6  7            1  3  9 11
+ 8  9 12 13            4  6 12 14
+10 11 14 15            5  7 13 15</pre></div>
+      <p><strong>Worked example</strong> — encode <code>x = 5</code>, <code>y = 3</code> on an 8 × 8 grid (<code>order = 3</code>):</p>
+      <div class="fig-diagram"><pre>x = 5 = 1 0 1   (binary, MSB → LSB)
+y = 3 = 0 1 1
+
+interleave: at each level take the y-bit, then the x-bit
+
+   level:    2     1     0
+   y bits:   0     1     1
+   x bits:   1     0     1
+             ↓     ↓     ↓
+   pairs:   0 1   1 0   1 1      →   0 1 1 0 1 1  (base 2)  =  27</pre></div>
+      <ul>
+        <li><strong>Hierarchical ✔</strong> — each bit pair is one quadrant choice, so every aligned block is a contiguous run.</li>
+        <li><strong>Continuous ✘</strong> — in the Z grid, <code>7 → 8</code> jumps from cell <code>(3,1)</code> to <code>(0,2)</code>, across the whole grid. These <em>jumps</em> are Z-order's weakness: a window straddling one needs extra ranges. (The viewer below draws every jump in red.)</li>
+        <li><strong>Very cheap</strong> — just bit shuffling.</li>
+        <li><strong>GeoHash <em>is</em> Z-order</strong> — it alternates longitude and latitude bits exactly like this, then writes 5 bits at a time in Base-32 (see <a href="LOCATION_DB.html">LOCATION_DB.html</a>, Phase 4).</li>
+      </ul>
+
+      <h3 id="u-order">4.3 U-order — the Hilbert curve</h3>
+      <p>The base pattern is a <strong>U</strong> (open at the top for a top-left start). Each quadrant is filled with a smaller U, rotated or mirrored so that the end of one quadrant touches the start of the next. Result: <strong>no jumps, ever.</strong> That is the subject of <a href="#hilbert">section 5</a>.</p>
+
+      <h3 id="others">4.4 Other members of the family — and “alpha”</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Curve</th><th>Base shape</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Peano</strong></td><td>3 × 3 serpentine</td><td>First space-filling curve (1890). Works on 3<sup>k</sup> grids, not powers of two.</td></tr>
+          <tr><td><strong>Moore</strong></td><td>four Hilbert curves in a ring</td><td>A <em>closed loop</em> variant of Hilbert: the end meets the start.</td></tr>
+          <tr><td><strong>Gray-code curve</strong></td><td>Z-like, Gray-coded interleave</td><td>Reported to cluster somewhat better than Z; slightly more expensive.</td></tr>
+          <tr><td><strong>Sierpiński</strong></td><td>triangles</td><td>For triangulated meshes.</td></tr>
+          <tr><td><strong>βΩ (beta-omega)</strong></td><td>Hilbert-like (Wierum)</td><td>Less common; listed as the best-known Greek-letter-named curve.</td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout warn"><strong>About “alpha curve”:</strong> I am not aware of a standard, widely-documented space-filling curve called an “alpha curve”. The common letter-named ones are <strong>Z</strong>, <strong>N</strong>, <strong>U</strong> (Hilbert) and the Greek-letter <strong>βΩ</strong> curve. If your source used “alpha curve” for something specific, check its definition — it may be an informal name for one of the above. Everything here (locality, prefix property, range decomposition) applies unchanged to any <em>hierarchical</em> curve.</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Property</th><th>Row-major</th><th>N / Z-order</th><th>Hilbert (U)</th><th>Moore</th></tr></thead>
+        <tbody>
+          <tr><td>Hierarchical (blocks = ranges)</td><td>✘</td><td>✔</td><td>✔</td><td>✔</td></tr>
+          <tr><td>Continuous (no jumps)</td><td>✘ (jump at each row end)</td><td>✘</td><td>✔</td><td>✔ (and closed)</td></tr>
+          <tr><td>Cost</td><td>trivial</td><td>very cheap</td><td>cheap (<code>O(order)</code> loop)</td><td>cheap</td></tr>
+          <tr><td>Range-query tightness</td><td>poor at scale</td><td>good</td><td><strong>best of the group</strong></td><td>like Hilbert</td></tr>
+          <tr><td>Used by</td><td>flat arrays</td><td>GeoHash, Z-order clustering</td><td>Google S2, Hilbert R-trees</td><td>periodic domains</td></tr>
+        </tbody>
+      </table></div>
+
+      <script type="text/plain" data-code="js" data-id="src-curves" data-runs="1">
+// ---- Row-major: d = y·n + x -------------------------------------------------------------
+function rowMajorXY2D(order, x, y) { return y * 2 ** order + x; }
+function rowMajorD2XY(order, d)    { const n = 2 ** order; return [d % n, Math.floor(d / n)]; }
+
+// ---- Z-order (Morton): x in the even bit positions, y in the odd ones ---------------------
+function mortonXY2D(order, x, y) {
+  let d = 0;
+  for (let i = 0; i < order; i++) {
+    d += ((x >> i) & 1) * 4 ** i + ((y >> i) & 1) * 2 * 4 ** i;
+  }
+  return d;
+}
+function mortonD2XY(order, d) {
+  let x = 0, y = 0;
+  for (let i = 0; i < order; i++) {
+    x |= (Math.floor(d / 4 ** i) % 2) << i;
+    y |= (Math.floor(d / (2 * 4 ** i)) % 2) << i;
+  }
+  return [x, y];
+}
+
+// ---- N-order = Z-order with the axes swapped ---------------------------------------------
+function nOrderXY2D(order, x, y) { return mortonXY2D(order, y, x); }
+function nOrderD2XY(order, d)    { const [a, b] = mortonD2XY(order, d); return [b, a]; }
+      </script>
+
+      <h3 id="viewer">4.5 Live: curve viewer</h3>
+      <div class="demo" id="demo-viewer">
+        <div class="demo-head"><span class="demo-tag">Live demo</span>
+          <p>Pick a curve and an order. Colour runs from blue (index 0) to red (last index). <b style="color:var(--bad)">Red dashed</b> segments are <em>jumps</em> — consecutive numbers that are not neighbours. Hover a cell to read its index. Compare how many jumps Row-major, N and Z have against Hilbert's zero.</p></div>
+        <div class="demo-controls">
+          <label>Curve <select id="v-curve"><option value="hilbert">Hilbert (U)</option><option value="z">Z-order (Morton)</option><option value="n">N-order</option><option value="row">Row-major</option></select></label>
+          <label>Order <input type="range" id="v-order" min="1" max="6" value="3"> <b id="v-order-val">3</b></label>
+          <label><input type="checkbox" id="v-numbers" checked> numbers</label>
+        </div>
+        <div class="demo-body">
+          <div class="grid-col"><svg class="curve" id="v-svg"></svg></div>
+          <div class="side-col"><div id="v-info" style="font-size:13.5px;"></div></div>
+        </div>
+        <div class="demo-readout" id="v-readout">Hover a cell.</div>
+      </div>
+
+<!-- ===================================================================================== -->
+      <h2 id="hilbert">5. The Hilbert curve, step by step</h2>
+
+      <h3 id="levels">5.1 Level 1 → 2 → 3 …</h3>
+      <p><strong>Level 1 — a single “U”.</strong> Split the square into four quadrants and visit them in a U order: <code>0</code> = top-left, <code>1</code> = bottom-left, <code>2</code> = bottom-right, <code>3</code> = top-right.</p>
+      <div class="fig-diagram"><pre>0  3
+│  │
+1──2</pre></div>
+      <p><strong>Level 2 — shrink the U into every quadrant,</strong> rotating or mirroring so the curve stays connected:</p>
+      <ul>
+        <li>quadrant 0 (top-left): the U is <strong>transposed</strong> (flipped over the main diagonal) so it <em>ends</em> at the bottom-left, where quadrant 1 begins;</li>
+        <li>quadrants 1 and 2 (bottom row): same orientation as the parent U;</li>
+        <li>quadrant 3 (top-right): <strong>anti-transposed</strong>, so it <em>starts</em> at the bottom-right, right above where quadrant 2 ends.</li>
+      </ul>
+      <div class="demo" id="demo-levels">
+        <div class="demo-head"><span class="demo-tag">Live demo</span>
+          <p>Step through the levels. Each of the four quadrants of the parent is drawn in its own colour — see how each one holds a smaller U that is rotated or mirrored to connect to the next.</p></div>
+        <div class="demo-controls">
+          <button class="demo-btn" id="l-prev" type="button">◀ Level</button>
+          <b id="l-level">Level 2</b>
+          <button class="demo-btn" id="l-next" type="button">Level ▶</button>
+          <label><input type="checkbox" id="l-numbers" checked> numbers</label>
+        </div>
+        <div class="demo-body">
+          <div class="grid-col"><svg class="curve" id="l-svg"></svg></div>
+          <div class="side-col"><div id="l-text" style="font-size:13.5px;"></div></div>
+        </div>
+      </div>
+      <p>The static versions — <strong>level 2</strong> and <strong>level 3</strong>:</p>
+      <div class="fig-diagram"><pre> 0   3── 4── 5  58──59──60  63
+ │   │       │   │       │   │
+ 1── 2   7── 6  57──56  61──62
+         │           │
+14──13   8── 9  54──55  50──49
+ │   │       │   │       │   │
+15  12──11──10  53──52──51  48
+ │                           │
+16──17  30──31──32──33  46──47
+     │   │           │   │
+19──18  29──28  35──34  45──44
+ │           │   │           │
+20  23──24  27  36  39──40  43
+ │   │   │   │   │   │   │   │
+21──22  25──26  37──38  41──42</pre><figcaption>Level 3 (8 × 8). Every aligned square is a contiguous run: top-left 4×4 = 0–15, bottom-left = 16–31, bottom-right = 32–47, top-right = 48–63; inside 0–15 the top-left 2×2 = 0–3.</figcaption></div>
+
+      <h3 id="rule">5.2 The recursive rule</h3>
+      <p>Each level repeats one step: <em>pick the quadrant, add its offset, then transform the coordinates inside it so the sub-problem looks like the original.</em></p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Quadrant</th><th>Bits</th><th>Digit</th><th>Offset added</th><th>Transform of <code>(x, y)</code> for the next level</th></tr></thead>
+        <tbody>
+          <tr><td>top-left</td><td><code>rx=0, ry=0</code></td><td>0</td><td><code>0·s²</code></td><td><strong>swap</strong> <code>x ↔ y</code></td></tr>
+          <tr><td>bottom-left</td><td><code>rx=0, ry=1</code></td><td>1</td><td><code>1·s²</code></td><td>none</td></tr>
+          <tr><td>bottom-right</td><td><code>rx=1, ry=1</code></td><td>2</td><td><code>2·s²</code></td><td>none</td></tr>
+          <tr><td>top-right</td><td><code>rx=1, ry=0</code></td><td>3</td><td><code>3·s²</code></td><td><strong>flip</strong> both (<code>x→n−1−x</code>, <code>y→n−1−y</code>) <strong>then swap</strong></td></tr>
+        </tbody>
+      </table></div>
+      <p><code>s</code> is the half-size at the current level; <code>rx</code>, <code>ry</code> are the bits of <code>x</code>, <code>y</code> at that level. The digit is <code>(3·rx) XOR ry</code>.</p>
+
+      <h3 id="encoder">5.3 Live: step-by-step encoder</h3>
+      <p>Click any cell. The table shows exactly what <code>hilbertXY2D</code> does at each level, and the nested rectangles show the quadrant chosen at each level — a descent down a quadtree.</p>
+      <div class="demo" id="demo-encoder">
+        <div class="demo-head"><span class="demo-tag">Live demo</span>
+          <p>Default selection is the worked example <code>(x=6, y=5)</code> on the 8 × 8 grid → <b>45</b>. You can also type an index and decode it back to a cell.</p></div>
+        <div class="demo-controls">
+          <label>Order <select id="e-order"><option>1</option><option>2</option><option selected>3</option><option>4</option></select></label>
+          <label>Index d <input type="number" id="e-d" min="0" value="45"></label>
+          <button class="demo-btn" id="e-decode" type="button">Decode d → cell</button>
+        </div>
+        <div class="demo-body">
+          <div class="grid-col"><svg class="curve" id="e-svg"></svg></div>
+          <div class="side-col"><div id="e-table"></div></div>
+        </div>
+        <div class="demo-readout" id="e-readout"></div>
+      </div>
+      <p>The worked example, written out (<code>n = 8</code>, so <code>s = 4, 2, 1</code>):</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Step</th><th><code>s</code></th><th><code>(x, y)</code> now</th><th><code>rx</code></th><th><code>ry</code></th><th>digit</th><th>add <code>s²·digit</code></th><th>running <code>d</code></th><th>transform → next <code>(x, y)</code></th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>4</td><td>(6, 5)</td><td>1</td><td>1</td><td>2</td><td>16·2 = 32</td><td><strong>32</strong></td><td>bottom-right: none → (6, 5)</td></tr>
+          <tr><td>2</td><td>2</td><td>(6, 5)</td><td>1</td><td>0</td><td>3</td><td>4·3 = 12</td><td><strong>44</strong></td><td>top-right: flip → (1, 2), swap → <strong>(2, 1)</strong></td></tr>
+          <tr><td>3</td><td>1</td><td>(2, 1)</td><td>0</td><td>1</td><td>1</td><td>1·1 = 1</td><td><strong>45</strong></td><td>bottom-left: none</td></tr>
+        </tbody>
+      </table></div>
+      <p>Result: <code>(6, 5) → 45</code>. In base 4 that is <code>2 3 1</code> — one digit per level: “bottom-right”, then “top-right”, then “bottom-left”. That is exactly a path down a <strong>quadtree</strong>.</p>
+
+      <h3 id="prefix">5.4 The prefix (quadtree) property</h3>
+      <p>Each level contributes one base-4 digit, so the index at order <code>k+1</code> is the parent's index at order <code>k</code> times four plus one digit:</p>
+      <div class="fig-diagram"><pre>d(k+1) = 4 · d(k) + digit        ⇔        d(k) = ⌊ d(k+1) / 4 ⌋</pre></div>
+      <p>Hyderabad <code>(17.4435, 78.3772)</code> at increasing orders (computed with the code in section 6):</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Order</th><th>Grid</th><th>Hilbert index</th><th>base 4</th><th>Observation</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>2 × 2</td><td class="num">3</td><td><code>3</code></td><td></td></tr>
+          <tr><td>2</td><td>4 × 4</td><td class="num">13</td><td><code>3 1</code></td><td><code>13 = 3·4 + 1</code></td></tr>
+          <tr><td>3</td><td>8 × 8</td><td class="num">52</td><td><code>3 1 0</code></td><td><code>52 = 13·4 + 0</code></td></tr>
+          <tr><td>4</td><td>16 × 16</td><td class="num">209</td><td><code>3 1 0 1</code></td><td><code>209 = 52·4 + 1</code></td></tr>
+        </tbody>
+      </table></div>
+      <p>So “everything inside the order-2 cell <code>13</code>” is simply “every index starting with digits <code>3 1</code>” — the range <code>[13·4<sup>k−2</sup>, 14·4<sup>k−2</sup> − 1]</code> at any finer order <code>k</code>. <strong>Dropping digits = zooming out; adding digits = zooming in</strong> — the same prefix trick GeoHash plays with strings.</p>
+
+      <h3 id="works">5.5 Why it works…</h3>
+      <ul>
+        <li><strong>Continuity:</strong> consecutive indexes are always adjacent cells (checked by script for orders 1–5 and 8, and visible as “0 jumps” in the viewer).</li>
+        <li><strong>Locality in one direction:</strong> two cells close <em>along the line</em> are guaranteed close in the plane (they lie in a small block).</li>
+      </ul>
+      <h3 id="limits">5.6 …and where it cannot</h3>
+      <p>Two cells that are neighbours in the plane can be very far apart on the line. The worst case is a <strong>seam</strong> between the big quadrants: in the 4 × 4 grid, cell <code>1</code> (top row, column 1) and cell <code>14</code> (top row, column 2) touch, yet their indexes differ by 13. <em>No</em> 2-D → 1-D mapping can avoid this. Consequence: a window that straddles a seam becomes <strong>several ranges</strong> — always query ranges, never “one interval”.</p>
+
+<!-- ===================================================================================== -->
+      <h2 id="javascript">6. Implementing it in JavaScript</h2>
+      <h3>6.1 Index ⇄ cell (plain Numbers, up to <code>order = 26</code>)</h3>
+      <p><code>n = 2^order</code>; <code>(x, y)</code> are integers in <code>[0, n)</code>; <code>d</code> is in <code>[0, n²)</code>. JavaScript Numbers are exact up to 2<sup>53</sup>, so <code>2·order ≤ 53</code> ⇒ <strong>order ≤ 26</strong> (cells ≈ 0.6 m wide at the equator).</p>
+      <script type="text/plain" data-code="js" data-id="src-core" data-runs="1">
+// Flip/swap the sub-square so the next level looks like the original problem.
+function rot(n, x, y, rx, ry) {
+  if (ry === 0) {
+    if (rx === 1) { x = n - 1 - x; y = n - 1 - y; }   // flip (top-right quadrant)
+    [x, y] = [y, x];                                   // swap (top-left AND top-right)
+  }
+  return [x, y];
+}
+
+// (x, y) -> d     order: 1..26
+function hilbertXY2D(order, x, y) {
+  const n = 2 ** order;
+  let d = 0;
+  for (let s = n / 2; s >= 1; s /= 2) {
+    const rx = (x & s) > 0 ? 1 : 0;        // which half in x at this level?
+    const ry = (y & s) > 0 ? 1 : 0;        // which half in y at this level?
+    d += s * s * ((3 * rx) ^ ry);          // digit 0,1,2,3 weighted by s²
+    [x, y] = rot(n, x, y, rx, ry);         // re-orient for the next level
+  }
+  return d;
+}
+
+// d -> (x, y)
+function hilbertD2XY(order, d) {
+  const n = 2 ** order;
+  let x = 0, y = 0, t = d;
+  for (let s = 1; s < n; s *= 2) {
+    const rx = Math.floor(t / 2) % 2;      // digits are consumed from the LAST one
+    const ry = (t % 2) ^ rx;
+    [x, y] = rot(s, x, y, rx, ry);
+    x += s * rx;
+    y += s * ry;
+    t = Math.floor(t / 4);
+  }
+  return [x, y];
+}
+      </script>
+      <p>Quick checks: <code>hilbertXY2D(3, 6, 5)</code> → <code>45</code> · <code>hilbertD2XY(3, 45)</code> → <code>[6, 5]</code> · <code>hilbertXY2D(2, 1, 0)</code> → <code>1</code>.</p>
+
+      <h3>6.2 BigInt version — beyond <code>order = 26</code> (up to 32 → a 64-bit key)</h3>
+      <script type="text/plain" data-code="js" data-id="src-big" data-runs="0">
+function hilbertXY2DBig(order, x, y) {                 // x, y, result are BigInt
+  const n = 1n << BigInt(order);
+  let d = 0n;
+  for (let s = n >> 1n; s > 0n; s >>= 1n) {
+    const rx = (x & s) > 0n ? 1n : 0n;
+    const ry = (y & s) > 0n ? 1n : 0n;
+    d += s * s * ((3n * rx) ^ ry);
+    if (ry === 0n) {
+      if (rx === 1n) { x = n - 1n - x; y = n - 1n - y; }
+      [x, y] = [y, x];
+    }
+  }
+  return d;
+}
+      </script>
+      <p>Order 32 gives a 2<sup>32</sup> × 2<sup>32</sup> grid and indexes up to 2<sup>64</sup> − 1 (an <em>unsigned</em> 64-bit column; use order ≤ 31 for a signed <code>BIGINT</code>). The Z-order and N-order code is in <a href="#z-order">section 4</a>.</p>
+
+      <h3>6.3 How this was verified</h3>
+      <ul>
+        <li>Round trip <code>d2xy(xy2d(x, y)) = (x, y)</code> for <strong>every</strong> cell at orders 1–5 and 8, plus 2,000 random cells at order 24.</li>
+        <li><strong>Adjacency:</strong> cell(<code>d</code>) and cell(<code>d−1</code>) differ by exactly 1 in Manhattan distance (orders 1–5, 8) — the curve is continuous.</li>
+        <li>BigInt = Number version on 3,000 random inputs (orders 1–24); 3,000 random round trips at order 32.</li>
+        <li>Prefix property <code>⌊d<sub>k</sub> / 4⌋ = d<sub>k−1</sub></code> on 2,000 random order-20 cells.</li>
+        <li>This page re-runs a smaller version of these checks in <em>your</em> browser every time it loads — see the line under the title.</li>
+      </ul>
+
+<!-- ===================================================================================== -->
+      <h2 id="world">7. From the whole world to a single line</h2>
+      <h3>7.1 Four steps: lat/lng → integer cell → index</h3>
+      <div class="fig-diagram"><pre>(lat, lng)  ──►  unit square  ──►  integer cell (x, y)  ──►  Hilbert index d
+ 17.4435,        u = (lng+180)/360        x = ⌊u · 2^order⌋       d = hilbertXY2D(order, x, y)
+ 78.3772         v = (90−lat)/180         y = ⌊v · 2^order⌋</pre></div>
+      <ul>
+        <li>Simple <strong>equirectangular</strong> mapping: longitude −180…180 → <code>x</code>; latitude 90…−90 → <code>y</code> (north is row 0, so the first U sits upright on the map).</li>
+        <li>The planet is a rectangle <strong>2 : 1</strong> (360° × 180°); cut into a <code>2^order × 2^order</code> grid, every cell is <code>360/2^k</code>° × <code>180/2^k</code>° — twice as wide as tall in degrees.</li>
+      </ul>
+      <script type="text/plain" data-code="js" data-id="src-geo" data-runs="1">
+function latLngToHilbert(order, lat, lng) {
+  const n = 2 ** order;
+  const x = Math.min(n - 1, Math.floor(((lng + 180) / 360) * n));   // clamp lng = 180
+  const y = Math.min(n - 1, Math.floor(((90 - lat) / 180) * n));    // clamp lat = -90
+  return hilbertXY2D(order, x, y);
+}
+
+function hilbertToBounds(order, d) {            // the rectangle a given index stands for
+  const n = 2 ** order;
+  const [x, y] = hilbertD2XY(order, d);
+  return {
+    minLng: (x / n) * 360 - 180,  maxLng: ((x + 1) / n) * 360 - 180,
+    maxLat: 90 - (y / n) * 180,   minLat: 90 - ((y + 1) / n) * 180,
+  };
+}
+      </script>
+
+      <h3>7.2 Zooming in — each order is one more level of U</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Order</th><th>Grid</th><th class="num">Cells</th><th class="num">Index bits</th><th>Cell size (lng × lat)</th><th>≈ at the equator</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>2 × 2</td><td class="num">4</td><td class="num">2</td><td>180° × 90°</td><td>20,037 km × 10,002 km</td></tr>
+          <tr><td>2</td><td>4 × 4</td><td class="num">16</td><td class="num">4</td><td>90° × 45°</td><td>10,019 km × 5,001 km</td></tr>
+          <tr><td>3</td><td>8 × 8</td><td class="num">64</td><td class="num">6</td><td>45° × 22.5°</td><td>5,009 km × 2,500 km</td></tr>
+          <tr><td>4</td><td>16 × 16</td><td class="num">256</td><td class="num">8</td><td>22.5° × 11.25°</td><td>2,505 km × 1,250 km</td></tr>
+          <tr><td>8</td><td>256 × 256</td><td class="num">65,536</td><td class="num">16</td><td>1.406° × 0.703°</td><td>156.5 km × 78.1 km</td></tr>
+          <tr><td>12</td><td>4,096²</td><td class="num">16.8 M</td><td class="num">24</td><td>0.0879° × 0.0439°</td><td>9.78 km × 4.88 km</td></tr>
+          <tr><td>16</td><td>65,536²</td><td class="num">4.29 B</td><td class="num">32</td><td>0.00549° × 0.00275°</td><td>611 m × 305 m</td></tr>
+          <tr><td>20</td><td>1,048,576²</td><td class="num">1.10 T</td><td class="num">40</td><td>0.000343° × 0.000172°</td><td>38.2 m × 19.1 m</td></tr>
+          <tr><td>24</td><td>16,777,216²</td><td class="num">281 T</td><td class="num">48</td><td>0.0000215° × 0.0000107°</td><td>2.4 m × 1.2 m</td></tr>
+        </tbody>
+      </table></div>
+      <p>Each extra order <strong>quadruples</strong> the number of cells and <strong>halves</strong> each side; an index is <code>2 × order</code> bits long. East–west km are exact only at the equator — they shrink by <code>cos(latitude)</code> (at Hyderabad, 17°, an order-20 cell is ≈ 36 m wide, not 38 m).</p>
+
+      <h3>7.3 The world at orders 1, 2 and 3</h3>
+      <div class="fig-diagram"><pre>   lng −180 ─────── 0 ─────── +180
+lat  ┌──────────┬──────────┐
++90  │    0     │    3     │     0 = North America, Atlantic, UK/W. Europe (west of 0°)
+     │          │          │     3 = Europe east of 0°, N. Africa, all of Asia (incl. India)
+  0  ├──────────┼──────────┤
+     │    1     │    2     │     1 = South America, S. Pacific
+     │          │          │     2 = Southern Africa, Indian Ocean, Australia
+−90  └──────────┴──────────┘</pre><figcaption>Order 1: four giant cells; the curve goes 0 → 1 → 2 → 3 — down the west, across the south, up the east. London (0.13° W) lands just inside quadrant 0; Hyderabad is in quadrant 3.</figcaption></div>
+      <p>At order 2, Hyderabad, Chennai, Mumbai and Delhi are all in cell <code>13</code>; London is in <code>1</code>; New York in <code>2</code>; Sydney in <code>11</code>. At order 3 Hyderabad, Chennai and Mumbai still share cell <code>52</code>, Delhi is in the neighbouring <code>55</code>, London is <code>6</code>, New York <code>8</code>, Sydney <code>44</code>.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>City</th><th class="num">Order 3</th><th class="num">Order 8</th><th class="num">Order 16</th></tr></thead>
+        <tbody>
+          <tr><td>Hyderabad (17.385, 78.4867)</td><td class="num">52</td><td class="num">53,632</td><td class="num">3,514,884,372</td></tr>
+          <tr><td>Chennai (13.0827, 80.2707)</td><td class="num">52</td><td class="num">53,528</td><td class="num">3,508,059,530</td></tr>
+          <tr><td>Mumbai (19.076, 72.8777)</td><td class="num">52</td><td class="num">53,685</td><td class="num">3,518,341,720</td></tr>
+          <tr><td>Delhi (28.6139, 77.209)</td><td class="num">55</td><td class="num">56,875</td><td class="num">3,727,379,662</td></tr>
+          <tr><td>London (51.5074, −0.1278)</td><td class="num">6</td><td class="num">6,761</td><td class="num">443,128,598</td></tr>
+          <tr><td>New York (40.7128, −74.006)</td><td class="num">8</td><td class="num">8,307</td><td class="num">544,412,351</td></tr>
+          <tr><td>Sydney (−33.8688, 151.2093)</td><td class="num">44</td><td class="num">45,903</td><td class="num">3,008,358,009</td></tr>
+        </tbody>
+      </table></div>
+      <p>At order 8 Hyderabad, Chennai and Mumbai sit within ~160 of each other on the line; Delhi is ~3,200 from Hyderabad. But notice the limit: Sydney (roughly 9,300 km from Hyderabad) is only ~7,700 away on the line while London (roughly 7,500 km) is ~46,900 away. <strong>Close on the line ⇒ close on the map; the reverse, and any exact ordering by distance, is not guaranteed.</strong></p>
+
+      <h3>7.4 One point, down the levels</h3>
+      <p>Hyderabad (HiTech City) at order 20 → <code>d = 899,808,907,534</code>, the cell lat <code>17.443371 … 17.443542</code>, lng <code>78.377151 … 78.377495</code> (≈ 19 m × 36 m). A restaurant ≈ 190 m east (<code>lng = 78.3790</code>) gets <code>899,808,907,541</code> — only <strong>7</strong> apart on a line with 1.1 trillion positions. At order 16 both share the <em>same</em> cell (<code>3,514,878,545</code>), because that cell is 611 m wide.</p>
+
+      <h3>7.5 Caveats of the equirectangular world</h3>
+      <ol>
+        <li><strong>Distortion.</strong> Cells are the same <em>degrees</em> everywhere but shrink in km toward the poles.</li>
+        <li><strong>Antimeridian.</strong> Longitude +179.99° and −179.99° are 2 km apart in reality but at opposite ends of the grid — a box crossing 180° must be split in two.</li>
+        <li><strong>Poles.</strong> The first and last rows collapse to points on a sphere but are full-width rows here.</li>
+        <li><strong>Production answer: Google S2</strong> projects the sphere onto the six faces of a <strong>cube</strong> and runs a Hilbert curve on each face, keeping cells much closer to uniform. The idea in this guide is exactly what S2 does; only the projection differs.</li>
+      </ol>
+
+      <h3 id="world-demo">7.6 Live: the world as a line, on a real map</h3>
+      <div class="demo" id="demo-world">
+        <div class="demo-head"><span class="demo-tag">Live demo</span>
+          <p><b>Curve:</b> choose a curve and order 1–6 to draw the whole planet as one line (the base map is Web-Mercator, so the grid looks stretched toward the poles). Toggle cities to see their index. <b>Pick a point:</b> click the map to encode it at the chosen <em>index order</em> — the nested rectangles are its cells at orders 1…k, and its base-4 digits are the quadrant chosen at each level. Zoom in a long way for high orders.</p></div>
+        <div class="demo-controls">
+          <label>Curve <select id="w-curve"><option value="hilbert">Hilbert (U)</option><option value="z">Z-order</option><option value="n">N-order</option><option value="row">Row-major</option></select></label>
+          <label>Curve order <input type="range" id="w-corder" min="0" max="6" value="3"> <b id="w-corder-val">3</b></label>
+          <label><input type="checkbox" id="w-cities" checked> cities</label>
+          <label>Index order <input type="range" id="w-iorder" min="1" max="24" value="12"> <b id="w-iorder-val">12</b></label>
+          <button class="demo-btn" id="w-clear" type="button">Clear pick</button>
+        </div>
+        <div class="demo-map" id="world-map"></div>
+        <div class="demo-readout" id="w-readout">Click the map to encode a point.</div>
+      </div>
+
+<!-- ===================================================================================== -->
+      <h2 id="range">8. Range queries with a Hilbert index</h2>
+      <h3>8.1 The query</h3>
+      <blockquote><p>“Find restaurants within 2 km of <code>(17.4435, 78.3772)</code>.”</p></blockquote>
+      <p>Pipeline: <strong>bounding box → cells → index ranges → B-tree range scans → exact distance filter.</strong></p>
+      <div class="fig-diagram"><pre>radius 2 km
+   │  box: Δlat = r/111,  Δlng = r/(111·cos lat)        (LOCATION_DB.html, Phase 2)
+   ▼
+bbox (lat 17.4255…17.4615, lng 78.3583…78.3961)
+   │  convert corners to integer cells at order 20
+   ▼
+cell rectangle  x: 752,523…752,633  (111 cells wide)   y: 422,567…422,777  (211 cells tall)
+   │  decompose into Hilbert index ranges
+   ▼
+3 ranges   [a1,b1] [a2,b2] [a3,b3]
+   │  3 index range scans  (WHERE hilbert_idx BETWEEN … OR …)
+   ▼
+candidates  →  Haversine filter  →  final answer</pre></div>
+
+      <h3 id="several-ranges">8.2 Why a rectangle becomes <em>several</em> ranges</h3>
+      <p>On the 16 × 16 grid the window <code>x = 5…10, y = 6…11</code> (6 × 6 = 36 cells) occupies these runs:</p>
+      <div class="fig-diagram"><pre>Hilbert   (7 ranges): [40–45] [112–116] [119–120] [123–132] [135–136] [139–143] [210–215]
+Z-order  (12 ranges): [57] [59–63] [104–108] [110] [145] [147–151] [153] [155–159] [192–196] [198] [200–204] [206]
+N-order   (8 ranges): [54–55] [60–63] [98–99] [102–111] [148–151] [156–157] [192–201] [204–205]
+Row-major (6 ranges): [101–106] [117–122] [133–138] [149–154] [165–170] [181–186]</pre><figcaption>All four cover the same 36 cells; only the numbering differs. The live comparison below lets you drag your own window.</figcaption></div>
+
+      <h3 id="compare">8.3 Live: compare the curves on your own window</h3>
+      <div class="demo" id="demo-compare">
+        <div class="demo-head"><span class="demo-tag">Live demo</span>
+          <p>Drag on the 16 × 16 grid to choose a window. Each strip below is the 1-D line (256 positions, left = index 0) for one curve. <b style="color:var(--ok)">Green</b> = the exact ranges; <b style="color:var(--warn)">amber</b> = what you would actually read if you may use only <b>R</b> index ranges (the smallest gaps are closed first). The overhead is rows-read ÷ rows-needed — 1.00× is perfect. <em>Row-major looks competitive here only because this grid is 16 cells wide, so every gap between its rows is at most 16 cells; on a planet-sized grid each gap is millions of cells — see section 8.5.</em></p></div>
+        <div class="demo-controls">
+          <label>Range budget R <input type="range" id="c-budget" min="1" max="16" value="4"> <b id="c-budget-val">4</b></label>
+          <label>Draw path of <select id="c-curve"><option value="hilbert">Hilbert</option><option value="z">Z-order</option><option value="n">N-order</option><option value="row">Row-major</option></select></label>
+          <button class="demo-btn" data-win="5,6,10,11" type="button">6×6 (doc example)</button>
+          <button class="demo-btn" data-win="6,0,9,15" type="button">tall strip across the seam</button>
+          <button class="demo-btn" data-win="0,7,15,8" type="button">wide strip</button>
+          <button class="demo-btn" data-win="3,3,5,5" type="button">3×3</button>
+        </div>
+        <div class="demo-body">
+          <div class="grid-col"><svg class="curve" id="c-svg"></svg></div>
+          <div class="side-col" id="c-strips"></div>
+        </div>
+        <div class="demo-readout" id="c-readout"></div>
+      </div>
+
+      <h3 id="cover">8.4 The decomposition algorithm (quadtree walk)</h3>
+      <p>Recursively ask, for each square cell (starting with the whole world):</p>
+      <ul>
+        <li><strong>Outside</strong> the query? → discard.</li>
+        <li><strong>Completely inside</strong>? → emit its whole index range <code>[prefix·4<sup>m</sup>, (prefix+1)·4<sup>m</sup> − 1]</code> — one range for an arbitrarily large area.</li>
+        <li><strong>Partly overlapping</strong>? → split into its 4 children (prefixes <code>prefix·4 + 0..3</code>) and repeat.</li>
+      </ul>
+      <p>Splitting forever would create as many ranges as boundary cells, so we <strong>stop early</strong> when the <em>range budget</em> is used up. Cells still “partly overlapping” are then emitted whole — they may hold a few unwanted points, which the final exact-distance filter removes. This trades a few extra rows for a bounded number of index seeks.</p>
+      <script type="text/plain" data-code="js" data-id="src-cover" data-runs="1">
+// A quadtree cell at `level` covers the index range [prefix·4^(order-level), (prefix+1)·4^(order-level) − 1]
+// and is an aligned square of side 2^(order-level); its position follows from decoding its first index.
+function hilbertCover(order, qx0, qy0, qx1, qy1, maxRanges = 16) {   // inclusive cell rectangle
+  const cell = (level, prefix) => {
+    const span = 4 ** (order - level), size = 2 ** (order - level);
+    const first = prefix * span;
+    const [x, y] = hilbertD2XY(order, first);
+    return { level, prefix, first, last: first + span - 1,
+             cx: x - (x % size), cy: y - (y % size), size };
+  };
+  const classify = (c) => {
+    if (c.cx > qx1 || c.cx + c.size - 1 < qx0 || c.cy > qy1 || c.cy + c.size - 1 < qy0) return 'out';
+    if (c.cx >= qx0 && c.cx + c.size - 1 <= qx1 && c.cy >= qy0 && c.cy + c.size - 1 <= qy1) return 'in';
+    return 'partial';
+  };
+  const merge = (cells) => {                       // join runs that touch: [a,b] + [b+1,c] → [a,c]
+    const sorted = cells.map(c => [c.first, c.last]).sort((a, b) => a[0] - b[0]);
+    const out = [];
+    for (const r of sorted) {
+      if (out.length && r[0] === out[out.length - 1][1] + 1) out[out.length - 1][1] = r[1];
+      else out.push([r[0], r[1]]);
+    }
+    return out;
+  };
+
+  let full = [], partial = [cell(0, 0)];
+  if (classify(partial[0]) === 'in') return { full: partial, partial: [], ranges: merge(partial) };
+
+  for (let level = 0; level < order && partial.length; level++) {
+    const nextFull = full.slice(), nextPartial = [];
+    for (const p of partial) {
+      for (let i = 0; i < 4; i++) {
+        const child = cell(level + 1, p.prefix * 4 + i);
+        const k = classify(child);
+        if (k === 'in') nextFull.push(child);
+        else if (k === 'partial') nextPartial.push(child);
+      }
+    }
+    if (merge(nextFull.concat(nextPartial)).length > maxRanges) break;   // budget exhausted
+    full = nextFull; partial = nextPartial;
+  }
+  // `full`    cells: every point inside is a certain hit.
+  // `partial` cells: candidates — must be filtered with the exact test.
+  return { full, partial, ranges: merge(full.concat(partial)) };
+}
+
+// radius → bounding box (LOCATION_DB.html Phase 2) → cell rectangle → ranges.
+// Ignores the antimeridian and the poles (see 7.5).
+function coverRadius(order, lat, lng, km, maxRanges) {
+  const n = 2 ** order;
+  const dLat = km / 111.0, dLng = km / (111.0 * Math.cos(lat * Math.PI / 180));
+  const cx = (g) => Math.min(n - 1, Math.max(0, Math.floor(((g + 180) / 360) * n)));
+  const cy = (t) => Math.min(n - 1, Math.max(0, Math.floor(((90 - t) / 180) * n)));
+  return hilbertCover(order, cx(lng - dLng), cy(lat + dLat), cx(lng + dLng), cy(lat - dLat), maxRanges);
+}
+      </script>
+      <p>Checked by script on 200 random windows (order 6): with an unlimited budget the ranges equal the exact brute-force ranges; with a budget of 6 the result never has more than 6 ranges and <strong>always covers every cell of the window</strong> (a superset — never a miss).</p>
+
+      <h3 id="benchmark">8.5 Is it actually better? (measured, not assumed)</h3>
+      <p>300 random square windows on a 256 × 256 grid (order 8). <em>Scan overhead</em> = cells that must be read ÷ cells actually needed when only <code>R</code> index ranges are allowed (best possible merge: always close the smallest gaps first). <strong>1.00× is perfect.</strong></p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Window</th><th>Curve</th><th class="num">avg exact ranges</th><th class="num">R = 1</th><th class="num">R = 4</th><th class="num">R = 8</th><th class="num">R = 16</th></tr></thead>
+        <tbody>
+          <tr><td rowspan="3">8 × 8</td><td>Row-major</td><td class="num">8.0</td><td class="num">28.13×</td><td class="num">16.50×</td><td class="num">1.00×</td><td class="num">1.00×</td></tr>
+          <tr><td>Z-order</td><td class="num">14.7</td><td class="num">30.05×</td><td class="num">1.57×</td><td class="num">1.18×</td><td class="num">1.03×</td></tr>
+          <tr class="best"><td>Hilbert</td><td class="num">8.3</td><td class="num">42.67×</td><td class="num">1.28×</td><td class="num">1.04×</td><td class="num">1.00×</td></tr>
+          <tr><td rowspan="3">20 × 20</td><td>Row-major</td><td class="num">20.0</td><td class="num">12.21×</td><td class="num">10.44×</td><td class="num">8.08×</td><td class="num">3.36×</td></tr>
+          <tr><td>Z-order</td><td class="num">36.0</td><td class="num">12.17×</td><td class="num">1.80×</td><td class="num">1.31×</td><td class="num">1.11×</td></tr>
+          <tr class="best"><td>Hilbert</td><td class="num">19.3</td><td class="num">16.46×</td><td class="num">1.44×</td><td class="num">1.13×</td><td class="num">1.03×</td></tr>
+          <tr><td rowspan="3">40 × 40</td><td>Row-major</td><td class="num">40.0</td><td class="num">6.27×</td><td class="num">5.86×</td><td class="num">5.32×</td><td class="num">4.24×</td></tr>
+          <tr><td>Z-order</td><td class="num">79.0</td><td class="num">7.12×</td><td class="num">1.88×</td><td class="num">1.40×</td><td class="num">1.16×</td></tr>
+          <tr class="best"><td>Hilbert</td><td class="num">40.6</td><td class="num">8.70×</td><td class="num">1.53×</td><td class="num">1.19×</td><td class="num">1.06×</td></tr>
+        </tbody>
+      </table></div>
+      <p>What this tells us, honestly:</p>
+      <ol>
+        <li><strong>Exact range count:</strong> Hilbert ≈ Row-major (about one range per window row); Z is about <strong>2× worse</strong>. So “Hilbert needs the fewest ranges” is <em>not</em> the right claim.</li>
+        <li><strong>With a range budget</strong> — the real situation, since each range is an index seek — the curves win dramatically once the window has more rows than the budget: Hilbert reads <strong>at most ~50 % extra</strong> (1.00×–1.53× for R ≥ 4), while row-major reads <strong>3×–16× more</strong>, because merging its row-ranges drags in whole world-wide rows. (Row-major is perfect only when the budget ≥ the number of window rows.) On a planet-sized grid the row-major gap grows with the grid width.</li>
+        <li><strong>Z-order reads ~3–25 % more rows than Hilbert</strong> for the same budget (and needs ~2× the exact ranges) — the cost of Z's jumps.</li>
+        <li>A single range (R = 1: “scan from smallest to largest index”) is bad for <em>every</em> curve (6×–43× here; Hilbert is actually the worst of the three) — plan for several ranges.</li>
+        <li>The simple level-by-level cover above is less tight than the optimal merge (≈ 1.4× at budget 8 on these windows) but is simple, fast and always correct. Better covers refine the <em>most wasteful</em> partial cell first.</li>
+      </ol>
+      <p><strong>The real example</strong> — 2 km radius around HiTech City at order 20 (a 111 × 211-cell window = 23,421 cells):</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Budget</th><th class="num">Ranges</th><th class="num">Cells scanned</th><th class="num">Overhead</th></tr></thead>
+        <tbody>
+          <tr><td>4 or 8</td><td class="num">3</td><td class="num">28,672</td><td class="num">1.22×</td></tr>
+          <tr><td>16</td><td class="num">10</td><td class="num">26,880</td><td class="num">1.15×</td></tr>
+        </tbody>
+      </table></div>
+      <div class="fig-diagram"><pre>[ 899808855040 , 899808857087 ]
+[ 899808860160 , 899808870399 ]
+[ 899808903168 , 899808919551 ]      ← contains the centre point  d = 899,808,907,534</pre></div>
+      <p>Three index range scans cover the whole ≈ 4 km × 4 km box; only rows whose <code>hilbert_idx</code> falls in those ranges are read, and the Haversine step then trims the corners.</p>
+
+      <h3 id="radius-demo">8.6 Live: radius query on the map</h3>
+      <div class="demo" id="demo-radius">
+        <div class="demo-head"><span class="demo-tag">Live demo</span>
+          <p>Click the map to run the whole pipeline: bounding box → cover → ranges. <b style="color:var(--ok)">Green</b> quadtree cells are fully inside the box (certain hits); <b style="color:var(--warn)">amber</b> cells straddle its edge (candidates). 400 random “restaurants” are scattered around the click: <b style="color:var(--ok)">green dots</b> are final answers, <b style="color:var(--warn)">amber dots</b> were read from the index but removed by the Haversine check, <b style="color:#7d8296">grey dots</b> were never touched.</p></div>
+        <div class="demo-controls">
+          <label>Index order <input type="range" id="r-order" min="10" max="24" value="18"> <b id="r-order-val">18</b></label>
+          <label>Radius km <input type="number" id="r-km" min="0.1" max="500" step="0.1" value="2"></label>
+          <label>Max ranges <input type="range" id="r-budget" min="1" max="32" value="8"> <b id="r-budget-val">8</b></label>
+          <button class="demo-btn primary" id="r-go" type="button">Use HiTech City</button>
+        </div>
+        <div class="demo-map" id="radius-map"></div>
+        <div class="legend"><span><i style="background:rgba(47,143,91,.35)"></i>cell fully inside</span><span><i style="background:rgba(168,101,10,.35)"></i>partial cell (candidates)</span><span><i style="background:transparent;border-color:#0a5f69"></i>bounding box</span><span><i style="background:transparent;border-color:#8856a7;border-radius:50%"></i>true radius</span></div>
+        <div class="demo-readout" id="r-readout">Click the map, or press “Use HiTech City”.</div>
+      </div>
+
+      <h3>8.7 Radius, nearest-N, polygon</h3>
+      <ul>
+        <li><strong>Radius</strong> → bounding box → ranges → fetch → <strong>Haversine</strong> the candidates, keep <code>≤ r</code>. (The box is a <em>superset</em> of the circle; the corners are exactly the false positives Haversine removes — see <a href="LOCATION_DB.html">LOCATION_DB.html</a>, Phase 2.)</li>
+        <li><strong>Nearest-N</strong> → start with a small radius; if fewer than N results return, double it and repeat. Scanning “a few keys left and right of my own index” is a handy first guess but is <em>not</em> guaranteed to find the true nearest, because of seams.</li>
+        <li><strong>Polygon</strong> → decompose the polygon's bounding box, then run point-in-polygon on the candidates.</li>
+      </ul>
+
+<!-- ===================================================================================== -->
+      <h2 id="pureeats">9. Putting it into PureEats</h2>
+      <div class="code-wrap"><span class="code-lang">SQL</span><pre class="code-block"><code>ALTER TABLE restaurant ADD COLUMN hilbert_idx BIGINT;          -- order 20 → 40 bits, fits BIGINT easily
+CREATE INDEX idx_restaurant_hilbert ON restaurant (hilbert_idx);</code></pre></div>
+      <p><strong>Write path</strong> (restaurant created or moved): <code>const hilbertIdx = latLngToHilbert(20, restaurant.lat, restaurant.lng);</code> and store it.</p>
+      <p><strong>Read path</strong> (nearby search): <code>const { ranges } = coverRadius(20, lat, lng, 2, 8);</code> then build the query and finish with an exact filter:</p>
+      <div class="code-wrap"><span class="code-lang">SQL</span><pre class="code-block"><code>SELECT id, name, lat, lng
+FROM   restaurant
+WHERE  (hilbert_idx BETWEEN 899808855040 AND 899808857087
+     OR hilbert_idx BETWEEN 899808860160 AND 899808870399
+     OR hilbert_idx BETWEEN 899808903168 AND 899808919551)
+-- then in the application (or a SQL function): exact Haversine filter ≤ 2 km</code></pre></div>
+      <div class="fig-diagram"><pre>User request → bounding box → HILBERT RANGES (instead of / alongside GeoHash prefixes)
+            → candidate rows → (KD-Tree / sort) → Haversine final ranking → results</pre><figcaption>Where it fits the pipeline in LOCATION_DB.html.</figcaption></div>
+      <ul>
+        <li>The key is <strong>immutable per location</strong> — it changes only when the location changes (moving drivers need one index update per move, like any index).</li>
+        <li>Pick the <strong>order</strong> from your typical radius: a cell a few times smaller than the radius (order 16–20 for 1–5 km). Too coarse ⇒ more overhead; too fine ⇒ more cells to describe (the range count stays bounded by your budget).</li>
+        <li>Because of the prefix property you can query at a coarser level later by integer division: <code>hilbert_idx / 4^(20−k)</code>.</li>
+        <li>If you need uniform cell size worldwide, move to an S2-style projection (<a href="#world">section 7.5</a>) rather than this equirectangular grid.</li>
+      </ul>
+
+<!-- ===================================================================================== -->
+      <h2 id="real-world">10. Where this is used in the real world</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>System</th><th>Curve</th><th>What for</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Google S2</strong></td><td>Hilbert, on each cube face</td><td>Cell IDs for geospatial indexing (Maps, many dispatch/ride systems)</td></tr>
+          <tr><td><strong>GeoHash</strong></td><td>Z-order (Base-32 text)</td><td>Prefix-searchable location keys (LOCATION_DB.html)</td></tr>
+          <tr><td><strong>Hilbert-packed R-trees</strong> (e.g. FlatGeobuf)</td><td>Hilbert</td><td>Sort features by Hilbert index so nearby shapes share R-tree nodes</td></tr>
+          <tr><td><strong>Data-warehouse clustering</strong> (<code>ZORDER BY</code> in Delta Lake, and similar)</td><td>Z-order (Hilbert in some systems)</td><td>Co-locate rows with similar values in several columns so queries skip files</td></tr>
+          <tr><td><strong>Image / texture / memory layout</strong></td><td>Z-order or Hilbert</td><td>Cache-friendly 2-D array traversal</td></tr>
+        </tbody>
+      </table></div>
+      <p>(Uber <strong>H3</strong> is <em>not</em> a space-filling-curve index: it uses hexagons with its own hierarchical numbering.)</p>
+
+<!-- ===================================================================================== -->
+      <h2 id="pitfalls">11. Pitfalls &amp; cheat sheet</h2>
+      <ol>
+        <li><strong>One interval ≠ a rectangle.</strong> A window is always several ranges; budget them.</li>
+        <li><strong>Seams.</strong> Neighbours in space can be far apart in index; “close on the line ⇒ close on the map”, never the reverse.</li>
+        <li><strong>Antimeridian and poles</strong> need special handling with the equirectangular grid (split the box; clamp latitude).</li>
+        <li><strong>Number precision.</strong> JS Numbers are exact only to 2<sup>53</sup> ⇒ <code>order ≤ 26</code>; use <code>BigInt</code> (and a 64-bit column) beyond that.</li>
+        <li><strong>JS bitwise operators are 32-bit.</strong> <code>x &amp; s</code> silently breaks for <code>x ≥ 2^31</code>; the BigInt version avoids it.</li>
+        <li><strong>Always post-filter</strong> with the exact predicate (Haversine / point-in-polygon); the index gives <em>candidates</em>.</li>
+        <li><strong>Fix the convention once</strong> (north = row 0, <code>x</code> = lng, <code>y</code> = lat, the order, clamping) and use it for both writing and querying.</li>
+      </ol>
+      <div class="fig-diagram"><pre>index(lat,lng, order)  = hilbertXY2D(order, ⌊(lng+180)/360·2^o⌋, ⌊(90−lat)/180·2^o⌋)
+cell of d              = hilbertD2XY(order, d)  →  bounds
+zoom out one level     = ⌊d / 4⌋           zoom in one level = 4d … 4d+3
+block at level m       = [p·4^m , (p+1)·4^m − 1]
+query                  = bbox → cell rect → quadtree cover (≤ R ranges) → BETWEEN … OR … → exact filter
+rule of thumb          = bits = 2·order ;  cell ≈ 40,075 km / 2^order wide at the equator</pre><figcaption>Cheat sheet.</figcaption></div>
+
+    </main>
+  </div>
+
+  <footer>pureeats-geo-service &middot; Hilbert curve guide &middot; companion to LOCATION_DB.html, GEOHASH_MAP_RENDERING.html and HILBERT_CURVE.md &middot; the code blocks on this page are executed by its demos</footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ============================================================================================
+   1. Render the displayed code blocks from <script type="text/plain"> sources, then EXECUTE the
+      very same text, so the code a reader sees is the code the demos run.
+   ============================================================================================ */
+(function () {
+  var sources = document.querySelectorAll('script[type="text/plain"][data-code]');
+  var toRun = [];
+  sources.forEach(function (s) {
+    var text = s.textContent.replace(/^\n/, '').replace(/\s+$/, '');
+    var wrap = document.createElement('div');
+    if (s.getAttribute('data-runs') === '1') {
+      var badge = document.createElement('div');
+      badge.className = 'runs-badge';
+      badge.textContent = '▶ this exact code runs in the demos on this page';
+      wrap.appendChild(badge);
+      toRun.push(text);
+    }
+    var cw = document.createElement('div'); cw.className = 'code-wrap';
+    var lang = document.createElement('span'); lang.className = 'code-lang'; lang.textContent = s.getAttribute('data-code');
+    var pre = document.createElement('pre'); pre.className = 'code-block';
+    var code = document.createElement('code'); code.textContent = text;
+    pre.appendChild(code); cw.appendChild(lang); cw.appendChild(pre); wrap.appendChild(cw);
+    s.parentNode.insertBefore(wrap, s.nextSibling);
+  });
+  (0, eval)(toRun.join('\n\n'));   // function declarations become globals
+})();
+
+/* ============================================================================================
+   2. Self-test in the reader's browser.
+   ============================================================================================ */
+(function () {
+  var el = document.getElementById('selftest');
+  var checks = 0, fail = [];
+  function ok(c, m) { checks++; if (!c) fail.push(m); }
+  for (var order = 1; order <= 4; order++) {
+    var n = 2 ** order;
+    for (var d = 0; d < n * n; d++) {
+      var xy = hilbertD2XY(order, d);
+      ok(hilbertXY2D(order, xy[0], xy[1]) === d, 'hilbert roundtrip ' + order + ',' + d);
+      if (d > 0) { var p = hilbertD2XY(order, d - 1); ok(Math.abs(p[0] - xy[0]) + Math.abs(p[1] - xy[1]) === 1, 'hilbert adjacency ' + order + ',' + d); }
+      var m = mortonD2XY(order, d); ok(mortonXY2D(order, m[0], m[1]) === d, 'morton roundtrip');
+      var nn = nOrderD2XY(order, d); ok(nOrderXY2D(order, nn[0], nn[1]) === d, 'n roundtrip');
+      var r = rowMajorD2XY(order, d); ok(rowMajorXY2D(order, r[0], r[1]) === d, 'row roundtrip');
+    }
+  }
+  ok(hilbertXY2D(3, 6, 5) === 45, 'worked example 45');
+  ok(JSON.stringify(hilbertD2XY(3, 45)) === '[6,5]', 'decode 45');
+  ok(mortonXY2D(3, 5, 3) === 27, 'morton example 27');
+  ok(latLngToHilbert(20, 17.4435, 78.3772) === 899808907534, 'HiTech City order 20');
+  ok(Math.floor(latLngToHilbert(20, 17.4435, 78.3772) / 4) === latLngToHilbert(19, 17.4435, 78.3772), 'prefix property');
+  // cover: exact with unlimited budget, superset with a budget
+  for (var t = 0; t < 40; t++) {
+    var o = 5, nn5 = 32;
+    var x0 = Math.floor(Math.random() * nn5), y0 = Math.floor(Math.random() * nn5);
+    var x1 = x0 + Math.floor(Math.random() * (nn5 - x0)), y1 = y0 + Math.floor(Math.random() * (nn5 - y0));
+    var ds = []; for (var yy = y0; yy <= y1; yy++) for (var xx = x0; xx <= x1; xx++) ds.push(hilbertXY2D(o, xx, yy));
+    ds.sort(function (a, b) { return a - b; });
+    var exact = []; var s = ds[0], q = ds[0];
+    for (var i = 1; i < ds.length; i++) { if (ds[i] === q + 1) q = ds[i]; else { exact.push([s, q]); s = q = ds[i]; } }
+    exact.push([s, q]);
+    ok(JSON.stringify(hilbertCover(o, x0, y0, x1, y1, Infinity).ranges) === JSON.stringify(exact), 'cover exact');
+    var bud = hilbertCover(o, x0, y0, x1, y1, 5);
+    ok(bud.ranges.length <= 5, 'cover budget');
+    ok(ds.every(function (v) { return bud.ranges.some(function (rg) { return v >= rg[0] && v <= rg[1]; }); }), 'cover superset');
+  }
+  if (fail.length) { el.className = 'selftest bad'; el.textContent = '✗ self-test FAILED (' + fail.length + ' of ' + checks + '): ' + fail.slice(0, 3).join('; '); }
+  else { el.className = 'selftest ok'; el.textContent = '✓ self-test passed in this browser (' + checks + ' checks: round-trips, adjacency, worked examples, prefix property, range cover)'; }
+})();
+
+/* ============================================================================================
+   3. SVG curve renderer shared by the viewer, level stepper, encoder and comparison demos.
+   ============================================================================================ */
+var SVGNS = 'http://www.w3.org/2000/svg';
+function svgEl(name, attrs, parent) {
+  var e = document.createElementNS(SVGNS, name);
+  for (var k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+var CURVES = {
+  hilbert: { name: 'Hilbert (U)',        xy2d: hilbertXY2D,  d2xy: hilbertD2XY },
+  z:       { name: 'Z-order (Morton)',   xy2d: mortonXY2D,   d2xy: mortonD2XY },
+  n:       { name: 'N-order',            xy2d: nOrderXY2D,   d2xy: nOrderD2XY },
+  row:     { name: 'Row-major',          xy2d: rowMajorXY2D, d2xy: rowMajorD2XY }
+};
+var QUAD_COLORS = ['#e6550d', '#3182bd', '#31a354', '#8856a7'];
+function hueColor(t) { return 'hsl(' + Math.round(230 * (1 - t)) + ',75%,48%)'; }
+
+// Returns { S, n, c, jumps }.  opts: numbers, quadrantColors, midlines
+function renderCurve(svg, key, order, opts) {
+  opts = opts || {};
+  var S = 480, n = 2 ** order, c = S / n, N = n * n, curve = CURVES[key];
+  svg.setAttribute('viewBox', '0 0 ' + S + ' ' + S);
+  svg.innerHTML = '';
+  var i, g;
+  if (n <= 32) {
+    var dgrid = '';
+    for (i = 1; i < n; i++) dgrid += 'M' + (i * c) + ' 0V' + S + 'M0 ' + (i * c) + 'H' + S;
+    svgEl('path', { d: dgrid, style: 'stroke:var(--border);stroke-width:1;fill:none' }, svg);
+  }
+  if (opts.midlines && n >= 2) {
+    svgEl('path', { d: 'M' + S / 2 + ' 0V' + S + 'M0 ' + S / 2 + 'H' + S, style: 'stroke:var(--ink-faint);stroke-width:2;fill:none;stroke-dasharray:6 4' }, svg);
+  }
+  var pts = new Array(N), d;
+  for (d = 0; d < N; d++) { var p = curve.d2xy(order, d); pts[d] = [(p[0] + 0.5) * c, (p[1] + 0.5) * c, p[0], p[1]]; }
+  var chunk = Math.max(1, Math.ceil(N / 220)), jumps = 0;
+  var paths = {};          // colour -> path data
+  var jumpPath = '';
+  for (d = 1; d < N; d++) {
+    var a = pts[d - 1], b = pts[d];
+    var isJump = Math.abs(a[2] - b[2]) + Math.abs(a[3] - b[3]) !== 1;
+    var seg = 'M' + a[0].toFixed(1) + ' ' + a[1].toFixed(1) + 'L' + b[0].toFixed(1) + ' ' + b[1].toFixed(1);
+    if (isJump) { jumps++; jumpPath += seg; continue; }
+    var col = opts.quadrantColors ? QUAD_COLORS[Math.min(3, Math.floor((d - 1) / (N / 4)))] : hueColor(Math.floor((d - 1) / chunk) * chunk / N);
+    paths[col] = (paths[col] || '') + seg;
+  }
+  var lw = Math.max(1.2, Math.min(5, c * 0.16));
+  for (var colr in paths) svgEl('path', { d: paths[colr], style: 'stroke:' + colr + ';stroke-width:' + lw + ';fill:none;stroke-linecap:round;stroke-linejoin:round' }, svg);
+  if (jumpPath) svgEl('path', { d: jumpPath, style: 'stroke:var(--bad);stroke-width:' + Math.max(1, lw * 0.6) + ';fill:none;stroke-dasharray:5 4;opacity:.8' }, svg);
+  var r = Math.max(2.5, Math.min(7, c * 0.2));
+  svgEl('circle', { cx: pts[0][0], cy: pts[0][1], r: r + 1, style: 'fill:#2f8f5b;stroke:#fff;stroke-width:1.5' }, svg);
+  svgEl('circle', { cx: pts[N - 1][0], cy: pts[N - 1][1], r: r + 1, style: 'fill:#b3261e;stroke:#fff;stroke-width:1.5' }, svg);
+  if (opts.numbers && n <= 16) {
+    var fs = Math.max(7, Math.min(15, c * 0.34));
+    for (d = 0; d < N; d++) {
+      var t = svgEl('text', { x: pts[d][0] + (n <= 8 ? c * 0.0 : 0), y: pts[d][1] - c * 0.18, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
+        style: 'font:600 ' + fs + 'px IBM Plex Mono,monospace;fill:var(--ink);paint-order:stroke;stroke:var(--surface);stroke-width:3px' }, svg);
+      t.textContent = d;
+    }
+  }
+  return { S: S, n: n, c: c, jumps: jumps, N: N };
+}
+// maps a pointer event to a cell
+function eventCell(svg, ev, n) {
+  var rect = svg.getBoundingClientRect();
+  var x = Math.floor((ev.clientX - rect.left) / rect.width * n), y = Math.floor((ev.clientY - rect.top) / rect.height * n);
+  return [Math.max(0, Math.min(n - 1, x)), Math.max(0, Math.min(n - 1, y))];
+}
+function cellRect(svg, x, y, size, c, style) {
+  return svgEl('rect', { x: x * c, y: y * c, width: size * c, height: size * c, style: style }, svg);
+}
+
+/* ---- Demo: curve viewer ------------------------------------------------------------------- */
+(function () {
+  var svg = document.getElementById('v-svg'), sel = document.getElementById('v-curve'), ord = document.getElementById('v-order'),
+      ordVal = document.getElementById('v-order-val'), numBox = document.getElementById('v-numbers'),
+      info = document.getElementById('v-info'), readout = document.getElementById('v-readout');
+  var meta, hoverRect = null;
+  var BLURB = {
+    hilbert: 'The U-shaped curve. Every step moves to an adjacent cell, so there are <b>no jumps</b>; every aligned square is one contiguous run of numbers.',
+    z: 'Interleaves the bits of x and y, tracing a Z at every scale. Hierarchical and very cheap, but it <b>jumps</b> across the grid between blocks (red dashes).',
+    n: 'Z-order with x and y swapped (an N shape). Same strengths and the same jumps, mirrored.',
+    row: 'Row by row. Horizontal neighbours are close; vertical neighbours are <b>n</b> apart. It jumps at the end of every row and blocks are not contiguous.'
+  };
+  function draw() {
+    var order = +ord.value; ordVal.textContent = order;
+    if (order > 4) numBox.checked = false;
+    meta = renderCurve(svg, sel.value, order, { numbers: numBox.checked });
+    hoverRect = null;
+    info.innerHTML = '<p><b>' + CURVES[sel.value].name + '</b> · order ' + order + ' · ' + meta.n + ' × ' + meta.n + ' = ' + meta.N.toLocaleString() + ' cells</p>' +
+      '<p>' + BLURB[sel.value] + '</p>' +
+      '<p>Jumps (non-adjacent consecutive cells): <b style="color:' + (meta.jumps ? 'var(--bad)' : 'var(--ok)') + '">' + meta.jumps.toLocaleString() + '</b></p>' +
+      '<p style="color:var(--ink-faint)">Green dot = index 0, red dot = last index.</p>';
+  }
+  svg.addEventListener('pointermove', function (ev) {
+    var cell = eventCell(svg, ev, meta.n), key = sel.value, order = +ord.value;
+    var d = CURVES[key].xy2d(order, cell[0], cell[1]);
+    if (hoverRect) hoverRect.remove();
+    hoverRect = cellRect(svg, cell[0], cell[1], 1, meta.c, 'fill:rgba(14,127,140,.25);stroke:var(--accent);stroke-width:2');
+    readout.innerHTML = 'cell (x=' + cell[0] + ', y=' + cell[1] + ')  →  d = <b>' + d.toLocaleString() + '</b>   (base 2: ' + d.toString(2).padStart(2 * order, '0') + ')';
+  });
+  [sel, ord, numBox].forEach(function (e) { e.addEventListener('input', draw); });
+  draw();
+})();
+
+/* ---- Demo: level stepper ------------------------------------------------------------------ */
+(function () {
+  var svg = document.getElementById('l-svg'), lvl = 2, label = document.getElementById('l-level'), text = document.getElementById('l-text'),
+      numBox = document.getElementById('l-numbers');
+  var TXT = {
+    1: '<p><b>Level 1</b> — one U through four quadrants: <b style="color:#e6550d">0</b> top-left, <b style="color:#3182bd">1</b> bottom-left, <b style="color:#31a354">2</b> bottom-right, <b style="color:#8856a7">3</b> top-right.</p>',
+    2: '<p><b>Level 2</b> — a smaller U in each quadrant. The top-left U is <em>transposed</em> so it ends at the bottom-left; the two bottom U\'s keep the parent\'s orientation; the top-right U is <em>anti-transposed</em> so it starts at the bottom-right. Indexes 0–3, 4–7, 8–11, 12–15 are the four colours.</p>',
+    3: '<p><b>Level 3</b> — repeat inside every one of the 16 sub-squares. Each colour now owns a 4 × 4 block holding 16 consecutive indexes (0–15, 16–31, 32–47, 48–63).</p>',
+    4: '<p><b>Level 4</b> — 16 × 16 = 256 cells. Zoom out and the picture is the same four-colour U; zoom in and every colour is the same U again. That self-similarity is the whole algorithm.</p>',
+    5: '<p><b>Level 5</b> — 1,024 cells. Still continuous: no red jump segments, at any level.</p>'
+  };
+  function draw() {
+    label.textContent = 'Level ' + lvl;
+    var m = renderCurve(svg, 'hilbert', lvl, { numbers: numBox.checked && lvl <= 3, quadrantColors: true, midlines: true });
+    text.innerHTML = TXT[lvl] + '<p style="color:var(--ink-faint)">' + m.N + ' cells · jumps: ' + m.jumps + '</p>';
+  }
+  document.getElementById('l-prev').addEventListener('click', function () { if (lvl > 1) { lvl--; draw(); } });
+  document.getElementById('l-next').addEventListener('click', function () { if (lvl < 5) { lvl++; draw(); } });
+  numBox.addEventListener('input', draw);
+  draw();
+})();
+
+/* ---- Demo: step-by-step encoder ----------------------------------------------------------- */
+function hilbertTrace(order, x, y) {
+  var n = 2 ** order, d = 0, rows = [];
+  for (var s = n / 2; s >= 1; s /= 2) {
+    var rx = (x & s) > 0 ? 1 : 0, ry = (y & s) > 0 ? 1 : 0, digit = (3 * rx) ^ ry, add = s * s * digit;
+    d += add;
+    var nx = x, ny = y, note = 'none';
+    if (ry === 0) {
+      if (rx === 1) { nx = n - 1 - x; ny = n - 1 - y; note = 'flip → (' + nx + ',' + ny + '), swap → (' + ny + ',' + nx + ')'; }
+      else note = 'swap → (' + y + ',' + x + ')';
+      var tmp = nx; nx = ny; ny = tmp;
+    }
+    rows.push({ s: s, x: x, y: y, rx: rx, ry: ry, digit: digit, add: add, d: d, note: note });
+    x = nx; y = ny;
+  }
+  return { rows: rows, d: d };
+}
+(function () {
+  var svg = document.getElementById('e-svg'), ordSel = document.getElementById('e-order'), dIn = document.getElementById('e-d'),
+      table = document.getElementById('e-table'), readout = document.getElementById('e-readout');
+  var meta, sel = [6, 5];
+  function show() {
+    var order = +ordSel.value, x = sel[0], y = sel[1], tr = hilbertTrace(order, x, y);
+    meta = renderCurve(svg, 'hilbert', order, { numbers: true });
+    var cols = ['#3182bd', '#e6550d', '#31a354', '#8856a7'];
+    for (var l = 1; l <= order; l++) {
+      var size = 2 ** (order - l), bx = x - (x % size), by = y - (y % size);
+      cellRect(svg, bx, by, size, meta.c, 'fill:' + cols[(l - 1) % 4] + ';fill-opacity:.12;stroke:' + cols[(l - 1) % 4] + ';stroke-width:2.5');
+    }
+    cellRect(svg, x, y, 1, meta.c, 'fill:rgba(14,127,140,.35);stroke:var(--accent-strong);stroke-width:3');
+    var html = '<table class="steps"><thead><tr><th>step</th><th>s</th><th>(x,y)</th><th>rx</th><th>ry</th><th>digit</th><th>+s²·digit</th><th>d</th><th>transform</th></tr></thead><tbody>';
+    tr.rows.forEach(function (r, i) {
+      html += '<tr><td>' + (i + 1) + '</td><td>' + r.s + '</td><td>(' + r.x + ',' + r.y + ')</td><td>' + r.rx + '</td><td>' + r.ry + '</td><td>' + r.digit + '</td><td>' + (r.s * r.s) + '·' + r.digit + ' = ' + r.add + '</td><td><b>' + r.d + '</b></td><td>' + r.note + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    table.innerHTML = html;
+    var digits = tr.rows.map(function (r) { return r.digit; }).join(' ');
+    readout.innerHTML = '(x=' + x + ', y=' + y + ') at order ' + order + '  →  d = <b>' + tr.d + '</b>   base 4: <b>' + digits + '</b>   check hilbertXY2D → ' + hilbertXY2D(order, x, y) + (hilbertXY2D(order, x, y) === tr.d ? '  ✓' : '  ✗');
+    dIn.value = tr.d; dIn.max = 4 ** order - 1;
+  }
+  svg.addEventListener('pointerdown', function (ev) { sel = eventCell(svg, ev, 2 ** (+ordSel.value)); show(); });
+  ordSel.addEventListener('input', function () { sel = [Math.min(sel[0], 2 ** (+ordSel.value) - 1), Math.min(sel[1], 2 ** (+ordSel.value) - 1)]; show(); });
+  document.getElementById('e-decode').addEventListener('click', function () {
+    var order = +ordSel.value, d = Math.max(0, Math.min(4 ** order - 1, Math.floor(+dIn.value || 0)));
+    sel = hilbertD2XY(order, d); show();
+  });
+  show();
+})();
+
+/* ---- Demo: compare curves on a window ----------------------------------------------------- */
+(function () {
+  var ORDER = 4, n = 16;
+  var svg = document.getElementById('c-svg'), strips = document.getElementById('c-strips'), readout = document.getElementById('c-readout'),
+      budget = document.getElementById('c-budget'), budVal = document.getElementById('c-budget-val'), curveSel = document.getElementById('c-curve');
+  var win = [5, 6, 10, 11], drag = null, meta;
+  var KEYS = ['row', 'n', 'z', 'hilbert'];
+
+  function exactRanges(key, w) {
+    var ds = [], f = CURVES[key].xy2d;
+    for (var y = w[1]; y <= w[3]; y++) for (var x = w[0]; x <= w[2]; x++) ds.push(f(ORDER, x, y));
+    ds.sort(function (a, b) { return a - b; });
+    var r = [], s = ds[0], p = ds[0];
+    for (var i = 1; i < ds.length; i++) { if (ds[i] === p + 1) p = ds[i]; else { r.push([s, p]); s = p = ds[i]; } }
+    r.push([s, p]);
+    return r;
+  }
+  function closeGaps(ranges, R) {
+    if (ranges.length <= R) return ranges.slice();
+    var gaps = [];
+    for (var i = 1; i < ranges.length; i++) gaps.push({ i: i, size: ranges[i][0] - ranges[i - 1][1] - 1 });
+    gaps.sort(function (a, b) { return a.size - b.size; });
+    var closed = {};
+    gaps.slice(0, ranges.length - R).forEach(function (g) { closed[g.i] = true; });
+    var out = [ranges[0].slice()];
+    for (i = 1; i < ranges.length; i++) { if (closed[i]) out[out.length - 1][1] = ranges[i][1]; else out.push(ranges[i].slice()); }
+    return out;
+  }
+  function sum(r) { return r.reduce(function (a, x) { return a + x[1] - x[0] + 1; }, 0); }
+
+  function drawGrid() {
+    meta = renderCurve(svg, curveSel.value, ORDER, { numbers: false });
+    svgEl('rect', { x: win[0] * meta.c, y: win[1] * meta.c, width: (win[2] - win[0] + 1) * meta.c, height: (win[3] - win[1] + 1) * meta.c,
+      style: 'fill:rgba(168,101,10,.18);stroke:var(--warn);stroke-width:3' }, svg);
+  }
+  function drawStrips() {
+    var R = +budget.value; budVal.textContent = R;
+    var needed = (win[2] - win[0] + 1) * (win[3] - win[1] + 1), html = '', rows = [];
+    KEYS.forEach(function (k) {
+      var ex = exactRanges(k, win), bd = closeGaps(ex, R), scanned = sum(bd);
+      rows.push({ k: k, ex: ex, bd: bd, over: scanned / needed });
+    });
+    var best = Math.min.apply(null, rows.map(function (r) { return r.over; }));
+    strips.innerHTML = '';
+    rows.forEach(function (r) {
+      var div = document.createElement('div'); div.className = 'strip-row';
+      div.innerHTML = '<div class="lbl"><span>' + CURVES[r.k].name + '</span><span class="s">' + r.ex.length + ' exact range' + (r.ex.length === 1 ? '' : 's') +
+        ' · with R=' + R + ': <b style="color:' + (r.over === best ? 'var(--ok)' : 'inherit') + '">' + r.over.toFixed(2) + '×</b></span></div>';
+      var s = svgEl('svg', { class: 'strip', viewBox: '0 0 256 16', preserveAspectRatio: 'none' });
+      r.bd.forEach(function (g) { svgEl('rect', { x: g[0], y: 0, width: g[1] - g[0] + 1, height: 16, style: 'fill:var(--warn);opacity:.45' }, s); });
+      r.ex.forEach(function (g) { svgEl('rect', { x: g[0], y: 3, width: g[1] - g[0] + 1, height: 10, style: 'fill:var(--ok)' }, s); });
+      div.appendChild(s); strips.appendChild(div);
+    });
+    readout.innerHTML = 'window x ' + win[0] + '…' + win[2] + ', y ' + win[1] + '…' + win[3] + ' = <b>' + needed + '</b> cells.  Overhead = cells read ÷ cells needed when only R = ' + R + ' index ranges are allowed (1.00× = perfect).';
+  }
+  function setWin(a, b) {
+    win = [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])];
+    drawGrid(); drawStrips();
+  }
+  svg.addEventListener('pointerdown', function (ev) { svg.setPointerCapture(ev.pointerId); drag = eventCell(svg, ev, n); setWin(drag, drag); });
+  svg.addEventListener('pointermove', function (ev) { if (drag) setWin(drag, eventCell(svg, ev, n)); });
+  svg.addEventListener('pointerup', function () { drag = null; });
+  budget.addEventListener('input', drawStrips);
+  curveSel.addEventListener('input', drawGrid);
+  document.querySelectorAll('#demo-compare [data-win]').forEach(function (b) {
+    b.addEventListener('click', function () { var w = b.getAttribute('data-win').split(',').map(Number); setWin([w[0], w[1]], [w[2], w[3]]); });
+  });
+  drawGrid(); drawStrips();
+})();
+
+/* ============================================================================================
+   4. Leaflet demos (world line / point picker, radius query).
+   ============================================================================================ */
+var CITIES = [
+  ['Hyderabad', 17.385, 78.4867], ['Chennai', 13.0827, 80.2707], ['Mumbai', 19.076, 72.8777], ['Delhi', 28.6139, 77.209],
+  ['London', 51.5074, -0.1278], ['New York', 40.7128, -74.006], ['Sydney', -33.8688, 151.2093]
+];
+function osm(map) {
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+}
+function wrapLng(lng) { return ((lng + 180) % 360 + 360) % 360 - 180; }
+function clampLat(lat) { return Math.max(-90, Math.min(90, lat)); }
+function haversineKm(lat1, lng1, lat2, lng2) {
+  var R = 6371.0, dLat = (lat2 - lat1) * Math.PI / 180, dLng = (lng2 - lng1) * Math.PI / 180;
+  var a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+function cellBounds(order, cx, cy, size) {
+  var n = 2 ** order;
+  return [[90 - (cy + size) / n * 180, cx / n * 360 - 180], [90 - cy / n * 180, (cx + size) / n * 360 - 180]];
+}
+
+/* ---- Demo: world curve + point picker ----------------------------------------------------- */
+(function () {
+  var map = L.map('world-map', { minZoom: 1, worldCopyJump: false }).setView([25, 30], 2);
+  osm(map);
+  var curveLayer = L.layerGroup().addTo(map), cityLayer = L.layerGroup().addTo(map), pickLayer = L.layerGroup().addTo(map);
+  var curveSel = document.getElementById('w-curve'), cOrd = document.getElementById('w-corder'), cOrdVal = document.getElementById('w-corder-val'),
+      cities = document.getElementById('w-cities'), iOrd = document.getElementById('w-iorder'), iOrdVal = document.getElementById('w-iorder-val'),
+      readout = document.getElementById('w-readout');
+  var lastPick = null;
+
+  function drawCurve() {
+    curveLayer.clearLayers(); cityLayer.clearLayers();
+    var order = +cOrd.value; cOrdVal.textContent = order;
+    var key = curveSel.value, curve = CURVES[key];
+    if (order > 0) {
+      var n = 2 ** order, N = n * n, pts = [], jumpPts = [];
+      for (var d = 0; d < N; d++) {
+        var p = curve.d2xy(order, d);
+        pts.push({ ll: [90 - (p[1] + 0.5) / n * 180, (p[0] + 0.5) / n * 360 - 180], x: p[0], y: p[1] });
+      }
+      var chunk = Math.max(1, Math.ceil(N / 200));
+      for (var i = 0; i < N - 1; i += chunk) {
+        var seg = [pts[i].ll];
+        for (var j = i + 1; j <= Math.min(i + chunk, N - 1); j++) {
+          var a = pts[j - 1], b = pts[j];
+          if (Math.abs(a.x - b.x) + Math.abs(a.y - b.y) !== 1) { jumpPts.push([a.ll, b.ll]); if (seg.length > 1) L.polyline(seg, { color: hueColor(i / N), weight: 3, opacity: .9 }).addTo(curveLayer); seg = [b.ll]; }
+          else seg.push(b.ll);
+        }
+        if (seg.length > 1) L.polyline(seg, { color: hueColor(i / N), weight: 3, opacity: .9 }).addTo(curveLayer);
+      }
+      jumpPts.forEach(function (jp) { L.polyline(jp, { color: '#b3261e', weight: 1.5, dashArray: '5 5', opacity: .7 }).addTo(curveLayer); });
+      L.circleMarker(pts[0].ll, { radius: 6, color: '#fff', fillColor: '#2f8f5b', fillOpacity: 1, weight: 2 }).addTo(curveLayer).bindTooltip('index 0');
+      L.circleMarker(pts[N - 1].ll, { radius: 6, color: '#fff', fillColor: '#b3261e', fillOpacity: 1, weight: 2 }).addTo(curveLayer).bindTooltip('index ' + (N - 1));
+      L.rectangle([[-90, -180], [90, 180]], { color: '#7d8296', weight: 1, fill: false, dashArray: '4 4' }).addTo(curveLayer);
+    }
+    if (cities.checked) {
+      var co = order > 0 ? order : 3;
+      CITIES.forEach(function (c) {
+        var n2 = 2 ** co, x = Math.min(n2 - 1, Math.floor((c[2] + 180) / 360 * n2)), y = Math.min(n2 - 1, Math.floor((90 - c[1]) / 180 * n2));
+        L.circleMarker([c[1], c[2]], { radius: 5, color: '#171a24', fillColor: '#e6550d', fillOpacity: 1, weight: 1 }).addTo(cityLayer)
+          .bindTooltip(c[0] + ' · ' + CURVES[key].name + ' order ' + co + ' → ' + curve.xy2d(co, x, y).toLocaleString(), { direction: 'top' });
+      });
+    }
+  }
+  function pick(ll) {
+    lastPick = ll;
+    pickLayer.clearLayers();
+    var order = +iOrd.value; iOrdVal.textContent = order;
+    var lat = clampLat(ll.lat), lng = wrapLng(ll.lng);
+    var d = latLngToHilbert(order, lat, lng), b = hilbertToBounds(order, d);
+    for (var o = 1; o < order; o++) {
+      var bo = hilbertToBounds(o, latLngToHilbert(o, lat, lng));
+      L.rectangle([[bo.minLat, bo.minLng], [bo.maxLat, bo.maxLng]], { color: hueColor(o / order), weight: 1.5, fill: false, opacity: .8 }).addTo(pickLayer);
+    }
+    L.rectangle([[b.minLat, b.minLng], [b.maxLat, b.maxLng]], { color: '#0a5f69', weight: 3, fillColor: '#0e7f8c', fillOpacity: .3 }).addTo(pickLayer);
+    L.circleMarker([lat, lng], { radius: 4, color: '#171a24', fillColor: '#fff', fillOpacity: 1, weight: 2 }).addTo(pickLayer);
+    var digits = d.toString(4).padStart(order, '0');
+    var wKm = (b.maxLng - b.minLng) * 111.32 * Math.cos(lat * Math.PI / 180), hKm = (b.maxLat - b.minLat) * 110.57;
+    readout.innerHTML = 'point (' + lat.toFixed(5) + ', ' + lng.toFixed(5) + ') at order ' + order + ' (' + (2 ** order).toLocaleString() + '² grid)\n' +
+      'Hilbert index d = <b>' + d.toLocaleString() + '</b>      base 4 = <b>' + digits.split('').join(' ') + '</b>   (one digit per level)\n' +
+      'cell: lat ' + b.minLat.toFixed(6) + ' … ' + b.maxLat.toFixed(6) + '   lng ' + b.minLng.toFixed(6) + ' … ' + b.maxLng.toFixed(6) +
+      '   ≈ ' + (wKm >= 1 ? wKm.toFixed(2) + ' km' : (wKm * 1000).toFixed(1) + ' m') + ' × ' + (hKm >= 1 ? hKm.toFixed(2) + ' km' : (hKm * 1000).toFixed(1) + ' m') + ' here\n' +
+      'Each nested rectangle is this point\'s cell at orders 1…' + (order - 1) + ' — the index at order k is ⌊d / 4^(' + order + '−k)⌋.';
+  }
+  map.on('click', function (e) { pick(e.latlng); });
+  [curveSel, cOrd, cities].forEach(function (e) { e.addEventListener('input', drawCurve); });
+  iOrd.addEventListener('input', function () { iOrdVal.textContent = iOrd.value; if (lastPick) pick(lastPick); });
+  document.getElementById('w-clear').addEventListener('click', function () { pickLayer.clearLayers(); lastPick = null; readout.textContent = 'Click the map to encode a point.'; });
+  drawCurve();
+})();
+
+/* ---- Demo: radius query on a map ---------------------------------------------------------- */
+(function () {
+  var map = L.map('radius-map').setView([17.4435, 78.3772], 13);
+  osm(map);
+  var layer = L.layerGroup().addTo(map);
+  var ord = document.getElementById('r-order'), ordVal = document.getElementById('r-order-val'), km = document.getElementById('r-km'),
+      bud = document.getElementById('r-budget'), budVal = document.getElementById('r-budget-val'), readout = document.getElementById('r-readout');
+  var last = null;
+
+  function inRanges(ranges, d) {
+    var lo = 0, hi = ranges.length - 1;
+    while (lo <= hi) { var mid = (lo + hi) >> 1; if (d < ranges[mid][0]) hi = mid - 1; else if (d > ranges[mid][1]) lo = mid + 1; else return true; }
+    return false;
+  }
+  function run(ll) {
+    last = ll; layer.clearLayers();
+    var order = +ord.value, radius = Math.max(0.1, +km.value || 2), budget = +bud.value;
+    ordVal.textContent = order; budVal.textContent = budget;
+    var lat = clampLat(ll.lat), lng = wrapLng(ll.lng);
+    var dLat = radius / 111.0, dLng = radius / (111.0 * Math.cos(lat * Math.PI / 180));
+    var t0 = performance.now();
+    var cover = coverRadius(order, lat, lng, radius, budget);
+    var ms = performance.now() - t0;
+
+    cover.full.forEach(function (c) { L.rectangle(cellBounds(order, c.cx, c.cy, c.size), { color: '#2f8f5b', weight: 1, fillColor: '#2f8f5b', fillOpacity: .25 }).addTo(layer); });
+    cover.partial.forEach(function (c) { L.rectangle(cellBounds(order, c.cx, c.cy, c.size), { color: '#a8650a', weight: 1, fillColor: '#a8650a', fillOpacity: .25 }).addTo(layer); });
+    var bboxB = [[lat - dLat, lng - dLng], [lat + dLat, lng + dLng]];
+    L.rectangle(bboxB, { color: '#0a5f69', weight: 2, fill: false }).addTo(layer);
+    L.circle([lat, lng], { radius: radius * 1000, color: '#8856a7', weight: 2, fill: false }).addTo(layer);
+    L.circleMarker([lat, lng], { radius: 6, color: '#fff', fillColor: '#8856a7', fillOpacity: 1, weight: 2 }).addTo(layer);
+
+    var hits = 0, cand = 0, none = 0, TOTAL = 400;
+    for (var i = 0; i < TOTAL; i++) {
+      var pl = lat + (Math.random() * 2 - 1) * dLat * 1.8, pg = lng + (Math.random() * 2 - 1) * dLng * 1.8;
+      var d = latLngToHilbert(order, clampLat(pl), wrapLng(pg));
+      var read = inRanges(cover.ranges, d), hit = read && haversineKm(lat, lng, pl, pg) <= radius;
+      if (hit) hits++; else if (read) cand++; else none++;
+      L.circleMarker([pl, pg], { radius: 3, weight: 0, fillOpacity: .95, fillColor: hit ? '#2f8f5b' : (read ? '#a8650a' : '#7d8296') }).addTo(layer);
+    }
+    map.fitBounds(bboxB, { padding: [30, 30] });
+
+    var n = 2 ** order;
+    var x0 = Math.min(n - 1, Math.max(0, Math.floor((lng - dLng + 180) / 360 * n))), x1 = Math.min(n - 1, Math.max(0, Math.floor((lng + dLng + 180) / 360 * n)));
+    var y0 = Math.min(n - 1, Math.max(0, Math.floor((90 - lat - dLat) / 180 * n))), y1 = Math.min(n - 1, Math.max(0, Math.floor((90 - lat + dLat) / 180 * n)));
+    var needed = (x1 - x0 + 1) * (y1 - y0 + 1), scanned = cover.ranges.reduce(function (a, r) { return a + r[1] - r[0] + 1; }, 0);
+    var list = cover.ranges.slice(0, 8).map(function (r) { return '[' + r[0].toLocaleString('en-US') + ' , ' + r[1].toLocaleString('en-US') + ']'; }).join('\n  ');
+    readout.innerHTML = 'centre (' + lat.toFixed(5) + ', ' + lng.toFixed(5) + ') · radius ' + radius + ' km · order ' + order + ' · budget ' + budget + '\n' +
+      'bounding box = <b>' + (x1 - x0 + 1) + ' × ' + (y1 - y0 + 1) + '</b> cells (' + needed.toLocaleString() + ');  quadtree cells: ' + cover.full.length + ' full + ' + cover.partial.length + ' partial;  computed in ' + ms.toFixed(1) + ' ms\n' +
+      '<b>' + cover.ranges.length + ' index range' + (cover.ranges.length === 1 ? '' : 's') + '</b> → ' + scanned.toLocaleString() + ' cells read = <b>' + (scanned / needed).toFixed(2) + '×</b> the cells needed\n' +
+      '  ' + list + (cover.ranges.length > 8 ? '\n  … (+' + (cover.ranges.length - 8) + ' more)' : '') + '\n' +
+      TOTAL + ' random points: <b style="color:var(--ok)">' + hits + ' final answers</b> · <b style="color:var(--warn)">' + cand + ' read then rejected by Haversine</b> · ' + none + ' never read (' + (100 * none / TOTAL).toFixed(0) + '% of the data untouched)';
+  }
+  map.on('click', function (e) { run(e.latlng); });
+  [ord, km, bud].forEach(function (e) { e.addEventListener('input', function () { ordVal.textContent = ord.value; budVal.textContent = bud.value; if (last) run(last); }); });
+  document.getElementById('r-go').addEventListener('click', function () { run(L.latLng(17.4435, 78.3772)); });
+})();
+
+/* ---- sidebar scroll-spy -------------------------------------------------------------------- */
+(function () {
+  var links = Array.prototype.slice.call(document.querySelectorAll('.sidebar-toc a[href^="#"]')), map = {};
+  links.forEach(function (a) { map[a.getAttribute('href').slice(1)] = a; });
+  var heads = Array.prototype.slice.call(document.querySelectorAll('main.article h2[id], main.article h3[id]'));
+  if (!('IntersectionObserver' in window) || !heads.length) return;
+  var cur = null;
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (en) {
+      if (!en.isIntersecting) return;
+      var l = map[en.target.id]; if (!l) return;
+      if (cur) cur.classList.remove('active'); l.classList.add('active'); cur = l;
+    });
+  }, { rootMargin: '0px 0px -70% 0px', threshold: 0 });
+  heads.forEach(function (h) { io.observe(h); });
+})();
+</script>
