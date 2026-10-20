@@ -45,6 +45,14 @@ pureeats:
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}
   otp:
     dev-mode: ${OTP_DEV_MODE:true}
+  seed:
+    demo-data:
+      # Demo restaurants, items, users, delivery partners, orders, finance, reports, notifications and content
+      # (the Demo*Seeder classes). Off by default: the backend then holds only the super admin below plus the
+      # reference data the app needs (order statuses, roles). Set true (PUREEATS_SEED_DEMO_DATA=true) to seed on
+      # startup - the seeders only add what's missing, they never delete. To empty an existing database down to the
+      # super admin, run scripts/db/reset-to-superadmin.sh (it takes a backup first).
+      enabled: ${PUREEATS_SEED_DEMO_DATA:false}
   # SuperAdminSeeder creates exactly this one account on startup if no SUPER_ADMIN exists yet.
   # There is no API to create/promote a SUPER_ADMIN - override these before any shared deployment.
   super-admin:
