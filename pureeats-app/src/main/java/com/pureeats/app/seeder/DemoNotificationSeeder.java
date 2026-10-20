@@ -17,6 +17,9 @@ import java.util.List;
 
 /** A handful of read/unread in-app alerts per demo account, so the Notifications screen (list, mark-read, delete) has something to show. Runs after DemoUserSeeder; idempotent. */
 @Slf4j
+// Demo data only when pureeats.seed.demo-data.enabled=true (application.yml, env PUREEATS_SEED_DEMO_DATA) - off by default,
+// so a fresh deployment holds nothing but the super admin.
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(prefix = "pureeats.seed.demo-data", name = "enabled", havingValue = "true")
 @Component
 @RequiredArgsConstructor
 @Order(3)

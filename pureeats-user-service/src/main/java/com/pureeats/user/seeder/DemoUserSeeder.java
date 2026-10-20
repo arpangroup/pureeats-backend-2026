@@ -30,6 +30,9 @@ import java.util.List;
  * testing, not as ready-to-use logins, so an accidental production seed never hands out live access.
  */
 @Slf4j
+// Demo data only when pureeats.seed.demo-data.enabled=true (application.yml, env PUREEATS_SEED_DEMO_DATA) - off by default,
+// so a fresh deployment holds nothing but the super admin.
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(prefix = "pureeats.seed.demo-data", name = "enabled", havingValue = "true")
 @Component
 @RequiredArgsConstructor
 @Order(1)
